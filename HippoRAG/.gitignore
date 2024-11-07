@@ -1,9 +1,14 @@
 */.DS_Store
 
-# Custom
-exp/
-output/
-data/
+# Ignore everything in these directories
+exp/*
+data/*
+output/*
+
+# But keep the directories with .gitkeep
+!exp/.gitkeep
+!data/.gitkeep
+!output/.gitkeep
 
 ### Python template
 # Byte-compiled / optimized / DLL files
