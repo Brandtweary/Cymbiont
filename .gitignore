@@ -1,3 +1,6 @@
+#HippoRAG
+HippoRAG/{exp,output,data}
+
 # IDE
 .vscode
 
