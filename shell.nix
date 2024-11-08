@@ -1,51 +1,53 @@
 { pkgs ? import <nixpkgs> { config = { allowUnfree = true; }; } }:
 
 let
+  # Import configuration from config.nix if it exists, otherwise use defaults
+  configFile = ./config.nix;
+  config = if builtins.pathExists configFile
+    then import configFile
+    else { withCuda = true; };
+
   pythonEnv = pkgs.buildFHSUserEnv {
-    name = "hipporag-env";
+    name = "cyberorganism-env";
     targetPkgs = pkgs: (with pkgs; [
-      # Python and core build tools
-      python39
-      python39Packages.pip
-      python39Packages.virtualenv
+      # Python and core ML packages
+      python312
+      python312Packages.pip
+      python312Packages.virtualenv
+      (if config.withCuda then python312Packages.torchWithCuda else python312Packages.torch)
+      
+      # Basic development tools
       git
-      gitRepo
-      gnupg
-      autoconf
       curl
-      procps
-      gnumake
-      util-linux
-      m4
-      gperf
-      unzip
       wget
-      cmake
-      ninja
+      
+      # Build essentials (for potential pip packages)
       gcc
       binutils
-      
-      # CUDA and graphics
-      cudaPackages_11.cudatoolkit
-      linuxPackages.nvidia_x11
-      libGLU libGL
-      xorg.libXi xorg.libXmu freeglut
-      xorg.libXext xorg.libX11 xorg.libXv xorg.libXrandr
-      
-      # Common C libraries
+      cmake
       zlib
-      ncurses5
       stdenv.cc
-      binutils
-    ]);
+      
+    ] ++ (if config.withCuda then [
+      # CUDA-specific packages
+      cudaPackages.cudatoolkit
+    ] else []));
 
     multiPkgs = pkgs: with pkgs; [ zlib ];
     
     profile = ''
-      export CUDA_PATH=${pkgs.cudaPackages_11.cudatoolkit}
-      export LD_LIBRARY_PATH=/usr/lib:/run/opengl-driver/lib:${pkgs.linuxPackages.nvidia_x11}/lib:$LD_LIBRARY_PATH
-      export EXTRA_LDFLAGS="-L/lib -L${pkgs.linuxPackages.nvidia_x11}/lib"
-      export EXTRA_CCFLAGS="-I/usr/include"
+      ${if config.withCuda then ''
+        # Set CUDA environment
+        export CUDA_PATH=${pkgs.cudaPackages.cudatoolkit}
+        export CUDA_HOME=$CUDA_PATH
+        export PATH=$CUDA_PATH/bin:$PATH
+        export CUDA_CACHE_PATH="$HOME/.cache/cuda"
+        export CUDA_CACHE_MAXSIZE=2147483648
+      '' else ""}
+      
+      # Cache configuration
+      export CUDA_CACHE_PATH="$HOME/.cache/cuda"
+      export CUDA_CACHE_MAXSIZE=2147483648  # 2GB cache size
       
       # Pretty startup banner
       echo ""
@@ -89,9 +91,12 @@ let
         return 1
       fi
 
-      if [ ! -f ".venv/req_installed" ] || [ ! -d ".venv/lib/python3.9/site-packages" ]; then
+      # Set NIX_MANAGED flag for requirements.txt conditional installs
+      export NIX_MANAGED=1
+      
+      if [ ! -f ".venv/req_installed" ] || [ ! -d ".venv/lib/python3.12/site-packages" ]; then
         echo -e "\033[32m>> Installing Python dependencies...\033[0m"
-        if pip install -r requirements.txt; then
+        if pip install -r requirements.txt --no-deps --ignore-installed; then
           echo -e "\033[32m>> Dependencies installed successfully\033[0m"
           touch .venv/req_installed
         else
@@ -103,10 +108,16 @@ let
         echo -e "\033[32m>> Dependencies already installed\033[0m"
       fi
 
-      # Check CUDA availability
-      python3 -c "import torch; print('\033[32m>> CUDA Status:\033[0m', '\033[32mAvailable\033[0m' if torch.cuda.is_available() else '\033[31mNot Available\033[0m')"
-      
-      echo ""
+      # Enhanced CUDA check
+      python3 -c '
+      import torch
+      cuda_available = torch.cuda.is_available()
+      device_count = torch.cuda.device_count() if cuda_available else 0
+      print("\033[32m>> CUDA Status:\033[0m", "\033[32mAvailable\033[0m" if cuda_available else "\033[31mNot Available\033[0m")
+      if cuda_available:
+          print("\033[32m>> CUDA Devices:\033[0m", "\033[32m" + str(device_count) + "\033[0m")
+          print("\033[32m>> CUDA Version:\033[0m", "\033[34m" + torch.version.cuda + "\033[0m")
+      '
     '';
   };
 in
