@@ -34,7 +34,7 @@ The bootstrap script will:
 - Configure environment variables
 - Verify CUDA availability (if applicable)
 
-### Manual Setup (If Bootstrap Fails)
+### Manual Setup (if bootstrap fails)
 
 1. Create and activate a virtual environment:
    ```bash
@@ -57,7 +57,7 @@ The bootstrap script will:
 
 ## Environment Variables
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root and set the following variables:
 ```bash
 OPENAI_API_KEY=your_api_key_here
 ```
