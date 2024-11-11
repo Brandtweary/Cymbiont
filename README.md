@@ -4,7 +4,7 @@ An autonomous LLM agent with long-term memory.
 
 ## Setup Instructions
 
-### Quick Setup (All Platforms)
+### Interactive Setup (Recommended)
 
 1. Install Python:
    - Windows: Download from [python.org](https://www.python.org/downloads/)
