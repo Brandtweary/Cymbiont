@@ -13,21 +13,21 @@ An autonomous LLM agent with long-term memory.
 
    **Note:** Python 3.12 is recommended. Newer versions may be incompatible with PyTorch.
 
-2. Download and run the bootstrap script:
+2. Clone and enter the repository:
    ```bash
-   # Clone the repository
    git clone https://github.com/Brandtweary/CyberOrganism.git
    cd CyberOrganism
-   
-   # Windows (in PowerShell)
-   ./bootstrap.sh
-   
-   # Mac/Linux
-   # Run with bash:
-   bash bootstrap.sh
+   ```
 
-   # Or make executable first:
-   chmod +x bootstrap.sh
+3. Run the bootstrap script:
+   ```bash
+   # Windows
+   ./bootstrap.sh
+
+   # Mac/Linux
+   bash bootstrap.sh  # Run with bash
+
+   chmod +x bootstrap.sh # Or make executable first
    ./bootstrap.sh
    ```
 
@@ -40,9 +40,11 @@ The bootstrap script will:
 
 The script will attempt to use the nvidia-smi tool to determine your CUDA version. If you don't have nvidia-smi, you can determine your CUDA version using a different method, or you can proceed if you already know which PyTorch compute platform you want (e.g. CPU, CUDA, ROCM). The PyTorch installation step can be skipped and performed later by running the bootstrap script again or [installing PyTorch manually](https://pytorch.org/get-started/locally/). 
 
-### Manual Setup (if bootstrap fails)
+### Manual Setup
 
-1. Create and activate a virtual environment:
+1. Install Python and clone repo (steps 1 and 2 above).
+
+2. Create and activate a virtual environment:
    ```bash
    # Windows
    python -m venv .venv
@@ -53,12 +55,12 @@ The script will attempt to use the nvidia-smi tool to determine your CUDA versio
    source .venv/bin/activate
    ```
 
-2. Install dependencies:
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Install PyTorch:
+4. Install PyTorch:
    Visit [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/) and follow the installation instructions for your platform and compute preferences.
 
 ## Environment Variables
