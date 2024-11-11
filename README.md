@@ -23,7 +23,7 @@ An autonomous LLM agent with long-term memory.
    ./bootstrap.sh
    
    # Mac/Linux
-   # Either run with bash:
+   # Run with bash:
    bash bootstrap.sh
 
    # Or make executable first:
