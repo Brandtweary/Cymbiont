@@ -23,7 +23,11 @@ An autonomous LLM agent with long-term memory.
    ./bootstrap.sh
    
    # Mac/Linux
-   chmod +x bootstrap.sh  # Make script executable
+   # Either run with bash:
+   bash bootstrap.sh
+
+   # Or make executable first:
+   chmod +x bootstrap.sh
    ./bootstrap.sh
    ```
 
