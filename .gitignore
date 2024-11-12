@@ -3,8 +3,18 @@
 .cursorignore
 
 # Custom
-archive/
-notes/
+.archive/
+.notes/
+data/chunks/*
+data/documents/*
+data/indexes/*
+data/processed/*
+data/triples/*
+!data/chunks/.gitkeep
+!data/documents/.gitkeep
+!data/indexes/.gitkeep
+!data/processed/.gitkeep
+!data/triples/.gitkeep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
