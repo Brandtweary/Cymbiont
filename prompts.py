@@ -1,25 +1,63 @@
-NER_PROMPT = '''Extract named entities (nouns and noun phrases) from the text. Format as JSON list.
+import string
+from typing import Dict, Any
+import logging
+import re
 
-Example:
-Text: "UC Berkeley researchers collaborated with Lawrence Berkeley Lab on quantum computing."
-Entities: ["UC Berkeley", "Lawrence Berkeley Lab", "quantum computing"]
+logger = logging.getLogger(__name__)
 
-Text: """
+def safe_format_prompt(prompt_template: str, params: Dict[str, Any]) -> str:
+    """Combat-ready prompt formatter. No JSON validation, just pure string formatting."""
+    # Initialize sanitized_params BEFORE try block
+    sanitized_params = {
+        k: str(v).replace('{', '').replace('}', '')  # Strip formatting characters
+        for k, v in params.items()
+    }
+    
+    try:
+        # Direct format attempt
+        return prompt_template.format(**sanitized_params)
+            
+    except Exception as e:
+        logger.error(f"Prompt formatting failed: {str(e)}")
+        # Now sanitized_params is ALWAYS defined
+        return prompt_template.replace('{text}', sanitized_params.get('text', ''))
+
+def validate_prompt_template(template: str) -> bool:
+    """Validate a prompt template for common issues."""
+    try:
+        # Check for balanced brackets
+        bracket_count = 0
+        for char in template:
+            if char == '{': bracket_count += 1
+            if char == '}': bracket_count -= 1
+            if bracket_count < 0:
+                raise ValueError("Unmatched closing bracket")
+        if bracket_count != 0:
+            raise ValueError("Unmatched opening bracket")
+            
+        # Validate format string syntax
+        string.Formatter().parse(template)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Template validation failed: {str(e)}")
+        return False
+
+def create_safe_prompt(template: str, **kwargs: Any) -> str:
+    """Create a prompt with validation and safe formatting."""
+    if not validate_prompt_template(template):
+        raise ValueError("Invalid prompt template")
+    return safe_format_prompt(template, kwargs)
+
+NER_PROMPT = '''Extract named entities from the text:
+
 {text}
-"""'''
 
-TRIPLE_PROMPT = '''Generate RDF triples through OpenIE, using the provided named entities. Each triple should contain at least one named entity. Format as JSON list of [subject, relationship, object].
+Format as JSON with an "entities" array.'''
 
-Example:
-Text: "UC Berkeley researchers collaborated with Lawrence Berkeley Lab on quantum computing."
-Entities: ["UC Berkeley", "Lawrence Berkeley Lab", "quantum computing"]
-Triples: [
-   ["UC Berkeley", "collaborated with", "Lawrence Berkeley Lab"],
-   ["UC Berkeley", "researches", "quantum computing"],
-   ["Lawrence Berkeley Lab", "researches", "quantum computing"]
-]
+TRIPLE_PROMPT = '''Extract factual relationships from this text as simple triples. Each triple should be a list of [entity1, relationship, entity2].
 
-Text: """
-{text}
-"""
-Entities: {entities}'''
+Text: {text}
+Known entities: {entities}
+
+Return as JSON array named "triples".'''

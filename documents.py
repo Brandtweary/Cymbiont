@@ -8,8 +8,9 @@ import time
 import re
 import asyncio
 from json.decoder import JSONDecodeError
-from prompts import NER_PROMPT, TRIPLE_PROMPT
-from shared_resources import openai_client, logger
+from prompts import create_safe_prompt, NER_PROMPT, TRIPLE_PROMPT
+from shared_resources import openai_client, logger, DEBUG
+from utils import log_performance
 
 
 NER_OPENAI_MODEL = "gpt-4o-mini"
@@ -158,77 +159,192 @@ def save_chunks(chunks: List[Chunk], paths: Paths, chunk_index: Dict):
     
     save_index(chunk_index, paths.index_dir / "chunks.json")
 
-async def get_triples(chunks: List[Chunk], base_dir: Path) -> List[Triple]:
-    """Extract triples from text chunks using NER + OpenIE pipeline."""
-    
-    async def process_chunk(chunk: Chunk) -> Optional[List[Triple]]:
+@log_performance
+async def extract_triples_from_ner(chunk: Chunk, entities: List[str]) -> Optional[List[Triple]]:
+    """Extract triples from a chunk using the identified entities."""
+    try:
+        logger.info(f"Attempting triple extraction for chunk {chunk.chunk_id}")
+        logger.info(f"Working with entities: {entities}")
+        
+        # Safely format triple prompt with validation
         try:
-            # Start NER
-            ner_future = openai_client.chat.completions.create(
+            triple_prompt = create_safe_prompt(
+                TRIPLE_PROMPT,
+                text=chunk.text,
+                entities=entities
+            )
+            logger.debug(f"Created triple prompt: {triple_prompt[:200]}...")
+        except ValueError as e:
+            logger.error(f"Failed to format triple prompt: {e}")
+            return None
+            
+        # OpenAI API call with error handling
+        try:
+            triple_response = await openai_client.chat.completions.create(
                 model=NER_OPENAI_MODEL,
                 response_format={"type": "json_object"},
                 messages=[{
                     "role": "user",
-                    "content": NER_PROMPT.format(text=chunk.text)
+                    "content": triple_prompt
                 }]
             )
+            logger.debug(f"Raw API response: {triple_response.choices[0].message.content}")
+        except Exception as e:
+            logger.error(f"OpenAI API call failed: {str(e)}")
+            return None
             
-            # Start triple extraction
-            async def extract_triples(ner_future):
-                ner_response = await ner_future
-                try:
-                    content = ner_response.choices[0].message.content
-                    if content is None:
-                        logger.error("Received null content from OpenAI API")
-                        return None
+        # Super defensive triple extraction
+        try:
+            content = triple_response.choices[0].message.content
+            if not content:
+                logger.error("Empty response from OpenAI")
+                return None
+                
+            logger.debug(f"Parsing JSON content: {content}")
+            triples_data = json.loads(content).get("triples", [])
+            
+            logger.debug(f"Extracted triples data: {triples_data}")
+            
+            if not isinstance(triples_data, list):
+                logger.error(f"Expected list of triples, got {type(triples_data)}")
+                return None
+            
+            valid_triples = []
+            for t in triples_data:
+                if not isinstance(t, list) or len(t) != 3:
+                    continue
                     
-                    entities = json.loads(content)
-                    chunk.named_entities = entities
-                    
-                    triple_response = await openai_client.chat.completions.create(
-                        model=NER_OPENAI_MODEL,
-                        response_format={"type": "json_object"},
-                        messages=[{
-                            "role": "user",
-                            "content": TRIPLE_PROMPT.format(
-                                text=chunk.text,
-                                entities=entities
-                            )
-                        }]
+                head, relation, tail = t  # Simple list unpacking
+                valid_triples.append(
+                    Triple(
+                        triple_id=generate_id(f"{head}{relation}{tail}"),
+                        chunk_id=chunk.chunk_id,
+                        doc_id=chunk.doc_id,
+                        head=str(head),
+                        relation=str(relation),
+                        tail=str(tail),
+                        metadata={"source": "openai_extraction"}
                     )
-                    
-                    content = triple_response.choices[0].message.content
-                    if content is None:
-                        logger.error("Received null content from OpenAI API")
-                        return None
-                    
-                    triples_data = json.loads(content)
-                    if not isinstance(triples_data, list):
-                        logger.error(f"Expected list of triples, got {type(triples_data)}")
-                        return None
-                    
-                    return [
-                        Triple(
-                            triple_id=generate_id(f"{t[0]}{t[1]}{t[2]}"),
-                            chunk_id=chunk.chunk_id,
-                            doc_id=chunk.doc_id,
-                            head=t[0],
-                            relation=t[1],
-                            tail=t[2],
-                            metadata={"source": "openai_extraction"}
-                        )
-                        for t in triples_data
-                    ]
-                except (JSONDecodeError, KeyError, IndexError) as e:
-                    logger.error(f"Error processing chunk {chunk.chunk_id}: {str(e)}")
-                    return None
-
-            return await extract_triples(ner_future)
+                )
+            
+            if valid_triples:
+                logger.info(f"Successfully extracted {len(valid_triples)} triples")
+                logger.debug(f"Valid triples: {valid_triples}")
+            else:
+                logger.warning("No valid triples extracted")
+                logger.debug("Triple extraction failed at validation stage")
+            
+            return valid_triples
             
         except Exception as e:
-            logger.error(f"Failed to process chunk {chunk.chunk_id}: {str(e)}")
+            logger.error(f"Failed to process response: {str(e)}")
             return None
+            
+    except Exception as e:
+        logger.error(f"Failed to process chunk {chunk.chunk_id}: {str(e)}")
+        if DEBUG:
+            raise  # Re-raise the exception in debug mode
+        return None
 
+@log_performance
+async def process_chunk(chunk: Chunk) -> Optional[List[Triple]]:
+    """Process a single chunk through NER and triple extraction."""
+    try:
+        logger.info(f"Starting processing of chunk: {chunk.chunk_id}")
+        logger.debug(f"Chunk text: {chunk.text[:100]}...")
+        
+        # Safely format NER prompt with validation
+        try:
+            ner_prompt = create_safe_prompt(
+                NER_PROMPT,
+                text=chunk.text
+            )
+            logger.debug("NER prompt created successfully")
+        except ValueError as e:
+            logger.error(f"Failed to format NER prompt: {e}")
+            return None
+            
+        # Log the actual prompt for debugging
+        logger.debug(f"NER Prompt: {ner_prompt[:200]}...")
+            
+        ner_response = await openai_client.chat.completions.create(
+            model=NER_OPENAI_MODEL,
+            response_format={"type": "json_object"},
+            messages=[{
+                "role": "user",
+                "content": ner_prompt
+            }]
+        )
+        
+        logger.info("Received response from OpenAI")
+        logger.debug(f"Raw response: {ner_response.choices[0].message.content}")
+        
+        # Super defensive entity extraction
+        content: Optional[str] = None  # Define content at the start of the scope
+        try:
+            content = ner_response.choices[0].message.content
+            if not content:
+                logger.warning("Empty content received from OpenAI, using empty entities list")
+                entities = []
+            else:
+                # Try to parse as JSON, with multiple fallback options
+                try:
+                    response_data = json.loads(content)
+                    
+                    # Try multiple possible response formats
+                    entities = (
+                        response_data.get("entities") or
+                        response_data.get("named_entities") or
+                        response_data.get("extracted_entities") or
+                        response_data.get("results") or
+                        []
+                    )
+                    
+                    # If we got a string instead of a list, try to parse it
+                    if isinstance(entities, str):
+                        try:
+                            entities = json.loads(entities)
+                        except JSONDecodeError:
+                            entities = [entities]  # Single entity as string
+                    
+                    # Ensure we have a list
+                    if not isinstance(entities, list):
+                        logger.warning(f"Unexpected entities format: {type(entities)}, converting to list")
+                        entities = [str(entities)]
+                    
+                    # Filter out any non-string entities
+                    entities = [str(e) for e in entities if e]
+                    
+                except JSONDecodeError:
+                    logger.warning("Failed to parse JSON response, attempting to extract entities directly")
+                    # Last resort: try to extract anything that looks like an entity
+                    import re
+                    entities = re.findall(r'"([^"]+)"', content)  # Extract quoted strings
+                    if not entities:
+                        entities = []
+            
+            logger.debug(f"Extracted entities: {entities}")
+            
+            # Store entities in chunk regardless of what we got
+            chunk.named_entities = entities
+            
+            # Proceed with triple extraction even if entities list is empty
+            return await extract_triples_from_ner(chunk, entities)
+            
+        except Exception as e:
+            logger.error(f"Entity extraction failed: {str(e)}")
+            logger.debug(f"Raw response content: {content}")  # Now content is always defined
+            # Don't fail completely, try with empty entities list
+            return await extract_triples_from_ner(chunk, [])
+        
+    except Exception as e:
+        logger.error(f"Failed to process chunk {chunk.chunk_id}: {str(e)}")
+        if DEBUG:
+            raise
+        return None
+
+async def get_triples(chunks: List[Chunk], base_dir: Path) -> List[Triple]:
+    """Extract triples from text chunks using NER + OpenIE pipeline."""
     # Process all chunks concurrently
     results = await asyncio.gather(
         *[process_chunk(chunk) for chunk in chunks]
@@ -276,31 +392,64 @@ def save_triples(triples: List[Triple], base_dir: Path) -> None:
         }
     save_index(triple_index, paths.index_dir / "triples.json")
 
+def clear_indices(paths: Paths) -> None:
+    """Clear all index files when in debug mode"""
+    index_files = [
+        paths.index_dir / "documents.json",
+        paths.index_dir / "chunks.json",
+        paths.index_dir / "triples.json"
+    ]
+    for index_file in index_files:
+        save_index({}, index_file)
+
+def move_processed_to_documents(paths: Paths) -> None:
+    """Move processed files back to documents directory in debug mode"""
+    for file_path in paths.processed_dir.glob("*.*"):
+        if file_path.suffix.lower() in ['.txt', '.md']:
+            try:
+                shutil.move(str(file_path), str(paths.docs_dir / file_path.name))
+                logger.debug(f"Moved {file_path.name} back to documents directory")
+            except Exception as e:
+                logger.error(f"Failed to move {file_path.name}: {str(e)}")
+
+@log_performance
 def process_documents(base_dir: Path) -> List[Chunk]:
     """Main document processing pipeline"""
-    # Get initialized paths
     paths = get_paths(base_dir)
+    
+    logger.info("🏰 Starting document processing pipeline")
+    
+    if DEBUG:
+        logger.info("🐛 Debug mode: Clearing indices and recycling processed documents")
+        clear_indices(paths)
+        move_processed_to_documents(paths)
+    
+    # Load indices
     doc_index = load_index(paths.index_dir / "documents.json")
     chunk_index = load_index(paths.index_dir / "chunks.json")
     
     # Find documents to process
     unprocessed = find_unprocessed_documents(paths)
+    logger.info(f"📄 Found {len(unprocessed)} documents to process")
+    
     if not unprocessed:
-        print("No documents to process")
+        logger.warning("⚠️ No documents to process")
         return []
     
     # Process each document
     all_chunks = []
     for filepath in unprocessed:
-        print(f"Processing {filepath.name}...")
+        logger.info(f"🔄 Processing {filepath.name}")
         doc, chunks = process_document(filepath, paths, doc_index)
         save_chunks(chunks, paths, chunk_index)
         all_chunks.extend(chunks)
     
     # Extract triples if chunks were processed
     if all_chunks:
+        logger.info(f"🎯 Extracting triples from {len(all_chunks)} chunks")
         asyncio.run(get_triples(all_chunks, base_dir))
         
+    logger.info(f"✅ Processing complete - {len(all_chunks)} chunks processed")
     return all_chunks
 
 # Retrieval functions (for when OpenIE needs them)
