@@ -1,7 +1,5 @@
-from pathlib import Path
 from documents import process_documents
-
-DATA_DIR = Path("./data")
+from shared_resources import DATA_DIR
 
 
 def main():

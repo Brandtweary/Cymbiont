@@ -6,6 +6,13 @@ import hashlib
 from typing import List, Dict, Optional, NamedTuple
 import time
 import re
+import asyncio
+from json.decoder import JSONDecodeError
+from prompts import NER_PROMPT, TRIPLE_PROMPT
+from shared_resources import openai_client, logger
+
+
+NER_OPENAI_MODEL = "gpt-4o-mini"
 
 # Data structures
 @dataclass
@@ -15,6 +22,7 @@ class Document:
     filename: str        # Original filename
     processed_at: float  # Unix timestamp
     metadata: Dict       # Any additional metadata
+    named_entities: Optional[List[str]] = None
 
 @dataclass
 class Chunk:
@@ -24,6 +32,7 @@ class Chunk:
     text: str           # Actual content
     position: int       # Order in document
     metadata: Dict      # Any additional metadata
+    named_entities: Optional[List[str]] = None
 
 @dataclass
 class Triple:
@@ -44,6 +53,10 @@ class Paths(NamedTuple):
     chunks_dir: Path
     triples_dir: Path
     index_dir: Path
+
+# Add at top with other globals
+_DIRS_INITIALIZED: bool = False
+_PATHS: Optional[Paths] = None
 
 # Utility functions
 def setup_directories(base_dir: Path) -> Paths:
@@ -145,10 +158,128 @@ def save_chunks(chunks: List[Chunk], paths: Paths, chunk_index: Dict):
     
     save_index(chunk_index, paths.index_dir / "chunks.json")
 
+async def get_triples(chunks: List[Chunk], base_dir: Path) -> List[Triple]:
+    """Extract triples from text chunks using NER + OpenIE pipeline."""
+    
+    async def process_chunk(chunk: Chunk) -> Optional[List[Triple]]:
+        try:
+            # Start NER
+            ner_future = openai_client.chat.completions.create(
+                model=NER_OPENAI_MODEL,
+                response_format={"type": "json_object"},
+                messages=[{
+                    "role": "user",
+                    "content": NER_PROMPT.format(text=chunk.text)
+                }]
+            )
+            
+            # Start triple extraction
+            async def extract_triples(ner_future):
+                ner_response = await ner_future
+                try:
+                    content = ner_response.choices[0].message.content
+                    if content is None:
+                        logger.error("Received null content from OpenAI API")
+                        return None
+                    
+                    entities = json.loads(content)
+                    chunk.named_entities = entities
+                    
+                    triple_response = await openai_client.chat.completions.create(
+                        model=NER_OPENAI_MODEL,
+                        response_format={"type": "json_object"},
+                        messages=[{
+                            "role": "user",
+                            "content": TRIPLE_PROMPT.format(
+                                text=chunk.text,
+                                entities=entities
+                            )
+                        }]
+                    )
+                    
+                    content = triple_response.choices[0].message.content
+                    if content is None:
+                        logger.error("Received null content from OpenAI API")
+                        return None
+                    
+                    triples_data = json.loads(content)
+                    if not isinstance(triples_data, list):
+                        logger.error(f"Expected list of triples, got {type(triples_data)}")
+                        return None
+                    
+                    return [
+                        Triple(
+                            triple_id=generate_id(f"{t[0]}{t[1]}{t[2]}"),
+                            chunk_id=chunk.chunk_id,
+                            doc_id=chunk.doc_id,
+                            head=t[0],
+                            relation=t[1],
+                            tail=t[2],
+                            metadata={"source": "openai_extraction"}
+                        )
+                        for t in triples_data
+                    ]
+                except (JSONDecodeError, KeyError, IndexError) as e:
+                    logger.error(f"Error processing chunk {chunk.chunk_id}: {str(e)}")
+                    return None
+
+            return await extract_triples(ner_future)
+            
+        except Exception as e:
+            logger.error(f"Failed to process chunk {chunk.chunk_id}: {str(e)}")
+            return None
+
+    # Process all chunks concurrently
+    results = await asyncio.gather(
+        *[process_chunk(chunk) for chunk in chunks]
+    )
+    
+    # Filter out None results and flatten
+    all_triples = [
+        triple 
+        for result in results 
+        if result is not None 
+        for triple in result
+    ]
+    
+    # Save triples using existing function
+    save_triples(all_triples, base_dir)
+    
+    return all_triples
+
+def get_paths(base_dir: Path) -> Paths:
+    """Get or initialize directory paths"""
+    global _DIRS_INITIALIZED, _PATHS
+    
+    if not _DIRS_INITIALIZED:
+        _PATHS = setup_directories(base_dir)
+        _DIRS_INITIALIZED = True
+    
+    assert _PATHS is not None  # Tell type checker _PATHS is initialized
+    return _PATHS
+
+def save_triples(triples: List[Triple], base_dir: Path) -> None:
+    """Store triples from OpenIE"""
+    paths = get_paths(base_dir)
+    triple_index = load_index(paths.index_dir / "triples.json")
+    
+    for triple in triples:
+        # Save triple
+        triple_file = paths.triples_dir / f"{triple.triple_id}.json"
+        triple_file.write_text(json.dumps(asdict(triple), indent=2))
+        
+        # Update triple index
+        triple_index[triple.triple_id] = {
+            "chunk_id": triple.chunk_id,
+            "doc_id": triple.doc_id,
+            "metadata": triple.metadata
+        }
+    save_index(triple_index, paths.index_dir / "triples.json")
+
 def process_documents(base_dir: Path) -> List[Chunk]:
     """Main document processing pipeline"""
-    # Setup
-    paths = setup_directories(base_dir)
+    # Get initialized paths
+    paths = get_paths(base_dir)
     doc_index = load_index(paths.index_dir / "documents.json")
     chunk_index = load_index(paths.index_dir / "chunks.json")
     
@@ -165,6 +296,10 @@ def process_documents(base_dir: Path) -> List[Chunk]:
         doc, chunks = process_document(filepath, paths, doc_index)
         save_chunks(chunks, paths, chunk_index)
         all_chunks.extend(chunks)
+    
+    # Extract triples if chunks were processed
+    if all_chunks:
+        asyncio.run(get_triples(all_chunks, base_dir))
         
     return all_chunks
 
@@ -180,18 +315,3 @@ def get_chunk(chunk_id: str, paths: Paths, chunk_index: Dict) -> Optional[Chunk]
                 **chunk_index[chunk_id]
             )
     return None
-
-def save_triples(triples: List[Triple], paths: Paths, triple_index: Dict):
-    """Store triples from OpenIE"""
-    for triple in triples:
-        # Save triple
-        triple_file = paths.triples_dir / f"{triple.triple_id}.json"
-        triple_file.write_text(json.dumps(asdict(triple), indent=2))
-        
-        # Update triple index
-        triple_index[triple.triple_id] = {
-            "chunk_id": triple.chunk_id,
-            "doc_id": triple.doc_id,
-            "metadata": triple.metadata
-        }
-    save_index(triple_index, paths.index_dir / "triples.json")
