@@ -1,4 +1,4 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 import json
 import shutil
@@ -23,7 +23,7 @@ class Document:
     filename: str        # Original filename
     processed_at: float  # Unix timestamp
     metadata: Dict       # Any additional metadata
-    named_entities: Optional[List[str]] = None
+    named_entities: List[str] = field(default_factory=list)
 
 @dataclass
 class Chunk:
@@ -34,6 +34,7 @@ class Chunk:
     position: int       # Order in document
     metadata: Dict      # Any additional metadata
     named_entities: Optional[List[str]] = None
+    triple_ids: Optional[List[str]] = None
 
 @dataclass
 class Triple:
@@ -67,7 +68,7 @@ def setup_directories(base_dir: Path) -> Paths:
     paths = Paths(
         base_dir=base_dir,
         docs_dir=base_dir / "input_documents",
-        processed_dir=base_dir / "processed",
+        processed_dir=base_dir / "processed_documents",
         chunks_dir=base_dir / "chunks",
         triples_dir=base_dir / "triples",
         index_dir=base_dir / "indexes",
@@ -154,11 +155,13 @@ def save_chunks(chunks: List[Chunk], paths: Paths, chunk_index: Dict):
         chunk_file = paths.chunks_dir / f"{chunk.chunk_id}.txt"
         chunk_file.write_text(chunk.text)
         
-        # Update chunk index
+        # Update chunk index with all fields
         chunk_index[chunk.chunk_id] = {
             "doc_id": chunk.doc_id,
             "position": chunk.position,
-            "metadata": chunk.metadata
+            "metadata": chunk.metadata,
+            "named_entities": chunk.named_entities or [],
+            "triple_ids": chunk.triple_ids or []
         }
     
     save_index(chunk_index, paths.index_dir / "chunks.json")
@@ -252,6 +255,7 @@ async def extract_triples_from_ner(chunk: Chunk, entities: List[str]) -> Optiona
             return None
             
         valid_triples_data = validate_triple_extraction_response(content)
+        logger.debug(f"Triples extracted: {valid_triples_data}")
         if valid_triples_data is None:
             return None
             
@@ -268,9 +272,9 @@ async def extract_triples_from_ner(chunk: Chunk, entities: List[str]) -> Optiona
             )
             for head, relation, tail in valid_triples_data
         ]
-        
-        logger.debug(f"Successfully extracted {len(triples)} triples")
-        logger.debug(f"Valid triples: {triples}")
+    
+        # Update chunk's triple_ids
+        chunk.triple_ids = [triple.triple_id for triple in triples]
         return triples
             
     except Exception as e:
@@ -312,7 +316,7 @@ def validate_ner_response(content: str) -> Optional[List[str]]:
         return None
 
 @log_performance
-async def process_chunk(chunk: Chunk) -> Optional[List[Triple]]:
+async def process_chunk(chunk: Chunk, paths: Paths) -> Optional[List[Triple]]:
     """Process a single chunk through NER and triple extraction."""
     try:
         logger.debug(f"Starting processing of chunk: {chunk.chunk_id}")        
@@ -349,8 +353,19 @@ async def process_chunk(chunk: Chunk) -> Optional[List[Triple]]:
             logger.error("Failed to validate NER response")
             return None
         
-        # Store entities in chunk
+        # Store entities in chunk and update parent document
         chunk.named_entities = entities
+        
+        # Load and update document index
+        doc_index = load_index(paths.index_dir / "documents.json")
+        if chunk.doc_id in doc_index:
+            doc_data = doc_index[chunk.doc_id]
+            # Add new entities without duplicates
+            doc_data["named_entities"] = list(set(doc_data["named_entities"] + entities))
+            save_index(doc_index, paths.index_dir / "documents.json")
+        else:
+            logger.error(f"Document {chunk.doc_id} not found in document index")
+            
         return await extract_triples_from_ner(chunk, entities)
         
     except Exception as e:
@@ -361,9 +376,10 @@ async def process_chunk(chunk: Chunk) -> Optional[List[Triple]]:
 
 async def get_triples(chunks: List[Chunk], base_dir: Path) -> List[Triple]:
     """Extract triples from text chunks using NER + OpenIE pipeline."""
+    paths = get_paths(base_dir)
     # Process all chunks concurrently
     results = await asyncio.gather(
-        *[process_chunk(chunk) for chunk in chunks]
+        *[process_chunk(chunk, paths) for chunk in chunks]
     )
     
     # Filter out None results and flatten
@@ -452,7 +468,7 @@ def process_documents(base_dir: Path) -> List[Chunk]:
     logger.info("Starting document processing pipeline")
     
     if FILE_RESET:
-        logger.info("File reset mode: Clearing indices, recycling documents, and cleaning triples")
+        logger.info("File reset mode on: processed documents will be re-processed")
         reset_files(paths)
         
     # Load indices
@@ -472,13 +488,15 @@ def process_documents(base_dir: Path) -> List[Chunk]:
     for filepath in unprocessed:
         logger.info(f"Processing {filepath.name}")
         doc, chunks = process_document(filepath, paths, doc_index)
-        save_chunks(chunks, paths, chunk_index)
         all_chunks.extend(chunks)
     
     # Extract triples if chunks were processed
     if all_chunks:
         logger.debug(f"Extracting triples from {len(all_chunks)} chunks")
         asyncio.run(get_triples(all_chunks, base_dir))
+        
+        # Save chunks after all processing is complete
+        save_chunks(all_chunks, paths, chunk_index)
         
     logger.info(f"Processing complete - {len(all_chunks)} chunks processed")
     return all_chunks
@@ -489,9 +507,14 @@ def get_chunk(chunk_id: str, paths: Paths, chunk_index: Dict) -> Optional[Chunk]
     if chunk_id in chunk_index:
         chunk_file = paths.chunks_dir / f"{chunk_id}.txt"
         if chunk_file.exists():
+            index_data = chunk_index[chunk_id]
             return Chunk(
                 chunk_id=chunk_id,
                 text=chunk_file.read_text(),
-                **chunk_index[chunk_id]
+                doc_id=index_data["doc_id"],
+                position=index_data["position"],
+                metadata=index_data["metadata"],
+                named_entities=index_data.get("named_entities"),
+                triple_ids=index_data.get("triple_ids")
             )
     return None

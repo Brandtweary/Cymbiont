@@ -9,7 +9,7 @@ Return as a JSON array named "entities". Example:
     "entities": ["John Smith", "UC Berkeley", "New York"]
 }}
 ---
-{text}
+Text: {text}
 ---'''
 
 TRIPLE_PROMPT = '''Please create RDF triples from the following text using OpenIE. Each triple should contain at least one named entity from the list.
