@@ -477,7 +477,7 @@ def process_documents(base_dir: Path) -> List[Chunk]:
     
     # Extract triples if chunks were processed
     if all_chunks:
-        logger.info(f"Extracting triples from {len(all_chunks)} chunks")
+        logger.debug(f"Extracting triples from {len(all_chunks)} chunks")
         asyncio.run(get_triples(all_chunks, base_dir))
         
     logger.info(f"Processing complete - {len(all_chunks)} chunks processed")

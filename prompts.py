@@ -5,21 +5,21 @@ from shared_resources import logger
 
 NER_PROMPT = '''Please extract named entities from the following text.
 Return as a JSON array named "entities". Example:
-{
+{{
     "entities": ["John Smith", "UC Berkeley", "New York"]
-}
+}}
 ---
 {text}
 ---'''
 
 TRIPLE_PROMPT = '''Please create RDF triples from the following text using OpenIE. Each triple should contain at least one named entity from the list.
 Return as a JSON array named "triples". Example:
-{
+{{
     "triples": [
         ["John Smith", "attended", "UC Berkeley"],
         ["UC Berkeley", "is located in", "California"]
     ]
-}
+}}
 ---
 Text: {text}
 

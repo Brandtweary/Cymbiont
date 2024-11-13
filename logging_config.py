@@ -68,8 +68,8 @@ def setup_logging(
     cymbiont_logger.propagate = True  # Allow logs to propagate to root logger
     
     # Log startup information
-    cymbiont_logger.info("Cymbiont logging initialized")
-    cymbiont_logger.info(f"Cymbiont log: {cymbiont_log_file}")
-    cymbiont_logger.info(f"Complete log: {complete_log_file}")
+    cymbiont_logger.debug("Cymbiont logging initialized")
+    cymbiont_logger.debug(f"Cymbiont log: {cymbiont_log_file}")
+    cymbiont_logger.debug(f"Complete log: {complete_log_file}")
     
     return cymbiont_logger
