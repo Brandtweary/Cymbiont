@@ -1,60 +1,16 @@
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict
 from pathlib import Path
 import json
 import shutil
-from typing import List, Dict, Optional, NamedTuple
+from typing import List, Dict, Optional
 import time
 import re
 import asyncio
 from shared_resources import logger, FILE_RESET
 from triple_extraction import process_chunk
 from utils import log_performance, generate_id, load_index, save_index
+from custom_dataclasses import Document, Chunk, Paths, Triple
 
-
-NER_OPENAI_MODEL = "gpt-4o-mini"
-
-# Data structures
-@dataclass
-class Document:
-    """Represents a processed document"""
-    doc_id: str          # Unique identifier
-    filename: str        # Original filename
-    processed_at: float  # Unix timestamp
-    metadata: Dict       # Any additional metadata
-    named_entities: List[str] = field(default_factory=list)
-
-@dataclass
-class Chunk:
-    """A chunk of text with references"""
-    chunk_id: str        # Unique identifier
-    doc_id: str         # Reference to parent document
-    text: str           # Actual content
-    position: int       # Order in document
-    metadata: Dict      # Any additional metadata
-    named_entities: Optional[List[str]] = None
-    triple_ids: Optional[List[str]] = None
-
-@dataclass
-class Triple:
-    """An RDF triple with provenance"""
-    triple_id: str      # Unique identifier
-    chunk_id: str       # Reference to source chunk
-    doc_id: str         # Reference to source document
-    head: str
-    relation: str
-    tail: str
-    metadata: Dict      # Any additional metadata
-
-class Paths(NamedTuple):
-    """Paths for data storage"""
-    base_dir: Path
-    docs_dir: Path
-    processed_dir: Path
-    chunks_dir: Path
-    triples_dir: Path
-    index_dir: Path
-    logs_dir: Path
-    inert_docs_dir: Path
 
 # Add at top with other globals
 _DIRS_INITIALIZED: bool = False
