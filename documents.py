@@ -8,8 +8,8 @@ import time
 import re
 import asyncio
 from json.decoder import JSONDecodeError
-from prompts import create_safe_prompt, NER_PROMPT, TRIPLE_PROMPT
-from shared_resources import openai_client, logger, DEBUG
+from prompts import safe_format_prompt, NER_PROMPT, TRIPLE_PROMPT
+from shared_resources import openai_client, logger, DEBUG, FILE_RESET
 from utils import log_performance
 
 
@@ -54,6 +54,8 @@ class Paths(NamedTuple):
     chunks_dir: Path
     triples_dir: Path
     index_dir: Path
+    logs_dir: Path
+    inert_docs_dir: Path
 
 # Add at top with other globals
 _DIRS_INITIALIZED: bool = False
@@ -64,11 +66,13 @@ def setup_directories(base_dir: Path) -> Paths:
     """Create directory structure and return paths"""
     paths = Paths(
         base_dir=base_dir,
-        docs_dir=base_dir / "documents",
+        docs_dir=base_dir / "input_documents",
         processed_dir=base_dir / "processed",
         chunks_dir=base_dir / "chunks",
         triples_dir=base_dir / "triples",
-        index_dir=base_dir / "indexes"
+        index_dir=base_dir / "indexes",
+        logs_dir=base_dir / "logs",
+        inert_docs_dir=base_dir / "inert_documents"
     )
     
     for dir_path in paths:
@@ -159,21 +163,70 @@ def save_chunks(chunks: List[Chunk], paths: Paths, chunk_index: Dict):
     
     save_index(chunk_index, paths.index_dir / "chunks.json")
 
+def validate_triple_extraction_response(content: str) -> Optional[List[List[str]]]:
+    """Validate triple extraction response and normalize format."""
+    try:
+        # Parse JSON
+        data = json.loads(content)
+        if not isinstance(data, dict):
+            logger.error(f"Expected JSON object, got {type(data)}")
+            return None
+            
+        # Ensure only one field
+        if len(data) != 1:
+            logger.error(f"Expected exactly one field, got {len(data)}")
+            return None
+            
+        # Get the triples list (regardless of field name)
+        field_name, triples = next(iter(data.items()))
+        
+        # Handle case where single triple isn't nested properly
+        if isinstance(triples, list) and len(triples) == 3 and all(isinstance(x, str) for x in triples):
+            logger.warning("Found non-nested triple, normalizing format")
+            triples = [triples]
+            
+        if not isinstance(triples, list):
+            logger.error(f"Expected list of triples, got {type(triples)}")
+            return None
+            
+        # Validate each triple
+        valid_triples = []
+        for i, triple in enumerate(triples):
+            if not isinstance(triple, list):
+                logger.warning(f"Triple {i} is not a list, skipping")
+                continue
+                
+            if len(triple) != 3:
+                logger.warning(f"Triple {i} does not have exactly 3 elements, skipping")
+                continue
+                
+            # Convert all elements to strings
+            valid_triples.append([str(elem) for elem in triple])
+            
+        if not valid_triples:
+            logger.warning("No valid triples found in response")
+            return None
+            
+        return valid_triples
+        
+    except JSONDecodeError as e:
+        logger.error(f"Invalid JSON response: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Validation failed: {str(e)}")
+        return None
+
 @log_performance
 async def extract_triples_from_ner(chunk: Chunk, entities: List[str]) -> Optional[List[Triple]]:
     """Extract triples from a chunk using the identified entities."""
     try:
-        logger.info(f"Attempting triple extraction for chunk {chunk.chunk_id}")
-        logger.info(f"Working with entities: {entities}")
-        
-        # Safely format triple prompt with validation
         try:
-            triple_prompt = create_safe_prompt(
+            triple_prompt = safe_format_prompt(
                 TRIPLE_PROMPT,
                 text=chunk.text,
                 entities=entities
             )
-            logger.debug(f"Created triple prompt: {triple_prompt[:200]}...")
+            logger.debug(f"Created triple prompt: {triple_prompt}")
         except ValueError as e:
             logger.error(f"Failed to format triple prompt: {e}")
             return None
@@ -193,79 +246,86 @@ async def extract_triples_from_ner(chunk: Chunk, entities: List[str]) -> Optiona
             logger.error(f"OpenAI API call failed: {str(e)}")
             return None
             
-        # Super defensive triple extraction
-        try:
-            content = triple_response.choices[0].message.content
-            if not content:
-                logger.error("Empty response from OpenAI")
-                return None
-                
-            logger.debug(f"Parsing JSON content: {content}")
-            triples_data = json.loads(content).get("triples", [])
-            
-            logger.debug(f"Extracted triples data: {triples_data}")
-            
-            if not isinstance(triples_data, list):
-                logger.error(f"Expected list of triples, got {type(triples_data)}")
-                return None
-            
-            valid_triples = []
-            for t in triples_data:
-                if not isinstance(t, list) or len(t) != 3:
-                    continue
-                    
-                head, relation, tail = t  # Simple list unpacking
-                valid_triples.append(
-                    Triple(
-                        triple_id=generate_id(f"{head}{relation}{tail}"),
-                        chunk_id=chunk.chunk_id,
-                        doc_id=chunk.doc_id,
-                        head=str(head),
-                        relation=str(relation),
-                        tail=str(tail),
-                        metadata={"source": "openai_extraction"}
-                    )
-                )
-            
-            if valid_triples:
-                logger.info(f"Successfully extracted {len(valid_triples)} triples")
-                logger.debug(f"Valid triples: {valid_triples}")
-            else:
-                logger.warning("No valid triples extracted")
-                logger.debug("Triple extraction failed at validation stage")
-            
-            return valid_triples
-            
-        except Exception as e:
-            logger.error(f"Failed to process response: {str(e)}")
+        content = triple_response.choices[0].message.content
+        if not content:
+            logger.error("Empty response from OpenAI")
             return None
+            
+        valid_triples_data = validate_triple_extraction_response(content)
+        if valid_triples_data is None:
+            return None
+            
+        # Convert to Triple objects
+        triples = [
+            Triple(
+                triple_id=generate_id(f"{head}{relation}{tail}"),
+                chunk_id=chunk.chunk_id,
+                doc_id=chunk.doc_id,
+                head=head,
+                relation=relation,
+                tail=tail,
+                metadata={"source": "openai_extraction"}
+            )
+            for head, relation, tail in valid_triples_data
+        ]
+        
+        logger.debug(f"Successfully extracted {len(triples)} triples")
+        logger.debug(f"Valid triples: {triples}")
+        return triples
             
     except Exception as e:
         logger.error(f"Failed to process chunk {chunk.chunk_id}: {str(e)}")
         if DEBUG:
-            raise  # Re-raise the exception in debug mode
+            raise
+        return None
+
+def validate_ner_response(content: str) -> Optional[List[str]]:
+    """Validate NER response and extract entities list."""
+    try:
+        # Parse JSON
+        data = json.loads(content)
+        if not isinstance(data, dict):
+            logger.error(f"Expected JSON object, got {type(data)}")
+            return None
+            
+        # Ensure only one field
+        if len(data) != 1:
+            logger.error(f"Expected exactly one field, got {len(data)}")
+            return None
+            
+        # Get the entities list (regardless of field name)
+        field_name, entities = next(iter(data.items()))
+        
+        if not isinstance(entities, list):
+            logger.error(f"Expected list of entities, got {type(entities)}")
+            return None
+            
+        # Ensure all entities are strings
+        entities = [str(entity) for entity in entities]
+        return entities
+        
+    except JSONDecodeError as e:
+        logger.error(f"Invalid JSON response: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Validation failed: {str(e)}")
         return None
 
 @log_performance
 async def process_chunk(chunk: Chunk) -> Optional[List[Triple]]:
     """Process a single chunk through NER and triple extraction."""
     try:
-        logger.info(f"Starting processing of chunk: {chunk.chunk_id}")
-        logger.debug(f"Chunk text: {chunk.text[:100]}...")
-        
-        # Safely format NER prompt with validation
+        logger.debug(f"Starting processing of chunk: {chunk.chunk_id}")        
         try:
-            ner_prompt = create_safe_prompt(
+            ner_prompt = safe_format_prompt(
                 NER_PROMPT,
                 text=chunk.text
             )
-            logger.debug("NER prompt created successfully")
         except ValueError as e:
             logger.error(f"Failed to format NER prompt: {e}")
             return None
             
-        # Log the actual prompt for debugging
-        logger.debug(f"NER Prompt: {ner_prompt[:200]}...")
+        logger.debug(f"NER Prompt: {ner_prompt}")
             
         ner_response = await openai_client.chat.completions.create(
             model=NER_OPENAI_MODEL,
@@ -276,66 +336,22 @@ async def process_chunk(chunk: Chunk) -> Optional[List[Triple]]:
             }]
         )
         
-        logger.info("Received response from OpenAI")
-        logger.debug(f"Raw response: {ner_response.choices[0].message.content}")
+        content = ner_response.choices[0].message.content
+        logger.debug(f"Raw response: {content}")
         
-        # Super defensive entity extraction
-        content: Optional[str] = None  # Define content at the start of the scope
-        try:
-            content = ner_response.choices[0].message.content
-            if not content:
-                logger.warning("Empty content received from OpenAI, using empty entities list")
-                entities = []
-            else:
-                # Try to parse as JSON, with multiple fallback options
-                try:
-                    response_data = json.loads(content)
-                    
-                    # Try multiple possible response formats
-                    entities = (
-                        response_data.get("entities") or
-                        response_data.get("named_entities") or
-                        response_data.get("extracted_entities") or
-                        response_data.get("results") or
-                        []
-                    )
-                    
-                    # If we got a string instead of a list, try to parse it
-                    if isinstance(entities, str):
-                        try:
-                            entities = json.loads(entities)
-                        except JSONDecodeError:
-                            entities = [entities]  # Single entity as string
-                    
-                    # Ensure we have a list
-                    if not isinstance(entities, list):
-                        logger.warning(f"Unexpected entities format: {type(entities)}, converting to list")
-                        entities = [str(entities)]
-                    
-                    # Filter out any non-string entities
-                    entities = [str(e) for e in entities if e]
-                    
-                except JSONDecodeError:
-                    logger.warning("Failed to parse JSON response, attempting to extract entities directly")
-                    # Last resort: try to extract anything that looks like an entity
-                    import re
-                    entities = re.findall(r'"([^"]+)"', content)  # Extract quoted strings
-                    if not entities:
-                        entities = []
-            
-            logger.debug(f"Extracted entities: {entities}")
-            
-            # Store entities in chunk regardless of what we got
-            chunk.named_entities = entities
-            
-            # Proceed with triple extraction even if entities list is empty
-            return await extract_triples_from_ner(chunk, entities)
-            
-        except Exception as e:
-            logger.error(f"Entity extraction failed: {str(e)}")
-            logger.debug(f"Raw response content: {content}")  # Now content is always defined
-            # Don't fail completely, try with empty entities list
+        if not content:
+            logger.warning("Empty response from OpenAI, using empty entities list")
+            chunk.named_entities = []
             return await extract_triples_from_ner(chunk, [])
+            
+        entities = validate_ner_response(content)
+        if entities is None:
+            logger.error("Failed to validate NER response")
+            return None
+        
+        # Store entities in chunk
+        chunk.named_entities = entities
+        return await extract_triples_from_ner(chunk, entities)
         
     except Exception as e:
         logger.error(f"Failed to process chunk {chunk.chunk_id}: {str(e)}")
@@ -412,44 +428,59 @@ def move_processed_to_documents(paths: Paths) -> None:
             except Exception as e:
                 logger.error(f"Failed to move {file_path.name}: {str(e)}")
 
+def clean_directories(paths: Paths) -> None:
+    """Remove all files from triples and chunks directories"""
+    # Clean triples directory
+    for triple_file in paths.triples_dir.glob("*.json"):
+        triple_file.unlink()
+    
+    # Clean chunks directory
+    for chunk_file in paths.chunks_dir.glob("*.txt"):
+        chunk_file.unlink()
+
+def reset_files(paths: Paths) -> None:
+    """Clear indices, move processed documents back, and clean generated files"""
+    clear_indices(paths)
+    move_processed_to_documents(paths)
+    clean_directories(paths)
+
 @log_performance
 def process_documents(base_dir: Path) -> List[Chunk]:
     """Main document processing pipeline"""
     paths = get_paths(base_dir)
     
-    logger.info("🏰 Starting document processing pipeline")
+    logger.info("Starting document processing pipeline")
     
-    if DEBUG:
-        logger.info("🐛 Debug mode: Clearing indices and recycling processed documents")
-        clear_indices(paths)
-        move_processed_to_documents(paths)
-    
+    if FILE_RESET:
+        logger.info("File reset mode: Clearing indices, recycling documents, and cleaning triples")
+        reset_files(paths)
+        
     # Load indices
     doc_index = load_index(paths.index_dir / "documents.json")
     chunk_index = load_index(paths.index_dir / "chunks.json")
     
     # Find documents to process
     unprocessed = find_unprocessed_documents(paths)
-    logger.info(f"📄 Found {len(unprocessed)} documents to process")
+    logger.info(f"Found {len(unprocessed)} documents to process")
     
     if not unprocessed:
-        logger.warning("⚠️ No documents to process")
+        logger.warning("No documents to process")
         return []
     
     # Process each document
     all_chunks = []
     for filepath in unprocessed:
-        logger.info(f"🔄 Processing {filepath.name}")
+        logger.info(f"Processing {filepath.name}")
         doc, chunks = process_document(filepath, paths, doc_index)
         save_chunks(chunks, paths, chunk_index)
         all_chunks.extend(chunks)
     
     # Extract triples if chunks were processed
     if all_chunks:
-        logger.info(f"🎯 Extracting triples from {len(all_chunks)} chunks")
+        logger.info(f"Extracting triples from {len(all_chunks)} chunks")
         asyncio.run(get_triples(all_chunks, base_dir))
         
-    logger.info(f"✅ Processing complete - {len(all_chunks)} chunks processed")
+    logger.info(f"Processing complete - {len(all_chunks)} chunks processed")
     return all_chunks
 
 # Retrieval functions (for when OpenIE needs them)

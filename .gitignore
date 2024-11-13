@@ -1,6 +1,7 @@
 # IDE
 .vscode/
 .cursorignore
+.cursorrules
 
 # Custom
 .archive/
@@ -10,12 +11,15 @@ data/documents/*
 data/indexes/*
 data/processed/*
 data/triples/*
+data/inert_documents/*
+data/logs/*
 !data/chunks/.gitkeep
 !data/documents/.gitkeep
 !data/indexes/.gitkeep
 !data/processed/.gitkeep
 !data/triples/.gitkeep
-
+!data/inert_documents/.gitkeep
+!data/logs/.gitkeep
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

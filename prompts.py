@@ -1,63 +1,52 @@
 import string
-from typing import Dict, Any
-import logging
-import re
+from typing import Any
+from shared_resources import logger
 
-logger = logging.getLogger(__name__)
 
-def safe_format_prompt(prompt_template: str, params: Dict[str, Any]) -> str:
-    """Combat-ready prompt formatter. No JSON validation, just pure string formatting."""
-    # Initialize sanitized_params BEFORE try block
-    sanitized_params = {
-        k: str(v).replace('{', '').replace('}', '')  # Strip formatting characters
-        for k, v in params.items()
-    }
+NER_PROMPT = '''Please extract named entities from the following text.
+Return as a JSON array named "entities". Example:
+{
+    "entities": ["John Smith", "UC Berkeley", "New York"]
+}
+---
+{text}
+---'''
+
+TRIPLE_PROMPT = '''Please create RDF triples from the following text using OpenIE. Each triple should contain at least one named entity from the list.
+Return as a JSON array named "triples". Example:
+{
+    "triples": [
+        ["John Smith", "attended", "UC Berkeley"],
+        ["UC Berkeley", "is located in", "California"]
+    ]
+}
+---
+Text: {text}
+
+Named entities: {entities}
+---'''
+
+
+def safe_format_prompt(prompt_template: str, **kwargs: Any) -> str:
+    """Safely format a prompt template with provided fields.
+    
+    Args:
+        prompt_template: String template with {field_name} placeholders
+        **kwargs: Field values to insert into template
+    
+    Returns:
+        Formatted prompt string
+    """
+    # Format lists into string representation
+    formatted_kwargs = {}
+    for key, value in kwargs.items():
+        if isinstance(value, list):
+            formatted_kwargs[key] = f'["{"\", \"".join(str(x) for x in value)}"]'
+        else:
+            formatted_kwargs[key] = str(value)
     
     try:
-        # Direct format attempt
-        return prompt_template.format(**sanitized_params)
-            
+        return prompt_template.format(**formatted_kwargs)
     except Exception as e:
-        logger.error(f"Prompt formatting failed: {str(e)}")
-        # Now sanitized_params is ALWAYS defined
-        return prompt_template.replace('{text}', sanitized_params.get('text', ''))
-
-def validate_prompt_template(template: str) -> bool:
-    """Validate a prompt template for common issues."""
-    try:
-        # Check for balanced brackets
-        bracket_count = 0
-        for char in template:
-            if char == '{': bracket_count += 1
-            if char == '}': bracket_count -= 1
-            if bracket_count < 0:
-                raise ValueError("Unmatched closing bracket")
-        if bracket_count != 0:
-            raise ValueError("Unmatched opening bracket")
-            
-        # Validate format string syntax
-        string.Formatter().parse(template)
-        
-        return True
-    except Exception as e:
-        logger.error(f"Template validation failed: {str(e)}")
-        return False
-
-def create_safe_prompt(template: str, **kwargs: Any) -> str:
-    """Create a prompt with validation and safe formatting."""
-    if not validate_prompt_template(template):
-        raise ValueError("Invalid prompt template")
-    return safe_format_prompt(template, kwargs)
-
-NER_PROMPT = '''Extract named entities from the text:
-
-{text}
-
-Format as JSON with an "entities" array.'''
-
-TRIPLE_PROMPT = '''Extract factual relationships from this text as simple triples. Each triple should be a list of [entity1, relationship, entity2].
-
-Text: {text}
-Known entities: {entities}
-
-Return as JSON array named "triples".'''
+        logger.error(f"Failed to format prompt: {e}")
+        return prompt_template

@@ -11,7 +11,7 @@ def log_performance(func: Callable) -> Callable:
         start = time.perf_counter()
         result = await func(*args, **kwargs)
         duration = time.perf_counter() - start
-        logger.info(f"⚡ {func.__name__} completed in {duration:.2f}s")
+        logger.info(f"{func.__name__} completed in {duration:.2f}s")
         return result
         
     @functools.wraps(func)
@@ -19,7 +19,7 @@ def log_performance(func: Callable) -> Callable:
         start = time.perf_counter()
         result = func(*args, **kwargs)
         duration = time.perf_counter() - start
-        logger.info(f"⚡ {func.__name__} completed in {duration:.2f}s")
+        logger.info(f"{func.__name__} completed in {duration:.2f}s")
         return result
         
     return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
