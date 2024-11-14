@@ -4,74 +4,47 @@ An autonomous LLM agent with long-term memory.
 
 ## Setup Instructions
 
-### Option 1: Using Nix (Linux)
+### Quick Setup (All Platforms)
 
-The `shell.nix` file automatically sets up a complete development environment, including Python, CUDA, and all dependencies. It creates an isolated environment that won't interfere with your system packages.
-
-1. Install the Nix package manager:
-   ```bash
-   # Install Nix
-   curl -L https://nixos.org/nix/install | sh
-   
-   # Restart your terminal or run:
-   source ~/.nix-profile/etc/profile.d/nix.sh
-   ```
-
-2. Download this repository:
-   ```bash
-   # Install git if you don't have it
-   sudo apt install git  # Ubuntu/Debian
-   sudo dnf install git  # Fedora
-   
-   # Clone the repository
-   git clone https://github.com/Brandtweary/CyberOrganism.git
-   
-   # Enter the project directory
-   cd CyberOrganism
-   ```
-
-3. Start the development environment:
-   ```bash
-   # With CUDA/GPU support (default)
-   nix-shell
-
-   # Or create a CPU-only configuration:
-   echo '{ withCuda = false; }' > config.nix
-   nix-shell
-   ```
-
-This will:
-- Set up Python
-- Install dependencies as nix packages
-- Create a virtual environment and pip install remaining dependencies
-- Configure environment variables from `.env` file
-
-If something goes wrong:
-- Check the error messages in the startup banner
-- For GPU support: ensure you have NVIDIA drivers installed
-- Configurations and paths can be modified in `shell.nix`
-
-If you are using VSCode, you can use the `Nix Environment Selector` extension to automatically activate the nix shell when you open the IDE. 
-
-### Option 2: Traditional Setup (All Platforms)
-
-1. Install Python 3.13:
+1. Install Python:
    - Windows: Download from [python.org](https://www.python.org/downloads/)
-   - Mac: `brew install python@3.13`
-   - Linux: `sudo apt install python3.13` (Ubuntu/Debian)
+   - Mac: `brew install python@3.12`
+   - Linux: `sudo apt install python3.12` (Ubuntu/Debian)
 
-2. Download this repository:
+   **Note:** Python 3.12 is recommended. Newer versions may be incompatible with PyTorch.
+
+2. Clone and enter the repository:
    ```bash
-   # Install git if you don't have it
-   # Windows: Download from https://git-scm.com/download/win
-   # Mac: brew install git
-   # Linux: sudo apt install git
-   
    git clone https://github.com/Brandtweary/CyberOrganism.git
    cd CyberOrganism
    ```
 
-3. Create and activate a virtual environment:
+3. Run the bootstrap script:
+   ```bash
+   # Windows
+   ./bootstrap.sh
+
+   # Mac/Linux
+   bash bootstrap.sh  # Run with bash
+
+   chmod +x bootstrap.sh # Or make executable first
+   ./bootstrap.sh
+   ```
+
+The bootstrap script will:
+- Create a Python virtual environment
+- Install project dependencies
+- Guide you through PyTorch installation
+- Configure environment variables
+- Verify CUDA availability (if applicable)
+
+The script will attempt to use the nvidia-smi tool to determine your CUDA version. If you don't have nvidia-smi, you can determine your CUDA version using a different method, or you can proceed if you already know which PyTorch compute platform you want (e.g. CPU, CUDA, ROCM). The PyTorch installation step can be skipped and performed later by running the bootstrap script again or [installing PyTorch manually](https://pytorch.org/get-started/locally/). 
+
+### Manual Setup
+
+1. Install Python and clone repo (steps 1 and 2 above).
+
+2. Create and activate a virtual environment:
    ```bash
    # Windows
    python -m venv .venv
@@ -82,19 +55,17 @@ If you are using VSCode, you can use the `Nix Environment Selector` extension to
    source .venv/bin/activate
    ```
 
-4. Install PyTorch:
-   Visit [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/) and select your platform preferences. For GPU support on Windows/Linux, you'll also need to:
-   1. Install NVIDIA drivers for your GPU
-   2. Install CUDA from [developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads)
-
-5. Install remaining dependencies:
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
+4. Install PyTorch:
+   Visit [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/) and follow the installation instructions for your platform and compute preferences.
+
 ## Environment Variables
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root and set the following variables:
 ```bash
 OPENAI_API_KEY=your_api_key_here
 ```
