@@ -1,2 +1,5 @@
-numpy
-openai
+# Core dependencies (skipped if NIX_MANAGED=1)
+numpy>=1.26.4; env_var("NIX_MANAGED") != "1"  # dummy example
+
+# Additional dependencies (always installed)
+# ex. faiss-gpu>=1.7.4
