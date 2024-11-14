@@ -1,4 +1,0 @@
-.venv/
-HippoRAG/{data, exp, output, images}
-
-data/
