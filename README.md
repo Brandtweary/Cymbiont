@@ -1,4 +1,4 @@
-# CyberOrganism
+# Cymbiont
 
 An autonomous LLM agent with long-term memory.
 
@@ -15,8 +15,8 @@ An autonomous LLM agent with long-term memory.
 
 2. Clone and enter the repository:
    ```bash
-   git clone https://github.com/Brandtweary/CyberOrganism.git
-   cd CyberOrganism
+   git clone https://github.com/Brandtweary/Cymbiont.git
+   cd Cymbiont
    ```
 
 3. Run the bootstrap script:
