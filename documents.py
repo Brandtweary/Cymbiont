@@ -7,10 +7,10 @@ import time
 import re
 import asyncio
 from shared_resources import logger, FILE_RESET
-from triple_extraction import process_chunk_with_ner
+from triple_extraction import process_chunk_with_ner, extract_triples_from_ner
 from utils import log_performance, generate_id, load_index, save_index
 from custom_dataclasses import Document, Chunk, Paths, Triple
-
+from api_queue import start_api_queue
 
 # Add at top with other globals
 _DIRS_INITIALIZED: bool = False
@@ -105,27 +105,6 @@ def save_chunks(chunks: List[Chunk], paths: Paths, chunk_index: Dict):
     
     save_index(chunk_index, paths.index_dir / "chunks.json")
 
-async def get_triples(chunks: List[Chunk], base_dir: Path) -> List[Triple]:
-    """Extract triples from text chunks using NER + OpenIE pipeline."""
-    paths = get_paths(base_dir)
-    # Process all chunks concurrently
-    results = await asyncio.gather(
-        *[process_chunk_with_ner(chunk, paths) for chunk in chunks]
-    )
-    
-    # Filter out None results and flatten
-    all_triples = [
-        triple 
-        for result in results 
-        if result is not None 
-        for triple in result
-    ]
-    
-    # Save triples using existing function
-    save_triples(all_triples, base_dir)
-    
-    return all_triples
-
 def get_paths(base_dir: Path) -> Paths:
     """Get or initialize directory paths"""
     global _DIRS_INITIALIZED, _PATHS
@@ -138,12 +117,12 @@ def get_paths(base_dir: Path) -> Paths:
     return _PATHS
 
 def save_triples(triples: List[Triple], base_dir: Path) -> None:
-    """Store triples from OpenIE"""
+    """Store triples from OpenAI"""
     paths = get_paths(base_dir)
     triple_index = load_index(paths.index_dir / "triples.json")
     
     for triple in triples:
-        # Save triple
+        # Save triple content
         triple_file = paths.triples_dir / f"{triple.triple_id}.json"
         triple_file.write_text(json.dumps(asdict(triple), indent=2))
         
@@ -192,43 +171,67 @@ def reset_files(paths: Paths) -> None:
     clean_directories(paths)
 
 @log_performance
-def process_documents(base_dir: Path) -> List[Chunk]:
-    """Main document processing pipeline"""
+async def process_documents(base_dir: Path) -> List[Chunk]:
+    """Main document processing pipeline."""
+    await start_api_queue()
     paths = get_paths(base_dir)
-    
+
     logger.info("Starting document processing pipeline")
-    
+
     if FILE_RESET:
         logger.info("File reset mode on: processed documents will be re-processed")
         reset_files(paths)
-        
+
     # Load indices
     doc_index = load_index(paths.index_dir / "documents.json")
     chunk_index = load_index(paths.index_dir / "chunks.json")
-    
+
     # Find documents to process
     unprocessed = find_unprocessed_documents(paths)
     logger.info(f"Found {len(unprocessed)} documents to process")
-    
+
     if not unprocessed:
         logger.warning("No documents to process")
         return []
-    
-    # Process each document
-    all_chunks = []
+
+    # Process each document into chunks
+    all_chunks: List[Chunk] = []
     for filepath in unprocessed:
         logger.info(f"Processing {filepath.name}")
         doc, chunks = process_document(filepath, paths, doc_index)
         all_chunks.extend(chunks)
-    
-    # Extract triples if chunks were processed
-    if all_chunks:
-        logger.debug(f"Extracting triples from {len(all_chunks)} chunks")
-        asyncio.run(get_triples(all_chunks, base_dir))
-        
-        # Save chunks after all processing is complete
-        save_chunks(all_chunks, paths, chunk_index)
-        
+
+    # Process NER on all chunks concurrently
+    named_entities_coros = [
+        process_chunk_with_ner(chunk, paths) for chunk in all_chunks
+    ]
+    named_entities_results = await asyncio.gather(*named_entities_coros)
+
+    # Prepare chunks with named entities for triple extraction
+    chunks_with_entities: List[Chunk] = []
+    for chunk, entities in zip(all_chunks, named_entities_results):
+        if entities is not None:
+            chunks_with_entities.append(chunk)
+
+    # Extract triples from chunks concurrently
+    triples_coros = []
+    for chunk in chunks_with_entities:
+        assert isinstance(chunk.named_entities, list), "Named entities must be a list after NER"
+        triples_coros.append(extract_triples_from_ner(chunk, chunk.named_entities, paths))
+    triples_results = await asyncio.gather(*triples_coros)
+
+    # Flatten triples and filter out None
+    all_triples: List[Triple] = [
+        triple
+        for triples in triples_results
+        if triples is not None
+        for triple in triples
+    ]
+
+    # Save triples and chunks
+    save_triples(all_triples, base_dir)
+    save_chunks(all_chunks, paths, chunk_index)
+
     logger.info(f"Processing complete - {len(all_chunks)} chunks processed")
     return all_chunks
 

@@ -1,9 +1,10 @@
 from documents import process_documents
 from shared_resources import DATA_DIR, logger
+import asyncio
 
 
-def main():
-    chunks = process_documents(DATA_DIR)
+async def main():
+    chunks = await process_documents(DATA_DIR)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
