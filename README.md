@@ -35,8 +35,7 @@ The bootstrap script will:
 - Create a Python virtual environment
 - Install project dependencies
 - Guide you through PyTorch installation
-- Configure environment variables
-- Verify CUDA availability (if applicable)
+- Perform system status checks
 
 The script will attempt to use the nvidia-smi tool to determine your CUDA version. If you don't have nvidia-smi, you can determine your CUDA version using a different method, or you can proceed if you already know which PyTorch compute platform you want (e.g. CPU, CUDA, ROCM). The PyTorch installation step can be skipped and performed later by running the bootstrap script again or [installing PyTorch manually](https://pytorch.org/get-started/locally/). 
 

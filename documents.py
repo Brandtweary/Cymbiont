@@ -1,14 +1,15 @@
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict
 from pathlib import Path
 import json
 import shutil
-from typing import List, Dict, Optional, NamedTuple
+from typing import List, Dict, Optional
 import time
 import re
 import asyncio
 from shared_resources import logger, FILE_RESET
 from triple_extraction import process_chunk
 from utils import log_performance, generate_id, load_index, save_index
+from custom_dataclasses import Document, Chunk, Paths, Triple
 
 
 # Add at top with other globals
