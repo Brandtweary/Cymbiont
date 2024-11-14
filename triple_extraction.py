@@ -160,7 +160,7 @@ def validate_ner_response(content: str) -> Optional[List[str]]:
         return None
 
 @log_performance
-async def process_chunk(chunk: Chunk, paths: Paths) -> Optional[List[Triple]]:
+async def process_chunk_with_ner(chunk: Chunk, paths: Paths) -> Optional[List[Triple]]:
     """Process a single chunk through NER and triple extraction."""
     try:
         logger.debug(f"Starting processing of chunk: {chunk.chunk_id}")        

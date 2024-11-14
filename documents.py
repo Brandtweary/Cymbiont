@@ -7,7 +7,7 @@ import time
 import re
 import asyncio
 from shared_resources import logger, FILE_RESET
-from triple_extraction import process_chunk
+from triple_extraction import process_chunk_with_ner
 from utils import log_performance, generate_id, load_index, save_index
 from custom_dataclasses import Document, Chunk, Paths, Triple
 
@@ -110,7 +110,7 @@ async def get_triples(chunks: List[Chunk], base_dir: Path) -> List[Triple]:
     paths = get_paths(base_dir)
     # Process all chunks concurrently
     results = await asyncio.gather(
-        *[process_chunk(chunk, paths) for chunk in chunks]
+        *[process_chunk_with_ner(chunk, paths) for chunk in chunks]
     )
     
     # Filter out None results and flatten
