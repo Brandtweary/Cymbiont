@@ -14,6 +14,8 @@ from utils import (
     async_timing_section
 )
 from api_queue import enqueue_api_call
+from logging_config import ProcessLog
+
 
 NER_OPENAI_MODEL = "gpt-4o-mini"
 
@@ -106,12 +108,15 @@ def validate_triple_extraction_response(content: str) -> Optional[List[List[str]
 
 
 @log_performance
-async def process_chunk_with_ner(chunk: Chunk, paths: Paths) -> Optional[List[str]]:
+async def process_chunk_with_ner(
+    chunk: Chunk, 
+    paths: Paths, 
+    process_log: ProcessLog
+) -> tuple[Optional[List[str]], ProcessLog]:
     """Process a single chunk through NER."""
     try:
         # Prepare prompt
         ner_prompt = safe_format_prompt(NER_PROMPT, text=chunk.text)
-        logger.debug(f"Starting NER processing of chunk: {chunk.chunk_id}")
 
         # API call section - isolated
         future = enqueue_api_call(
@@ -120,41 +125,46 @@ async def process_chunk_with_ner(chunk: Chunk, paths: Paths) -> Optional[List[st
             response_format={"type": "json_object"}
         )
         response = await future
-        logger.debug(f"NER API call used {response['token_usage']['total_tokens']} tokens")
+        process_log.debug(f"NER API call used {response['token_usage']['total_tokens']} tokens")
         
         if not response["content"]:
-            logger.warning("Empty NER response from OpenAI")
+            process_log.warning("Empty NER response from OpenAI")
             chunk.named_entities = []
-            return []
+            return [], process_log
 
         entities = validate_ner_response(response["content"])
         if entities is None:
+            process_log.error("Failed to validate NER response")
             chunk.named_entities = []
-            return []
+            return [], process_log
 
         chunk.named_entities = entities
-        logger.debug(f"Updated chunk {chunk.chunk_id} with entities: {entities}")
-        return entities
+        process_log.debug(f"Extracted entities: {entities}")
+        return entities, process_log
 
     except AssertionError as e:
-        logger.error(f"Assertion Error: {str(e)}")
+        process_log.error(f"Assertion Error: {str(e)}")
         if DEBUG:
             raise
-        return []
+        return [], process_log
     except Exception as e:
-        logger.error(f"Failed to process chunk {chunk.chunk_id}: {str(e)}")
+        process_log.error(f"Failed to process chunk {chunk.chunk_id}: {str(e)}")
         if DEBUG:
             raise
-        return []
+        return [], process_log
 
 
 @log_performance
-async def extract_triples_from_ner(chunk: Chunk, entities: List[str], paths: Paths) -> Optional[List[Triple]]:
+async def extract_triples_from_ner(
+    chunk: Chunk, 
+    entities: List[str], 
+    paths: Paths,
+    process_log: ProcessLog
+) -> tuple[Optional[List[Triple]], ProcessLog]:
     """Extract triples from a chunk using the identified entities."""
     try:
         # Prepare prompt
         triple_prompt = safe_format_prompt(TRIPLE_PROMPT, text=chunk.text, entities=entities)
-        logger.debug(f"Created triple prompt: {triple_prompt}")
 
         # API call section - isolated
         future = enqueue_api_call(
@@ -163,18 +173,17 @@ async def extract_triples_from_ner(chunk: Chunk, entities: List[str], paths: Pat
             response_format={"type": "json_object"}
         )
         response = await future
-        logger.debug(f"Triple Extraction API call used {response['token_usage']['total_tokens']} tokens")
+        process_log.debug(f"Triple Extraction API call used {response['token_usage']['total_tokens']} tokens")
         
         if not response["content"]:
-            logger.error("Empty Triple Extraction response from OpenAI")
-            return None
+            process_log.error("Empty Triple Extraction response from OpenAI")
+            return None, process_log
 
         # Process response and create triples
-        logger.debug(f"Raw Triple Extraction response: {response['content']}")
         valid_triples_data = validate_triple_extraction_response(response["content"])
-        logger.debug(f"Triples extracted: {valid_triples_data}")
         if valid_triples_data is None:
-            return None
+            process_log.error("Failed to validate triple extraction response")
+            return None, process_log
 
         triples: List[Triple] = [
             Triple(
@@ -190,17 +199,17 @@ async def extract_triples_from_ner(chunk: Chunk, entities: List[str], paths: Pat
         ]
 
         chunk.triple_ids = [triple.triple_id for triple in triples]
-        logger.debug(f"Updated chunk {chunk.chunk_id} with triple IDs.")
+        process_log.debug(f"Created {len(triples)} triples: {valid_triples_data}")
 
-        return triples
+        return triples, process_log
 
     except AssertionError as e:
-        logger.error(f"Assertion Error: {str(e)}")
+        process_log.error(f"Assertion Error: {str(e)}")
         if DEBUG:
             raise
-        return None
+        return None, process_log
     except Exception as e:
-        logger.error(f"Failed to extract triples from chunk {chunk.chunk_id}: {str(e)}")
+        process_log.error(f"Failed to extract triples from chunk {chunk.chunk_id}: {str(e)}")
         if DEBUG:
             raise
-        return None
+        return None, process_log

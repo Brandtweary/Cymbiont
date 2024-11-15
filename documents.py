@@ -10,6 +10,7 @@ from shared_resources import logger, FILE_RESET
 from triple_extraction import process_chunk_with_ner, extract_triples_from_ner
 from utils import log_performance, generate_id, load_index, save_index
 from custom_dataclasses import Document, Chunk, Paths, Triple
+from logging_config import ProcessLog
 
 # Add at top with other globals
 _DIRS_INITIALIZED: bool = False
@@ -173,7 +174,7 @@ def reset_files(paths: Paths) -> None:
 async def process_documents(base_dir: Path) -> List[Chunk]:
     """Main document processing pipeline."""
     paths = get_paths(base_dir)
-
+    
     logger.info("Starting document processing pipeline")
 
     if FILE_RESET:
@@ -199,29 +200,39 @@ async def process_documents(base_dir: Path) -> List[Chunk]:
         doc, chunks = process_document(filepath, paths, doc_index)
         all_chunks.extend(chunks)
 
-    # Process NER on all chunks concurrently
+    # Create process logs for each chunk and prepare NER coroutines
+    chunk_logs = [ProcessLog(f"Chunk {chunk.chunk_id}") for chunk in all_chunks]
     named_entities_coros = [
-        process_chunk_with_ner(chunk, paths) for chunk in all_chunks
+        process_chunk_with_ner(chunk, paths, process_log) 
+        for chunk, process_log in zip(all_chunks, chunk_logs)
     ]
-    named_entities_results = await asyncio.gather(*named_entities_coros)
+    
+    # Process NER on all chunks concurrently
+    ner_results = await asyncio.gather(*named_entities_coros)
+    # Unpack results - each result is (entities, process_log)
+    named_entities_results, ner_logs = zip(*ner_results)
 
     # Prepare chunks with named entities for triple extraction
     chunks_with_entities: List[Chunk] = []
-    for chunk, entities in zip(all_chunks, named_entities_results):
+    valid_chunk_logs: List[ProcessLog] = []
+    for chunk, entities, chunk_log in zip(all_chunks, named_entities_results, chunk_logs):
         if entities is not None:
             chunks_with_entities.append(chunk)
+            valid_chunk_logs.append(chunk_log)
 
     # Extract triples from chunks concurrently
-    triples_coros = []
-    for chunk in chunks_with_entities:
-        assert isinstance(chunk.named_entities, list), "Named entities must be a list after NER"
-        triples_coros.append(extract_triples_from_ner(chunk, chunk.named_entities, paths))
+    triples_coros = [
+        extract_triples_from_ner(chunk, chunk.named_entities, paths, chunk_log)
+        for chunk, chunk_log in zip(chunks_with_entities, valid_chunk_logs)
+    ]
     triples_results = await asyncio.gather(*triples_coros)
+    # Unpack results - each result is (triples, process_log)
+    triples_list, triples_logs = zip(*triples_results)
 
     # Flatten triples and filter out None
     all_triples: List[Triple] = [
         triple
-        for triples in triples_results
+        for triples in triples_list
         if triples is not None
         for triple in triples
     ]
@@ -230,7 +241,12 @@ async def process_documents(base_dir: Path) -> List[Chunk]:
     save_triples(all_triples, base_dir)
     save_chunks(all_chunks, paths, chunk_index)
 
+    # Add all logs to the logger in order
+    for log in chunk_logs:
+        log.add_to_logger(logger)
+    
     logger.info(f"Processing complete - {len(all_chunks)} chunks processed")
+
     return all_chunks
 
 # Retrieval functions (for when OpenIE needs them)

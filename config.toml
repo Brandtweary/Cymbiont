@@ -1,4 +1,4 @@
 [app]
 benchmark = true
-debug = false
+debug = true
 file_reset = true

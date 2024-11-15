@@ -38,7 +38,6 @@ def _convert_response_format(format_dict: Dict[str, str]) -> ResponseFormat:
 
 async def _process_pending_calls() -> None:
     """Process pending API calls within rate limits."""
-    logger.debug("Starting API queue processor")
     while True:
         try:
             async with _batch_lock:
@@ -47,10 +46,6 @@ async def _process_pending_calls() -> None:
                 # Remove timestamps older than 0.1 seconds
                 while _request_times and _request_times[0] < current_time - 0.1:
                     _request_times.popleft()
-                
-                # Process as many calls as we can within rate limit
-                if _pending_calls:
-                    logger.debug(f"Found {len(_pending_calls)} pending calls")
                 
                 calls_to_process = []
                 while _pending_calls and len(_request_times) < REQUESTS_PER_TENTH:
@@ -73,7 +68,6 @@ async def _process_pending_calls() -> None:
 async def _execute_call(call: APICall) -> None:
     """Execute a single API call and set its future."""
     try:
-        logger.debug("Executing API call")
         openai_messages = [
             ChatCompletionUserMessageParam(
                 role=msg["role"],
@@ -86,7 +80,6 @@ async def _execute_call(call: APICall) -> None:
             messages=openai_messages,
             response_format=_convert_response_format(call.response_format)
         )
-        logger.debug("API call complete")
         
         # Package only what we need in a clean format
         assert response.usage is not None, "API response missing 'usage'"
@@ -121,21 +114,18 @@ def enqueue_api_call(
         timestamp=time.time()
     )
     _pending_calls.append(call)
-    logger.debug("API call enqueued")
     return future
 
 async def start_api_queue() -> None:
     """Start the API queue processor."""
     global _processor_task
     if _processor_task is None:
-        logger.debug("Starting API queue")
         _processor_task = asyncio.create_task(_process_pending_calls())
 
 async def stop_api_queue() -> None:
     """Stop the API queue processor."""
     global _processor_task
     if _processor_task is not None:
-        logger.debug("Stopping API queue")
         _processor_task.cancel()
         try:
             await _processor_task
