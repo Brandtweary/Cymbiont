@@ -6,6 +6,7 @@ from typing import Callable, Any, Dict
 from shared_resources import logger
 from pathlib import Path
 import json
+from logging_config import BENCHMARK
 
 def log_performance(func: Callable) -> Callable:
     """Decorator to log function performance."""
@@ -14,7 +15,7 @@ def log_performance(func: Callable) -> Callable:
         start = time.perf_counter()
         result = await func(*args, **kwargs)
         duration = time.perf_counter() - start
-        logger.debug(f"{func.__name__} completed in {duration:.2f}s")
+        logger.log(BENCHMARK, f"{func.__name__} completed in {duration:.2f}s")
         return result
         
     @functools.wraps(func)
@@ -22,7 +23,7 @@ def log_performance(func: Callable) -> Callable:
         start = time.perf_counter()
         result = func(*args, **kwargs)
         duration = time.perf_counter() - start
-        logger.debug(f"{func.__name__} completed in {duration:.2f}s")
+        logger.log(BENCHMARK, f"{func.__name__} completed in {duration:.2f}s")
         return result
         
     return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper

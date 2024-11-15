@@ -13,10 +13,11 @@ def load_config() -> dict:
 
 config = load_config()
 DEBUG = config["app"]["debug"]
+BENCHMARK = config["app"]["benchmark"]
 FILE_RESET = config["app"]["file_reset"]
 
 # Initialize logging first
-logger = setup_logging(LOG_DIR, debug=DEBUG)
+logger = setup_logging(LOG_DIR, debug=DEBUG, benchmark=BENCHMARK)
 
 # Initialize OpenAI client
 openai_client = AsyncOpenAI()

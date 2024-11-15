@@ -1,6 +1,7 @@
 import asyncio
 import time
 from typing import Any, Callable, Optional
+from dataclasses import dataclass, field
 
 RATE_LIMIT_PER_MINUTE = 5000
 RATE_LIMIT_TOKENS_PER_MINUTE = 2_000_000
@@ -30,18 +31,27 @@ async def rate_limit():
         
         break
 
+@dataclass(order=True)
+class PrioritizedItem:
+    priority: int
+    # Make these fields not participate in comparison
+    func: Callable = field(compare=False)
+    args: tuple = field(compare=False)
+    kwargs: dict = field(compare=False)
+    callback: Optional[Callable] = field(compare=False)
+
 async def worker(queue: asyncio.Queue, semaphore: asyncio.Semaphore):
     while True:
-        priority, func, args, kwargs, callback = await queue.get()
+        item = await queue.get()
         await rate_limit()
         async with semaphore:
             try:
-                result = await func(*args, **kwargs)
-                if callback:
-                    callback(result)
+                result = await item.func(*item.args, **item.kwargs)
+                if item.callback:
+                    item.callback(result)
             except Exception as e:
-                if callback:
-                    callback(e)
+                if item.callback:
+                    item.callback(e)
         queue.task_done()
 
 async def initialize_queue():
@@ -56,13 +66,14 @@ async_queue: Optional[asyncio.PriorityQueue] = None
 def enqueue_api_call(
     func: Callable[..., Any],
     *args: Any,
-    priority: int = 1,  # Lower numbers indicate higher priority
+    priority: int = 1,
     callback: Optional[Callable[[Any], None]] = None,
     **kwargs: Any
 ) -> None:
     if async_queue is None:
         raise RuntimeError("API queue not initialized. Call `start_api_queue` first.")
-    async_queue.put_nowait((priority, func, args, kwargs, callback))
+    item = PrioritizedItem(priority=priority, func=func, args=args, kwargs=kwargs, callback=callback)
+    async_queue.put_nowait(item)
 
 async def start_api_queue():
     global async_queue

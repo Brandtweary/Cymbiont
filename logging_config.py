@@ -4,19 +4,26 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime
 
+BENCHMARK = logging.INFO + 5  # Custom level between INFO and WARNING
+logging.addLevelName(BENCHMARK, 'BENCHMARK')
+
 class ConsoleFilter(logging.Filter):
-    """Filter debug messages from console unless debug mode is enabled"""
-    def __init__(self, debug: bool):
+    """Filter debug and benchmark messages based on config flags"""
+    def __init__(self, debug: bool, benchmark: bool):
         self.debug = debug
+        self.benchmark = benchmark
         
     def filter(self, record: logging.LogRecord) -> bool:
         if record.levelno == logging.DEBUG:
             return self.debug
+        if record.levelno == BENCHMARK:
+            return self.benchmark
         return True
 
 def setup_logging(
     log_dir: Path,
     debug: bool = False,
+    benchmark: bool = False,
     log_prefix: Optional[str] = None
 ) -> logging.Logger:
     """Configure logging with separate handlers for cymbiont and all logs"""
@@ -58,7 +65,7 @@ def setup_logging(
     
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(console_formatter)
-    console_handler.addFilter(ConsoleFilter(debug))  # Add filter for debug messages
+    console_handler.addFilter(ConsoleFilter(debug, benchmark))  # Updated filter
     
     # Configure cymbiont logger
     cymbiont_logger = logging.getLogger('cymbiont')

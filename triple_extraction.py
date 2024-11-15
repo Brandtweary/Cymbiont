@@ -10,6 +10,7 @@ from utils import (
     generate_id,
     load_index,
     save_index,
+    log_performance
 )
 from api_queue import enqueue_api_call
 
@@ -103,6 +104,7 @@ def validate_triple_extraction_response(content: str) -> Optional[List[List[str]
         return None
 
 
+@log_performance
 async def process_chunk_with_ner(chunk: Chunk, paths: Paths) -> Optional[List[str]]:
     """Process a single chunk through NER."""
     try:
@@ -181,6 +183,7 @@ async def process_chunk_with_ner(chunk: Chunk, paths: Paths) -> Optional[List[st
         return None
 
 
+@log_performance
 async def extract_triples_from_ner(chunk: Chunk, entities: List[str], paths: Paths) -> Optional[List[Triple]]:
     """Extract triples from a chunk using the identified entities."""
     try:
