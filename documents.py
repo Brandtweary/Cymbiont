@@ -10,7 +10,6 @@ from shared_resources import logger, FILE_RESET
 from triple_extraction import process_chunk_with_ner, extract_triples_from_ner
 from utils import log_performance, generate_id, load_index, save_index
 from custom_dataclasses import Document, Chunk, Paths, Triple
-from api_queue import start_api_queue
 
 # Add at top with other globals
 _DIRS_INITIALIZED: bool = False
@@ -173,7 +172,6 @@ def reset_files(paths: Paths) -> None:
 @log_performance
 async def process_documents(base_dir: Path) -> List[Chunk]:
     """Main document processing pipeline."""
-    await start_api_queue()
     paths = get_paths(base_dir)
 
     logger.info("Starting document processing pipeline")

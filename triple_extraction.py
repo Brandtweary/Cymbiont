@@ -10,7 +10,8 @@ from utils import (
     generate_id,
     load_index,
     save_index,
-    log_performance
+    log_performance,
+    async_timing_section
 )
 from api_queue import enqueue_api_call
 
@@ -108,130 +109,73 @@ def validate_triple_extraction_response(content: str) -> Optional[List[List[str]
 async def process_chunk_with_ner(chunk: Chunk, paths: Paths) -> Optional[List[str]]:
     """Process a single chunk through NER."""
     try:
-        logger.debug(f"Starting NER processing of chunk: {chunk.chunk_id}")
+        # Prepare prompt
         ner_prompt = safe_format_prompt(NER_PROMPT, text=chunk.text)
-        logger.debug(f"NER Prompt: {ner_prompt}")
+        logger.debug(f"Starting NER processing of chunk: {chunk.chunk_id}")
 
-        # Define the API call as a coroutine
-        async def api_call() -> str:
-            response = await openai_client.chat.completions.create(
-                model=NER_OPENAI_MODEL,
-                response_format={"type": "json_object"},
-                messages=[{"role": "user", "content": ner_prompt}],
-            )
-            # Ensure 'usage' is present
-            assert response.usage is not None, "API response missing 'usage'"
-            tokens = response.usage.total_tokens
-            logger.debug(f"NER API call used {tokens} tokens.")
-            content = response.choices[0].message.content
-            # Ensure 'content' is not None
-            assert content is not None, "API response missing 'content'"
-            return content
-
-        # Create a future to await the result
-        future: asyncio.Future = asyncio.get_event_loop().create_future()
-
-        def callback(result: Any) -> None:
-            if isinstance(result, Exception):
-                future.set_exception(result)
-            else:
-                future.set_result(result)
-
-        # Enqueue the API call with priority 1
-        enqueue_api_call(api_call, priority=1, callback=callback)
-
-        # Await the future for the API response
-        content: str = await future
-        logger.debug(f"Raw NER response: {content}")
-
-        if not content:
+        # API call section - isolated
+        future = enqueue_api_call(
+            model=NER_OPENAI_MODEL,
+            messages=[{"role": "user", "content": ner_prompt}],
+            response_format={"type": "json_object"}
+        )
+        response = await future
+        logger.debug(f"NER API call used {response['token_usage']['total_tokens']} tokens")
+        
+        if not response["content"]:
             logger.warning("Empty NER response from OpenAI")
             chunk.named_entities = []
             return []
 
-        entities = validate_ner_response(content)
+        entities = validate_ner_response(response["content"])
         if entities is None:
-            logger.error("Failed to validate NER response")
-            return None
+            chunk.named_entities = []
+            return []
 
-        # Store entities in chunk and update parent document
         chunk.named_entities = entities
-
-        # Load and update document index
-        doc_index = load_index(paths.index_dir / "documents.json")
-        if chunk.doc_id in doc_index:
-            doc_data = doc_index[chunk.doc_id]
-            # Add new entities without duplicates
-            existing_entities = doc_data.get("named_entities", [])
-            doc_data["named_entities"] = list(set(existing_entities + entities))
-            save_index(doc_index, paths.index_dir / "documents.json")
-            logger.debug(f"Updated document {chunk.doc_id} with new entities.")
-        else:
-            logger.error(f"Document {chunk.doc_id} not found in document index")
-
+        logger.debug(f"Updated chunk {chunk.chunk_id} with entities: {entities}")
         return entities
 
     except AssertionError as e:
         logger.error(f"Assertion Error: {str(e)}")
         if DEBUG:
             raise
-        return None
+        return []
     except Exception as e:
         logger.error(f"Failed to process chunk {chunk.chunk_id}: {str(e)}")
         if DEBUG:
             raise
-        return None
+        return []
 
 
 @log_performance
 async def extract_triples_from_ner(chunk: Chunk, entities: List[str], paths: Paths) -> Optional[List[Triple]]:
     """Extract triples from a chunk using the identified entities."""
     try:
+        # Prepare prompt
         triple_prompt = safe_format_prompt(TRIPLE_PROMPT, text=chunk.text, entities=entities)
         logger.debug(f"Created triple prompt: {triple_prompt}")
 
-        # Define the API call as a coroutine
-        async def api_call() -> str:
-            response = await openai_client.chat.completions.create(
-                model=NER_OPENAI_MODEL,
-                response_format={"type": "json_object"},
-                messages=[{"role": "user", "content": triple_prompt}],
-            )
-            # Ensure 'usage' is present
-            assert response.usage is not None, "API response missing 'usage'"
-            tokens = response.usage.total_tokens
-            logger.debug(f"Triple Extraction API call used {tokens} tokens.")
-            content = response.choices[0].message.content
-            # Ensure 'content' is not None
-            assert content is not None, "API response missing 'content'"
-            return content
-
-        # Create a future to await the result
-        future: asyncio.Future = asyncio.get_event_loop().create_future()
-
-        def callback(result: Any) -> None:
-            if isinstance(result, Exception):
-                future.set_exception(result)
-            else:
-                future.set_result(result)
-
-        # Enqueue the API call with priority 1
-        enqueue_api_call(api_call, priority=1, callback=callback)
-
-        # Await the future for the API response
-        content: str = await future
-        logger.debug(f"Raw Triple Extraction response: {content}")
-
-        if not content:
+        # API call section - isolated
+        future = enqueue_api_call(
+            model=NER_OPENAI_MODEL,
+            messages=[{"role": "user", "content": triple_prompt}],
+            response_format={"type": "json_object"}
+        )
+        response = await future
+        logger.debug(f"Triple Extraction API call used {response['token_usage']['total_tokens']} tokens")
+        
+        if not response["content"]:
             logger.error("Empty Triple Extraction response from OpenAI")
             return None
 
-        valid_triples_data = validate_triple_extraction_response(content)
+        # Process response and create triples
+        logger.debug(f"Raw Triple Extraction response: {response['content']}")
+        valid_triples_data = validate_triple_extraction_response(response["content"])
         logger.debug(f"Triples extracted: {valid_triples_data}")
         if valid_triples_data is None:
             return None
 
-        # Convert to Triple objects
         triples: List[Triple] = [
             Triple(
                 triple_id=generate_id(f"{head}{relation}{tail}"),
@@ -245,7 +189,6 @@ async def extract_triples_from_ner(chunk: Chunk, entities: List[str], paths: Pat
             for head, relation, tail in valid_triples_data
         ]
 
-        # Update chunk's triple_ids
         chunk.triple_ids = [triple.triple_id for triple in triples]
         logger.debug(f"Updated chunk {chunk.chunk_id} with triple IDs.")
 
