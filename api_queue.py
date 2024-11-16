@@ -9,12 +9,19 @@ from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from openai.types.shared_params.response_format_text import ResponseFormatText
 
-# Rate limits
-REQUESTS_PER_MINUTE = 5000
-TOKENS_PER_MINUTE = 2000000
+@dataclass
+class TokenUsage:
+    tokens: int
+    timestamp: float
 
-# Derived constants
-REQUESTS_PER_TENTH = REQUESTS_PER_MINUTE / 600  # ≈8.33 requests per 0.1s
+# Constants
+REQUESTS_PER_MINUTE: int = 5000
+TOKENS_PER_MINUTE: int = 2000000
+BATCH_TIMER: float = 0.1  # seconds
+BATCH_LIMIT: int = int(REQUESTS_PER_MINUTE * BATCH_TIMER / 60)  # requests per batch
+TPM_WINDOW: float = 60.0  # seconds to look back for token usage
+TOKEN_HISTORY_SIZE: int = 1000
+TPM_SOFT_LIMIT: float = 0.75  # percentage where interpolation begins
 
 @dataclass
 class APICall:
@@ -25,10 +32,10 @@ class APICall:
     timestamp: float
 
 # Global state
-_request_times: deque[float] = deque(maxlen=int(REQUESTS_PER_TENTH))
 _pending_calls: deque[APICall] = deque()
 _processor_task: Optional[asyncio.Task] = None
 _batch_lock = asyncio.Lock()
+_token_history: deque[TokenUsage] = deque(maxlen=TOKEN_HISTORY_SIZE)
 
 def _convert_response_format(format_dict: Dict[str, str]) -> ResponseFormat:
     """Convert generic response format dict to OpenAI type."""
@@ -37,29 +44,43 @@ def _convert_response_format(format_dict: Dict[str, str]) -> ResponseFormat:
     return ResponseFormatText(type="text")
 
 async def _process_pending_calls() -> None:
-    """Process pending API calls within rate limits."""
+    """Process pending API calls within rate limits.
+    Processes up to BATCH_LIMIT calls every BATCH_TIMER seconds."""
     while True:
         try:
             async with _batch_lock:
                 current_time = time.time()
                 
-                # Remove timestamps older than 0.1 seconds
-                while _request_times and _request_times[0] < current_time - 0.1:
-                    _request_times.popleft()
+                # Clean up old token usage records and calculate recent usage
+                while _token_history and _token_history[0].timestamp < current_time - TPM_WINDOW:
+                    _token_history.popleft()
                 
+                recent_tokens = sum(usage.tokens for usage in _token_history)
+                tokens_per_minute = recent_tokens * (60 / TPM_WINDOW)  # extrapolate to per-minute rate
+                
+                # Calculate interpolated batch limit
+                interpolation_factor = 1.0
+                if tokens_per_minute > TOKENS_PER_MINUTE * TPM_SOFT_LIMIT:
+                    # Linear interpolation between soft limit and hard limit
+                    interpolation_factor = max(0.0, 
+                        1.0 - (tokens_per_minute - TOKENS_PER_MINUTE * TPM_SOFT_LIMIT) / 
+                        (TOKENS_PER_MINUTE * (1.0 - TPM_SOFT_LIMIT)))
+                
+                interpolated_batch_limit = int(BATCH_LIMIT * interpolation_factor)
+                
+                # Process up to interpolated_batch_limit calls
                 calls_to_process = []
-                while _pending_calls and len(_request_times) < REQUESTS_PER_TENTH:
+                while _pending_calls and len(calls_to_process) < interpolated_batch_limit:
                     calls_to_process.append(_pending_calls.popleft())
-                    _request_times.append(current_time)
                 
-                # Create tasks for each call without waiting for them
                 if calls_to_process:
-                    logger.debug(f"Creating {len(calls_to_process)} API call tasks")
+                    logger.debug(f"Creating {len(calls_to_process)} API call tasks " +
+                               f"(TPM: {tokens_per_minute:.0f}, factor: {interpolation_factor:.2f})")
                     for call in calls_to_process:
                         asyncio.create_task(_execute_call(call))
             
-            # Wait until next 0.1s window
-            await asyncio.sleep(0.1)
+            # Wait for next batch window
+            await asyncio.sleep(BATCH_TIMER)
         except Exception as e:
             logger.error(f"Error in processor: {str(e)}")
             if asyncio.get_event_loop().get_debug():
@@ -80,9 +101,15 @@ async def _execute_call(call: APICall) -> None:
             messages=openai_messages,
             response_format=_convert_response_format(call.response_format)
         )
+        assert response.usage is not None, "API response missing 'usage'"
+
+        # Add token usage to history
+        _token_history.append(TokenUsage(
+            tokens=response.usage.total_tokens,
+            timestamp=time.time()
+        ))
         
         # Package only what we need in a clean format
-        assert response.usage is not None, "API response missing 'usage'"
         result = {
             "content": response.choices[0].message.content,
             "token_usage": {
