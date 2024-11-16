@@ -15,9 +15,17 @@ config = load_config()
 DEBUG = config["app"]["debug"]
 BENCHMARK = config["app"]["benchmark"]
 FILE_RESET = config["app"]["file_reset"]
+PROMPT = config["app"]["prompt"]
+RESPONSE = config["app"]["response"]
 
 # Initialize logging first
-logger = setup_logging(LOG_DIR, debug=DEBUG, benchmark=BENCHMARK)
+logger = setup_logging(
+    LOG_DIR, 
+    debug=DEBUG, 
+    benchmark=BENCHMARK,
+    prompt=PROMPT,
+    response=RESPONSE
+)
 
 # Initialize OpenAI client
 openai_client = AsyncOpenAI()

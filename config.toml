@@ -2,3 +2,5 @@
 benchmark = true
 debug = true
 file_reset = true
+prompt = false
+response = false

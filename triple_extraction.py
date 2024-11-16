@@ -117,6 +117,7 @@ async def process_chunk_with_ner(
     try:
         # Prepare prompt
         ner_prompt = safe_format_prompt(NER_PROMPT, text=chunk.text)
+        process_log.prompt(f"NER Prompt:\n{ner_prompt}")
 
         # API call section - isolated
         future = enqueue_api_call(
@@ -126,6 +127,7 @@ async def process_chunk_with_ner(
         )
         response = await future
         process_log.debug(f"NER API call used {response['token_usage']['total_tokens']} tokens")
+        process_log.response(f"NER Response:\n{response['content']}")
         
         if not response["content"]:
             process_log.warning("Empty NER response from OpenAI")
@@ -165,6 +167,7 @@ async def extract_triples_from_ner(
     try:
         # Prepare prompt
         triple_prompt = safe_format_prompt(TRIPLE_PROMPT, text=chunk.text, entities=entities)
+        process_log.prompt(f"Triple Extraction Prompt:\n{triple_prompt}")
 
         # API call section - isolated
         future = enqueue_api_call(
@@ -174,6 +177,7 @@ async def extract_triples_from_ner(
         )
         response = await future
         process_log.debug(f"Triple Extraction API call used {response['token_usage']['total_tokens']} tokens")
+        process_log.response(f"Triple Extraction Response:\n{response['content']}")
         
         if not response["content"]:
             process_log.error("Empty Triple Extraction response from OpenAI")

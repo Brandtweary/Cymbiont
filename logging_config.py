@@ -6,19 +6,36 @@ from datetime import datetime
 from dataclasses import dataclass, field
 
 BENCHMARK = logging.INFO + 5  # Custom level between INFO and WARNING
+PROMPT = logging.INFO + 6
+RESPONSE = logging.INFO + 7
+
 logging.addLevelName(BENCHMARK, 'BENCHMARK')
+logging.addLevelName(PROMPT, 'PROMPT')
+logging.addLevelName(RESPONSE, 'RESPONSE')
 
 class ConsoleFilter(logging.Filter):
-    """Filter debug and benchmark messages based on config flags"""
-    def __init__(self, debug: bool, benchmark: bool):
+    """Filter messages based on config flags"""
+    def __init__(
+        self, 
+        debug: bool, 
+        benchmark: bool,
+        prompt: bool,
+        response: bool
+    ):
         self.debug = debug
         self.benchmark = benchmark
+        self.prompt = prompt
+        self.response = response
         
     def filter(self, record: logging.LogRecord) -> bool:
         if record.levelno == logging.DEBUG:
             return self.debug
         if record.levelno == BENCHMARK:
             return self.benchmark
+        if record.levelno == PROMPT:
+            return self.prompt
+        if record.levelno == RESPONSE:
+            return self.response
         return True
 
 @dataclass
@@ -47,24 +64,34 @@ class ProcessLog:
         """Store an error level message"""
         self.messages.append((logging.ERROR, message))
         
+    def prompt(self, message: str) -> None:
+        """Store a prompt level message"""
+        self.messages.append((PROMPT, message))
+        
+    def response(self, message: str) -> None:
+        """Store a response level message"""
+        self.messages.append((RESPONSE, message))
+        
     def add_to_logger(self, logger: logging.Logger) -> None:
         """Write all collected messages to the provided logger"""
         if not self.messages:
             return
             
         # Create a process group header
-        logger.info(f"=== Process: {self.name} ===")
+        logger.info(f"=== Process Log: {self.name} ===")
         
         # Write all messages, respecting their original levels
         for level, message in self.messages:
             logger.log(level, message)
             
-        logger.info(f"===")
+        logger.info(f"=== END ===")
 
 def setup_logging(
     log_dir: Path,
     debug: bool = False,
     benchmark: bool = False,
+    prompt: bool = False,
+    response: bool = False,
     log_prefix: Optional[str] = None
 ) -> logging.Logger:
     """Configure logging with separate handlers for cymbiont and all logs"""
@@ -106,7 +133,12 @@ def setup_logging(
     
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(console_formatter)
-    console_handler.addFilter(ConsoleFilter(debug, benchmark))  # Updated filter
+    console_handler.addFilter(ConsoleFilter(
+        debug=debug,
+        benchmark=benchmark,
+        prompt=prompt,
+        response=response
+    ))
     
     # Configure cymbiont logger
     cymbiont_logger = logging.getLogger('cymbiont')
