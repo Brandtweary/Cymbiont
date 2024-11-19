@@ -7,37 +7,88 @@ echo -e "\033[32m║        Initializing \033[34mCyberOrganism\033[32m      ║\
 echo -e "\033[32m╚════════════════════════════════════════╝\033[0m"
 
 # Check Python version
-PYTHON_VERSION=$(python --version 2>&1 | cut -d' ' -f2)
+PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2)
 PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
 PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
 
 echo -e "\033[32m>> Runtime: \033[34mPython $PYTHON_VERSION\033[0m"
 echo -e "\033[32m>> Environment: Development\033[0m"
 
-# Check Python version compatibility
-if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -gt 12 ]; then
-    echo -e "\033[31m>> Warning: PyTorch may not be compatible with Python $PYTHON_VERSION\033[0m"
-    echo -e "\033[31m>> PyTorch currently supports Python versions up to 3.12\033[0m"
-    echo -e "\033[31m>> Please consider using Python 3.12 or earlier\033[0m"
-    read -p "Continue anyway? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
+# Load config
+echo -e "\033[32m>> Loading configuration...\033[0m"
+MANAGE_VENV=$(python3 -c '
+import tomllib
+with open("config.toml", "rb") as f:
+    config = tomllib.load(f)
+print(config.get("environment", {}).get("manage_venv", True))
+')
+
+if [ "$MANAGE_VENV" = "False" ]; then
+    PYTHON_PATH=$(which python3)
+    echo -e "\033[33m>> Virtual environment management is disabled\033[0m"
+    echo -e "\033[33m>> Using system Python at: $PYTHON_PATH\033[0m"
+    echo -e "\033[33m>> Dependencies will be installed to this Python environment\033[0m"
+    echo -e -n "\033[34m>> Continue with dependency installation? (y/n): \033[0m"
+    read answer
+    
+    case ${answer:0:1} in
+        y|Y )
+            # Install dependencies
+            echo -e "\033[32m>> Installing dependencies...\033[0m"
+            if python3 -m pip install -r requirements.txt -q; then
+                echo -e "\033[32m>> Dependencies installed successfully\033[0m"
+                
+                # Only ask about PyTorch if dependencies were installed
+                echo -e -n "\033[34m>> Would you like to install PyTorch? (y/n): \033[0m"
+                read pytorch_answer
+                case ${pytorch_answer:0:1} in
+                    y|Y )
+                        if install_pytorch; then
+                            PYTORCH_INSTALLED=true
+                        fi
+                        ;;
+                    * )
+                        echo -e "\033[33m>> Skipping PyTorch installation\033[0m"
+                        echo -e "\033[33m>> See: https://pytorch.org/get-started/locally/\033[0m"
+                        ;;
+                esac
+            else
+                echo -e "\033[31m>> Error: Failed to install dependencies\033[0m"
+                exit 1
+            fi
+            ;;
+        * )
+            echo -e "\033[33m>> Skipping all package installation\033[0m"
+            ;;
+    esac
+else
+    # Check if PyTorch is already installed
+    if python -c "import torch" &> /dev/null; then
+        echo -e "\033[32m>> PyTorch is already installed\033[0m"
+        PYTORCH_INSTALLED=true
+    else
+        if install_pytorch; then
+            PYTORCH_INSTALLED=true
+        fi
     fi
 fi
 
-# Create virtual environment if it doesn't exist
-if [ ! -d ".venv" ]; then
-    echo -e "\033[32m>> Creating virtual environment...\033[0m"
-    python -m venv .venv
-fi
-
-# Activate venv only if not already in one
-if [ -z "$VIRTUAL_ENV" ]; then
-    echo -e "\033[32m>> Activating virtual environment...\033[0m"
-    source .venv/bin/activate
-else
-    echo -e "\033[32m>> Using active virtual environment: \033[34m$VIRTUAL_ENV\033[0m"
+# CUDA check (only if PyTorch was installed or was already present)
+if [ "$PYTORCH_INSTALLED" = true ]; then
+    if python -c "import torch" &> /dev/null; then
+        echo -e "\033[32m>> Checking CUDA availability...\033[0m"
+        python -c '
+import torch
+cuda_available = torch.cuda.is_available()
+device_count = torch.cuda.device_count() if cuda_available else 0
+print("\033[32m>> CUDA Status:\033[0m", "\033[32mAvailable\033[0m" if cuda_available else "\033[31mNot Available\033[0m")
+if cuda_available:
+    print("\033[32m>> CUDA Devices:\033[0m", "\033[32m" + str(device_count) + "\033[0m")
+    print("\033[32m>> CUDA Version:\033[0m", "\033[34m" + torch.version.cuda + "\033[0m")
+'
+    else
+        echo -e "\033[31m>> PyTorch import failed, skipping CUDA check\033[0m"
+    fi
 fi
 
 # Check internet connectivity
@@ -63,101 +114,97 @@ else
     echo -e "\033[32m>> OpenAI API Key: Configured\033[0m"
 fi
 
-# Install dependencies
-if [ ! -f "requirements.txt" ]; then
-    echo -e "\033[31m>> Error: requirements.txt not found\033[0m"
-    exit 1
-fi
-
-echo -e "\033[32m>> Installing Python dependencies...\033[0m"
-if pip install -r requirements.txt --no-deps --upgrade-strategy only-if-needed; then
-    echo -e "\033[32m>> Dependencies installed successfully\033[0m"
-else
-    echo -e "\033[31m>> Error: Failed to install dependencies\033[0m"
-    exit 1
-fi
-
-# Function to detect OS
-get_os() {
-    case "$(uname -s)" in
+# Function to handle PyTorch installation
+install_pytorch() {
+    # Detect OS
+    OS=$(case "$(uname -s)" in
         Linux*)     echo 'Linux';;
         Darwin*)    echo 'Mac';;
         MINGW*|MSYS*|CYGWIN*) echo 'Windows';;
         *)         echo 'Unknown';;
-    esac
-}
-
-# Track if we explicitly skipped PyTorch installation
-PYTORCH_SKIPPED=false
-
-# Check if PyTorch is already installed
-if python3 -c "import torch" &> /dev/null; then
-    echo -e "\033[32m>> PyTorch is already installed\033[0m"
-else
-    # Execute appropriate install command
+    esac)
+    
+    echo -e "\033[32m>> Select PyTorch installation type:\033[0m"
+    if [ "$OS" = "Linux" ]; then
+        options=("CUDA 11.8" "CUDA 12.1" "CUDA 12.4" "ROCm 6.2" "CPU-only" "SKIP")
+    elif [ "$OS" = "Windows" ]; then
+        options=("CUDA 11.8" "CUDA 12.1" "CUDA 12.4" "CPU-only" "SKIP")
+    else  # Mac
+        options=("Default" "SKIP")
+    fi
+    
+    select CHOICE in "${options[@]}"; do
+        if [[ " ${options[@]} " =~ " ${CHOICE} " ]]; then
+            break
+        fi
+        echo "Invalid option. Please try again."
+    done
+    
     if [ "$CHOICE" = "SKIP" ]; then
         echo -e "\033[33m>> Skipping PyTorch installation\033[0m"
-        PYTORCH_SKIPPED=true
-    else
-        echo -e "\033[32m>> Installing PyTorch for: \033[34m$CHOICE\033[0m"
-        
-        case $OS in
-            "Linux")
-                case $CHOICE in
-                    "CUDA 11.8")
-                        pip3 install torch --index-url https://download.pytorch.org/whl/cu118
-                        ;;
-                    "CUDA 12.1")
-                        pip3 install torch --index-url https://download.pytorch.org/whl/cu121
-                        ;;
-                    "CUDA 12.4")
-                        pip3 install torch
-                        ;;
-                    "ROCm 6.2")
-                        pip3 install torch --index-url https://download.pytorch.org/whl/rocm6.2
-                        ;;
-                    "CPU-only")
-                        pip3 install torch --index-url https://download.pytorch.org/whl/cpu
-                        ;;
-                esac
-                ;;
-            "Windows")
-                case $CHOICE in
-                    "CUDA 11.8")
-                        pip3 install torch --index-url https://download.pytorch.org/whl/cu118
-                        ;;
-                    "CUDA 12.1")
-                        pip3 install torch --index-url https://download.pytorch.org/whl/cu121
-                        ;;
-                    "CUDA 12.4")
-                        pip3 install torch --index-url https://download.pytorch.org/whl/cu124
-                        ;;
-                    "CPU-only")
-                        pip3 install torch
-                        ;;
-                esac
-                ;;
-            "Mac")
-                pip3 install torch torchvision torchaudio
-                ;;
-        esac
+        return 1
     fi
-fi
+    
+    echo -e "\033[32m>> Installing PyTorch for: \033[34m$CHOICE\033[0m"
+    case $OS in
+        "Linux")
+            case $CHOICE in
+                "CUDA 11.8")
+                    python -m pip install torch --index-url https://download.pytorch.org/whl/cu118
+                    ;;
+                "CUDA 12.1")
+                    python -m pip install torch --index-url https://download.pytorch.org/whl/cu121
+                    ;;
+                "CUDA 12.4")
+                    python -m pip install torch
+                    ;;
+                "ROCm 6.2")
+                    python -m pip install torch --index-url https://download.pytorch.org/whl/rocm6.2
+                    ;;
+                "CPU-only")
+                    python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+                    ;;
+            esac
+            ;;
+        "Windows")
+            case $CHOICE in
+                "CUDA 11.8")
+                    python -m pip install torch --index-url https://download.pytorch.org/whl/cu118
+                    ;;
+                "CUDA 12.1")
+                    python -m pip install torch --index-url https://download.pytorch.org/whl/cu121
+                    ;;
+                "CUDA 12.4")
+                    python -m pip install torch --index-url https://download.pytorch.org/whl/cu124
+                    ;;
+                "CPU-only")
+                    python -m pip install torch
+                    ;;
+            esac
+            ;;
+        "Mac")
+            python -m pip install torch torchvision torchaudio
+            ;;
+    esac
+    return 0
+}
 
-# Check CUDA availability if PyTorch wasn't explicitly skipped
-if ! $PYTORCH_SKIPPED; then
-    if python3 -c "import torch" &> /dev/null; then
-        echo -e "\033[32m>> Checking CUDA availability...\033[0m"
-        python3 -c '
-import torch
-cuda_available = torch.cuda.is_available()
-device_count = torch.cuda.device_count() if cuda_available else 0
-print("\033[32m>> CUDA Status:\033[0m", "\033[32mAvailable\033[0m" if cuda_available else "\033[31mNot Available\033[0m")
-if cuda_available:
-    print("\033[32m>> CUDA Devices:\033[0m", "\033[32m" + str(device_count) + "\033[0m")
-    print("\033[32m>> CUDA Version:\033[0m", "\033[34m" + torch.version.cuda + "\033[0m")
-'
-    else
-        echo -e "\033[31m>> PyTorch import failed, skipping CUDA check\033[0m"
-    fi
+# After all setup is successful
+if [ $? -eq 0 ]; then
+    echo -e "\033[32m>> Setup complete.\033[0m"
+    echo -e -n "\033[34m>> Would you like to launch Cymbiont? (y/n): \033[0m"
+    read answer
+
+    case ${answer:0:1} in
+        y|Y )
+            echo -e "\033[32m>> Launching Cymbiont...\033[0m"
+            python cymbiont.py
+            ;;
+        * )
+            echo -e "\033[32m>> Setup completed successfully.\033[0m"
+            echo -e "\033[32m>> To run Cymbiont:\033[0m"
+            echo -e "\033[34m>>   python cymbiont.py\033[0m"
+            echo -e "\033[32m>> See README.md for alternative environment options\033[0m"
+            ;;
+    esac
 fi

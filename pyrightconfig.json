@@ -1,0 +1,6 @@
+{
+    "extraPaths": ["src"],
+    "pythonPath": ".venv/bin/python",
+    "venvPath": ".",
+    "venv": ".venv"
+}

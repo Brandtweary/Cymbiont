@@ -4,3 +4,6 @@ debug = true
 file_reset = true
 prompt = false
 response = false
+
+[environment]
+manage_venv = true

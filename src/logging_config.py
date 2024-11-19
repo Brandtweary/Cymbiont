@@ -38,6 +38,38 @@ class ConsoleFilter(logging.Filter):
             return self.response
         return True
 
+class ColoredFormatter(logging.Formatter):
+    """Custom formatter that adds color to console output"""
+    def format(self, record: logging.LogRecord) -> str:
+        # ANSI color codes
+        GREEN = "\033[32m"       # Info, Debug
+        YELLOW = "\033[33m"      # Warning
+        RED = "\033[31m"         # Error
+        BRIGHT_RED = "\033[91m"  # Critical
+        WHITE = "\033[97m"       # Benchmark
+        MAGENTA = "\033[35m"     # Prompt/Response
+        RESET = "\033[0m"
+        
+        # Select color based on log level
+        color = GREEN  # default
+        prefix = ""
+        
+        if record.levelno == logging.WARNING:
+            color = YELLOW
+        elif record.levelno == logging.ERROR:
+            color = RED
+        elif record.levelno == logging.CRITICAL:
+            color = BRIGHT_RED
+            prefix = "CRITICAL: "
+        elif record.levelno == BENCHMARK:
+            color = WHITE
+        elif record.levelno in (PROMPT, RESPONSE):
+            color = MAGENTA
+            
+        # Format the message with color
+        record.msg = f"{color}{prefix}{record.msg}{RESET}"
+        return super().format(record)
+
 @dataclass
 class ProcessLog:
     """Collects logs for a specific process/task to be written together later"""
@@ -108,7 +140,7 @@ def setup_logging(
     file_formatter = logging.Formatter(
         '%(asctime)s | %(levelname)-8s | %(message)s'
     )
-    console_formatter = logging.Formatter('%(message)s')  # Only show the message
+    console_formatter = ColoredFormatter('%(message)s')
     
     # Set up complete logging (all modules)
     complete_handler = logging.handlers.RotatingFileHandler(
@@ -149,7 +181,7 @@ def setup_logging(
     
     # Log startup information
     cymbiont_logger.debug("Cymbiont logging initialized")
-    cymbiont_logger.debug(f"Cymbiont log: {cymbiont_log_file}")
-    cymbiont_logger.debug(f"Complete log: {complete_log_file}")
+    cymbiont_logger.debug(f"Concise log created at: {cymbiont_log_file}") # only Cymbiont logs
+    cymbiont_logger.debug(f"Complete log created at: {complete_log_file}") # includes logs from all modules, not just Cymbiont
     
     return cymbiont_logger

@@ -30,6 +30,7 @@ class APICall:
     response_format: Dict[str, str]
     future: asyncio.Future
     timestamp: float
+    mock: bool = False
 
 # Global state
 _pending_calls: deque[APICall] = deque()
@@ -89,35 +90,50 @@ async def _process_pending_calls() -> None:
 async def _execute_call(call: APICall) -> None:
     """Execute a single API call and set its future."""
     try:
-        openai_messages = [
-            ChatCompletionUserMessageParam(
-                role=msg["role"],
-                content=msg["content"]
-            ) for msg in call.messages
-        ]
-        
-        response = await openai_client.chat.completions.create(
-            model=call.model,
-            messages=openai_messages,
-            response_format=_convert_response_format(call.response_format)
-        )
-        assert response.usage is not None, "API response missing 'usage'"
+        if call.mock:
+            # For mock calls, just echo back the last message content
+            mock_tokens = sum(len(msg["content"]) for msg in call.messages)
+            result = {
+                "content": call.messages[-1]["content"],
+                "token_usage": {
+                    "prompt_tokens": mock_tokens,
+                    "completion_tokens": mock_tokens,
+                    "total_tokens": mock_tokens * 2
+                },
+                "timestamp": time.time()
+            }
+        else:
+            # Real API call logic
+            openai_messages = [
+                ChatCompletionUserMessageParam(
+                    role=msg["role"],
+                    content=msg["content"]
+                ) for msg in call.messages
+            ]
+            
+            response = await openai_client.chat.completions.create(
+                model=call.model,
+                messages=openai_messages,
+                response_format=_convert_response_format(call.response_format)
+            )
+            assert response.usage is not None, "API response missing 'usage'"
 
-        # Add token usage to history
+            result = {
+                "content": response.choices[0].message.content,
+                "token_usage": {
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens
+                },
+                "timestamp": time.time()
+            }
+
+        # Add token usage to history (both real and mock calls)
         _token_history.append(TokenUsage(
-            tokens=response.usage.total_tokens,
+            tokens=result["token_usage"]["total_tokens"],
             timestamp=time.time()
         ))
         
-        # Package only what we need in a clean format
-        result = {
-            "content": response.choices[0].message.content,
-            "token_usage": {
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens
-            }
-        }
         call.future.set_result(result)
     except Exception as e:
         logger.error(f"API call failed: {str(e)}")
@@ -126,7 +142,8 @@ async def _execute_call(call: APICall) -> None:
 def enqueue_api_call(
     model: str,
     messages: List[Dict[str, Any]],
-    response_format: Dict[str, str]
+    response_format: Dict[str, str],
+    mock: bool = False
 ) -> asyncio.Future:
     """Add an API call to the queue and return a future for its result."""
     if _processor_task is None:
@@ -138,7 +155,8 @@ def enqueue_api_call(
         messages=messages,
         response_format=response_format,
         future=future,
-        timestamp=time.time()
+        timestamp=time.time(),
+        mock=mock
     )
     _pending_calls.append(call)
     return future

@@ -19,21 +19,29 @@ _PATHS: Optional[Paths] = None
 # Utility functions
 def setup_directories(base_dir: Path) -> Paths:
     """Create directory structure and return paths"""
-    paths = Paths(
-        base_dir=base_dir,
-        docs_dir=base_dir / "input_documents",
-        processed_dir=base_dir / "processed_documents",
-        chunks_dir=base_dir / "chunks",
-        triples_dir=base_dir / "triples",
-        index_dir=base_dir / "indexes",
-        logs_dir=base_dir / "logs",
-        inert_docs_dir=base_dir / "inert_documents"
-    )
-    
-    for dir_path in paths:
-        dir_path.mkdir(parents=True, exist_ok=True)
+    try:
+        paths = Paths(
+            base_dir=base_dir,
+            docs_dir=base_dir / "input_documents",
+            processed_dir=base_dir / "processed_documents",
+            chunks_dir=base_dir / "chunks",
+            triples_dir=base_dir / "triples",
+            index_dir=base_dir / "indexes",
+            logs_dir=base_dir / "logs",
+            inert_docs_dir=base_dir / "inert_documents"
+        )
         
-    return paths
+        for dir_path in paths:
+            try:
+                dir_path.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                logger.error(f"Failed to create directory {dir_path}: {str(e)}")
+                raise
+            
+        return paths
+    except Exception as e:
+        logger.error(f"Directory setup failed: {str(e)}")
+        raise
 
 # Document processing
 def find_unprocessed_documents(paths: Paths) -> List[Path]:
@@ -109,12 +117,16 @@ def get_paths(base_dir: Path) -> Paths:
     """Get or initialize directory paths"""
     global _DIRS_INITIALIZED, _PATHS
     
-    if not _DIRS_INITIALIZED:
-        _PATHS = setup_directories(base_dir)
-        _DIRS_INITIALIZED = True
-    
-    assert _PATHS is not None  # Tell type checker _PATHS is initialized
-    return _PATHS
+    try:
+        if not _DIRS_INITIALIZED:
+            _PATHS = setup_directories(base_dir)
+            _DIRS_INITIALIZED = True
+        
+        assert _PATHS is not None  # Tell type checker _PATHS is initialized
+        return _PATHS
+    except Exception as e:
+        logger.error(f"Failed to get/initialize paths: {str(e)}")
+        raise
 
 def save_triples(triples: List[Triple], base_dir: Path) -> None:
     """Store triples from OpenAI"""
@@ -173,81 +185,98 @@ def reset_files(paths: Paths) -> None:
 @log_performance
 async def process_documents(base_dir: Path) -> List[Chunk]:
     """Main document processing pipeline."""
-    paths = get_paths(base_dir)
-    
-    logger.info("Starting document processing pipeline")
+    try:
+        paths = get_paths(base_dir)
+        logger.info("Starting document processing pipeline")
+        
+        if FILE_RESET:
+            logger.info("File reset mode on: processed documents will be re-processed")
+            reset_files(paths)
 
-    if FILE_RESET:
-        logger.info("File reset mode on: processed documents will be re-processed")
-        reset_files(paths)
+        # Load indices
+        doc_index = load_index(paths.index_dir / "documents.json")
+        chunk_index = load_index(paths.index_dir / "chunks.json")
 
-    # Load indices
-    doc_index = load_index(paths.index_dir / "documents.json")
-    chunk_index = load_index(paths.index_dir / "chunks.json")
+        # Find documents to process
+        unprocessed = find_unprocessed_documents(paths)
+        logger.info(f"Found {len(unprocessed)} documents to process")
 
-    # Find documents to process
-    unprocessed = find_unprocessed_documents(paths)
-    logger.info(f"Found {len(unprocessed)} documents to process")
+        if not unprocessed:
+            logger.warning("No documents to process")
+            return []
 
-    if not unprocessed:
-        logger.warning("No documents to process")
-        return []
+        # Process each document into chunks
+        all_chunks: List[Chunk] = []
+        for filepath in unprocessed:
+            logger.info(f"Processing {filepath.name}")
+            doc, chunks = process_document(filepath, paths, doc_index)
+            all_chunks.extend(chunks)
 
-    # Process each document into chunks
-    all_chunks: List[Chunk] = []
-    for filepath in unprocessed:
-        logger.info(f"Processing {filepath.name}")
-        doc, chunks = process_document(filepath, paths, doc_index)
-        all_chunks.extend(chunks)
+        # Create process logs for each chunk and prepare NER coroutines
+        chunk_logs = [ProcessLog(f"Chunk {chunk.chunk_id}") for chunk in all_chunks]
+        named_entities_coros = [
+            process_chunk_with_ner(chunk, paths, process_log) 
+            for chunk, process_log in zip(all_chunks, chunk_logs)
+        ]
+        
+        # Process NER on all chunks concurrently
+        try:
+            ner_results = await asyncio.gather(*named_entities_coros, return_exceptions=True)
+            # Check for exceptions in results
+            for result in ner_results:
+                if isinstance(result, Exception):
+                    raise result
+            named_entities_results, ner_logs = zip(*ner_results)
+        except Exception as e:
+            logger.error(f"NER processing failed: {str(e)}")
+            raise
 
-    # Create process logs for each chunk and prepare NER coroutines
-    chunk_logs = [ProcessLog(f"Chunk {chunk.chunk_id}") for chunk in all_chunks]
-    named_entities_coros = [
-        process_chunk_with_ner(chunk, paths, process_log) 
-        for chunk, process_log in zip(all_chunks, chunk_logs)
-    ]
-    
-    # Process NER on all chunks concurrently
-    ner_results = await asyncio.gather(*named_entities_coros)
-    # Unpack results - each result is (entities, process_log)
-    named_entities_results, ner_logs = zip(*ner_results)
+        # Prepare chunks with named entities for triple extraction
+        chunks_with_entities: List[Chunk] = []
+        valid_chunk_logs: List[ProcessLog] = []
+        for chunk, entities, chunk_log in zip(all_chunks, named_entities_results, chunk_logs):
+            if entities is not None:
+                chunks_with_entities.append(chunk)
+                valid_chunk_logs.append(chunk_log)
 
-    # Prepare chunks with named entities for triple extraction
-    chunks_with_entities: List[Chunk] = []
-    valid_chunk_logs: List[ProcessLog] = []
-    for chunk, entities, chunk_log in zip(all_chunks, named_entities_results, chunk_logs):
-        if entities is not None:
-            chunks_with_entities.append(chunk)
-            valid_chunk_logs.append(chunk_log)
+        # Extract triples from chunks concurrently
+        triples_coros = [
+            extract_triples_from_ner(chunk, chunk.named_entities, paths, chunk_log)
+            for chunk, chunk_log in zip(chunks_with_entities, valid_chunk_logs)
+        ]
+        try:
+            triples_results = await asyncio.gather(*triples_coros, return_exceptions=True)
+            # Check for exceptions in results
+            for result in triples_results:
+                if isinstance(result, Exception):
+                    raise result
+            triples_list, triples_logs = zip(*triples_results)
+        except Exception as e:
+            logger.error(f"Triple extraction failed: {str(e)}")
+            raise
 
-    # Extract triples from chunks concurrently
-    triples_coros = [
-        extract_triples_from_ner(chunk, chunk.named_entities, paths, chunk_log)
-        for chunk, chunk_log in zip(chunks_with_entities, valid_chunk_logs)
-    ]
-    triples_results = await asyncio.gather(*triples_coros)
-    # Unpack results - each result is (triples, process_log)
-    triples_list, triples_logs = zip(*triples_results)
+        # Flatten triples and filter out None
+        all_triples: List[Triple] = [
+            triple
+            for triples in triples_list
+            if triples is not None
+            for triple in triples
+        ]
 
-    # Flatten triples and filter out None
-    all_triples: List[Triple] = [
-        triple
-        for triples in triples_list
-        if triples is not None
-        for triple in triples
-    ]
+        # Save triples and chunks
+        save_triples(all_triples, base_dir)
+        save_chunks(all_chunks, paths, chunk_index)
 
-    # Save triples and chunks
-    save_triples(all_triples, base_dir)
-    save_chunks(all_chunks, paths, chunk_index)
+        # Add all logs to the logger in order
+        for log in chunk_logs:
+            log.add_to_logger(logger)
+        
+        logger.info(f"Processing complete - {len(unprocessed)} documents, {len(all_chunks)} chunks, {len(all_triples)} triples")
+        return all_chunks
 
-    # Add all logs to the logger in order
-    for log in chunk_logs:
-        log.add_to_logger(logger)
-    
-    logger.info(f"Processing complete - {len(all_chunks)} chunks processed")
-
-    return all_chunks
+    except Exception as e:
+        logger.error(f"Document processing pipeline failed: {str(e)}")
+        raise  # Re-raise to propagate to main
 
 # Retrieval functions (for when OpenIE needs them)
 def get_chunk(chunk_id: str, paths: Paths, chunk_index: Dict) -> Optional[Chunk]:

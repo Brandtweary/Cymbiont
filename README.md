@@ -36,6 +36,7 @@ The bootstrap script will:
 - Install project dependencies
 - Guide you through PyTorch installation
 - Perform system status checks
+- Optionally launch Cymbiont
 
 The script will attempt to use the nvidia-smi tool to determine your CUDA version. If you don't have nvidia-smi, you can determine your CUDA version using a different method, or you can proceed if you already know which PyTorch compute platform you want (e.g. CPU, CUDA, ROCM). The PyTorch installation step can be skipped and performed later by running the bootstrap script again or [installing PyTorch manually](https://pytorch.org/get-started/locally/). 
 
@@ -68,3 +69,24 @@ Create a `.env` file in the project root and set the following variables:
 ```bash
 OPENAI_API_KEY=your_api_key_here
 ```
+
+## Running Cymbiont
+
+### Quick Start
+```bash
+python cymbiont.py
+```
+Cymbiont will automatically use the virtual environment created during setup.
+
+### Environment Issues?
+If you encounter any environment-related errors, you can re-run the bootstrap script:
+```bash
+./bootstrap.sh  # or: bash bootstrap.sh
+```
+This will repair the virtual environment and reinstall dependencies if needed.
+
+### Alternative Environment Managers
+> If you prefer to use conda, poetry, or another environment manager:
+> 1. Set `manage_venv = false` in config.toml
+> 2. Activate your preferred environment
+> 3. Run bootstrap.sh to install dependencies into that environment, or follow the manual setup instructions, substituting the venv activation step with your environment manager's activation command.

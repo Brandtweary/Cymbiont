@@ -1,2 +1,5 @@
 numpy
 openai
+pytest
+pytest-asyncio
+python-dotenv
