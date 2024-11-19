@@ -76,7 +76,7 @@ OPENAI_API_KEY=your_api_key_here
 ```bash
 python cymbiont.py
 ```
-Cymbiont will automatically use the virtual environment created during setup.
+Cymbiont will automatically use the virtual environment created during setup. If you are using an alternative environment manager, see the [Alternative Environment Managers](#alternative-environment-managers) section below.
 
 ### Environment Issues?
 If you encounter any environment-related errors, you can re-run the bootstrap script:
@@ -90,3 +90,4 @@ If you prefer to use conda, poetry, or another environment manager:
 1. Set `manage_venv = false` in config.toml
 2. Activate your preferred environment
 3. Run bootstrap.sh to install dependencies into that environment, or follow the manual setup instructions, substituting the venv activation step with your environment manager's activation command.
+4. Run `python cymbiont.py` from the activated environment.
