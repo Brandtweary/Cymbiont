@@ -86,7 +86,7 @@ If you encounter any environment-related errors, you can re-run the bootstrap sc
 This will repair the virtual environment and reinstall dependencies if needed.
 
 ### Alternative Environment Managers
-> If you prefer to use conda, poetry, or another environment manager:
-> 1. Set `manage_venv = false` in config.toml
-> 2. Activate your preferred environment
-> 3. Run bootstrap.sh to install dependencies into that environment, or follow the manual setup instructions, substituting the venv activation step with your environment manager's activation command.
+If you prefer to use conda, poetry, or another environment manager:
+1. Set `manage_venv = false` in config.toml
+2. Activate your preferred environment
+3. Run bootstrap.sh to install dependencies into that environment, or follow the manual setup instructions, substituting the venv activation step with your environment manager's activation command.
