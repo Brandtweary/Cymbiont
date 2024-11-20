@@ -20,7 +20,7 @@ if not DATA_DIR.exists():
 LOG_DIR = DATA_DIR / "logs"
 
 # Models
-NER_OPENAI_MODEL = "gpt-4o-mini"
+TAG_EXTRACTION_OPENAI_MODEL = "gpt-4o-mini"
 
 
 # Load config

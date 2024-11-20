@@ -1,5 +1,6 @@
+import asyncio
 from dataclasses import dataclass
-from typing import List, Dict, Optional, NamedTuple, Set
+from typing import Any, List, Dict, Optional, NamedTuple, Set
 from pathlib import Path
 
 
@@ -32,3 +33,19 @@ class Paths(NamedTuple):
     logs_dir: Path
     inert_docs_dir: Path
     snapshots_dir: Path
+
+@dataclass
+class APICall:
+    model: str
+    messages: List[Dict[str, Any]]
+    response_format: Dict[str, str]
+    future: asyncio.Future
+    timestamp: float
+    mock: bool = False
+    mock_tokens: Optional[int] = None
+    expiration_counter: int = 0
+
+@dataclass
+class TokenUsage:
+    tokens: int
+    timestamp: float

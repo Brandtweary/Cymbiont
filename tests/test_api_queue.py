@@ -133,12 +133,81 @@ async def test_tpm_soft_limit() -> None:
     )
     logger.info("test_tpm_soft_limit passed.")
 
+async def test_retry_mechanism() -> None:
+    """Test that API calls retry properly through various failure cases."""
+    from tag_extraction import extract_tags
+    from logging_config import ProcessLog
+    from custom_dataclasses import Chunk
+
+    test_cases = [
+        {
+            "name": "empty_response",
+            "mock_content": "",
+            "expected_retries": 5,
+            "expected_tags": []
+        },
+        {
+            "name": "invalid_json",
+            "mock_content": "not json at all",
+            "expected_retries": 5,
+            "expected_tags": []
+        },
+        {
+            "name": "empty_tag_array",
+            "mock_content": '{"tags": []}',
+            "expected_retries": 5,
+            "expected_tags": []
+        },
+        {
+            "name": "execution_error",
+            "mock_content": None,
+            "expected_retries": 5,
+            "expected_tags": []
+        },
+        {
+            "name": "success_case",
+            "mock_content": '{"tags": ["final", "success"]}',
+            "expected_retries": 1,
+            "expected_tags": ["final", "success"]
+        }
+    ]
+
+    for case in test_cases:
+        # Create fresh test objects for each case
+        chunk = Chunk(
+            chunk_id=f"test_{case['name']}",
+            doc_id="test_doc",
+            text="This is a test chunk that needs tags.",
+            position=0,
+            metadata={},
+            tags=None
+        )
+        process_log = ProcessLog(name=f"test_{case['name']}")
+
+        await clear_token_history()
+        await extract_tags(chunk, process_log, mock=True, mock_content=case["mock_content"])
+
+        assert chunk.tags == case["expected_tags"], (
+            f"{case['name']}: Expected tags {case['expected_tags']}, got {chunk.tags}"
+        )
+        
+        # Check process_log messages for retry count
+        retry_messages = [msg for msg in process_log.messages if "attempt" in msg[1]]
+        retry_count = len(retry_messages)
+        assert retry_count == case["expected_retries"] - 1, (
+            f"{case['name']}: Expected {case['expected_retries'] - 1} retries in logs, "
+            f"got {retry_count}\nRetry messages:\n" + "\n".join(msg[1] for msg in retry_messages)
+        )
+
+    logger.info("test_retry_mechanism passed.")
+
 async def run_tests() -> None:
     """Execute all API queue tests sequentially."""
     tests = [
         test_rpm_rate_limiting,
         test_tpm_throttle,
-        test_tpm_soft_limit
+        test_tpm_soft_limit,
+        test_retry_mechanism
     ]
 
     for test in tests:

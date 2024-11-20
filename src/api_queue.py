@@ -8,11 +8,8 @@ from openai.types.chat import ChatCompletionMessageParam, ChatCompletionUserMess
 from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from openai.types.shared_params.response_format_text import ResponseFormatText
+from custom_dataclasses import APICall, TokenUsage
 
-@dataclass
-class TokenUsage:
-    tokens: int
-    timestamp: float
 
 # Constants
 REQUESTS_PER_MINUTE: int = 5000
@@ -22,16 +19,6 @@ BATCH_LIMIT: int = int(REQUESTS_PER_MINUTE * BATCH_TIMER / 60)  # requests per b
 TPM_WINDOW: float = 60.0  # seconds to look back for token usage
 TOKEN_HISTORY_SIZE: int = 1000
 TPM_SOFT_LIMIT: float = 0.75  # percentage where interpolation begins
-
-@dataclass
-class APICall:
-    model: str
-    messages: List[Dict[str, Any]]
-    response_format: Dict[str, str]
-    future: asyncio.Future
-    timestamp: float
-    mock: bool = False
-    mock_tokens: Optional[int] = None
 
 # Global state
 _pending_calls: deque[APICall] = deque()
@@ -89,7 +76,7 @@ async def _process_pending_calls() -> None:
                 raise
 
 async def _execute_call(call: APICall) -> None:
-    """Execute a single API call and set its future."""
+    """Execute a single API call with retry logic."""
     try:
         if call.mock:
             # Use mock_tokens if provided, else default to message length
@@ -101,7 +88,8 @@ async def _execute_call(call: APICall) -> None:
                     "completion_tokens": mock_tokens,
                     "total_tokens": mock_tokens * 2
                 },
-                "timestamp": time.time()
+                "timestamp": time.time(),
+                "expiration_counter": call.expiration_counter + 1
             }
             mock_total_tokens = result["token_usage"]["total_tokens"]
             token_logger.add_tokens(mock_total_tokens)
@@ -128,7 +116,8 @@ async def _execute_call(call: APICall) -> None:
                     "completion_tokens": response.usage.completion_tokens,
                     "total_tokens": response.usage.total_tokens
                 },
-                "timestamp": time.time()
+                "timestamp": time.time(),
+                "expiration_counter": call.expiration_counter + 1
             }
             token_logger.add_tokens(response.usage.total_tokens)
 
@@ -140,32 +129,47 @@ async def _execute_call(call: APICall) -> None:
         
         call.future.set_result(result)
     except Exception as e:
-        logger.error(f"API call failed: {str(e)}")
-        call.future.set_exception(e)
+        if call.expiration_counter < 4:  # Allow up to 5 total attempts (0-4)
+            logger.warning(f"API call failed (attempt {call.expiration_counter + 1}), retrying: {str(e)}")
+            # Re-queue with incremented counter
+            new_future = enqueue_api_call(
+                model=call.model,
+                messages=call.messages,
+                response_format=call.response_format,
+                mock=call.mock,
+                mock_tokens=call.mock_tokens,
+                expiration_counter=call.expiration_counter + 1
+            )
+            # Link the futures
+            new_future.add_done_callback(
+                lambda f: call.future.set_result(f.result()) if not f.exception() 
+                else call.future.set_exception(f.exception() or RuntimeError("Unknown error occurred"))
+            )
+        else:
+            logger.error(f"API call failed after 5 attempts: {str(e)}")
+            call.future.set_exception(e)
 
 def enqueue_api_call(
     model: str,
     messages: List[Dict[str, Any]],
     response_format: Dict[str, str],
     mock: bool = False,
-    mock_tokens: Optional[int] = None
-) -> asyncio.Future:
-    """Add an API call to the queue and return a future for its result."""
-    if _processor_task is None:
-        raise RuntimeError("API queue not started. Call start_api_queue() first.")
-        
-    future: asyncio.Future = asyncio.get_event_loop().create_future()
+    mock_tokens: Optional[int] = None,
+    expiration_counter: int = 0
+) -> asyncio.Future[Dict[str, Any]]:
+    """Enqueue an API call with retry counter."""
     call = APICall(
         model=model,
         messages=messages,
         response_format=response_format,
-        future=future,
         timestamp=time.time(),
         mock=mock,
-        mock_tokens=mock_tokens
+        mock_tokens=mock_tokens,
+        expiration_counter=expiration_counter,
+        future=asyncio.Future()
     )
     _pending_calls.append(call)
-    return future
+    return call.future
 
 def is_queue_empty() -> bool:
     """Check if the API queue is empty."""
