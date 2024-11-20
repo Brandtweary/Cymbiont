@@ -44,3 +44,4 @@ class Paths(NamedTuple):
     index_dir: Path
     logs_dir: Path
     inert_docs_dir: Path
+    snapshots_dir: Path

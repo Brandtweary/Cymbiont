@@ -11,6 +11,7 @@ from shared_resources import logger
 from pathlib import Path
 import json
 from logging_config import BENCHMARK
+from custom_dataclasses import Paths
 
 @dataclass
 class TimingContext:
@@ -100,3 +101,30 @@ def load_index(index_path: Path) -> Dict:
 def save_index(data: Dict, index_path: Path) -> None:
     """Save an index to disk"""
     index_path.write_text(json.dumps(data, indent=2))
+
+def setup_directories(base_dir: Path) -> Paths:
+    """Create directory structure and return paths"""
+    try:
+        paths = Paths(
+            base_dir=base_dir,
+            docs_dir=base_dir / "input_documents",
+            processed_dir=base_dir / "processed_documents",
+            chunks_dir=base_dir / "chunks",
+            triples_dir=base_dir / "triples",
+            index_dir=base_dir / "indexes",
+            logs_dir=base_dir / "logs",
+            inert_docs_dir=base_dir / "inert_documents",
+            snapshots_dir=base_dir / "snapshots"
+        )
+        
+        for dir_path in paths:
+            try:
+                dir_path.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                logger.error(f"Failed to create directory {dir_path}: {str(e)}")
+                raise
+            
+        return paths
+    except Exception as e:
+        logger.error(f"Directory setup failed: {str(e)}")
+        raise

@@ -13,6 +13,7 @@ data/processed_documents/*
 data/triples/*
 data/inert_documents/*
 data/logs/*
+data/snapshots/*
 !data/chunks/.gitkeep
 !data/input_documents/.gitkeep
 !data/indexes/.gitkeep
@@ -20,6 +21,7 @@ data/logs/*
 !data/triples/.gitkeep
 !data/inert_documents/.gitkeep
 !data/logs/.gitkeep
+!data/snapshots/.gitkeep
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

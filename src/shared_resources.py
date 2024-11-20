@@ -3,6 +3,8 @@ from openai import AsyncOpenAI
 from logging_config import setup_logging
 import tomllib
 from dotenv import load_dotenv
+from dataclasses import dataclass
+from typing import Optional
 
 # Get the project root (one level up from src)
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -40,3 +42,23 @@ logger = setup_logging(
 
 # Initialize OpenAI client
 openai_client = AsyncOpenAI()
+
+@dataclass
+class TokenLogger:
+    token_count: int = 0
+    
+    def add_tokens(self, tokens: int) -> None:
+        """Add tokens to the running total"""
+        self.token_count += tokens
+    
+    def print_tokens(self) -> None:
+        """Print the current token count"""
+        logger.info(f"Current token count: {self.token_count}")
+    
+    def reset_tokens(self) -> None:
+        """Reset token count to zero"""
+        old_count = self.token_count
+        self.token_count = 0
+
+# Initialize token logger
+token_logger = TokenLogger()
