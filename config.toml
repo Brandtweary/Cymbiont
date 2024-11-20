@@ -1,7 +1,7 @@
 [app]
 benchmark = true
 debug = true
-file_reset = true
+file_reset = false
 prompt = false
 response = false
 

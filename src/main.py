@@ -18,8 +18,8 @@ setup_python_path()
 
 # Project imports
 from api_queue import start_api_queue, stop_api_queue, enqueue_api_call
-from documents import process_documents
-from shared_resources import DATA_DIR, logger
+from documents import create_data_snapshot, process_documents
+from shared_resources import DATA_DIR, logger, token_logger
 from tests import test_api_queue
 import threading
 
@@ -40,11 +40,13 @@ class CymbiontShell(cmd.Cmd):
         """Process documents in the data directory.
         Usage: process_documents"""
         try:
+            token_logger.reset_tokens()
             future = asyncio.run_coroutine_threadsafe(
                 process_documents(DATA_DIR),
                 self.loop
             )
-            result = future.result(timeout=300)
+            future.result()
+            token_logger.print_tokens()
         except Exception as e:
             logger.error(f"Document processing failed: {str(e)}")
     
@@ -61,9 +63,27 @@ class CymbiontShell(cmd.Cmd):
                 test_api_queue.run_tests(),
                 self.loop
             )
-            future.result(timeout=300)  # Adjust timeout as needed
+            future.result()  # Adjust timeout as needed
         except Exception as e:
             logger.error(f"API queue tests failed: {str(e)}")
+    
+    def do_create_data_snapshot(self, arg: str) -> None:
+        """Create a snapshot of the data directory structure."""
+        if not arg:
+            print("Error: Please provide a name for the snapshot")
+            return
+        
+        try:
+            token_logger.reset_tokens()
+            future = asyncio.run_coroutine_threadsafe(
+                create_data_snapshot(arg),
+                self.loop
+            )
+            snapshot_path = future.result()
+            logger.info(f"Created snapshot at {snapshot_path}")
+            token_logger.print_tokens()
+        except Exception as e:
+            logger.error(f"Snapshot creation failed: {str(e)}")
 
 def main():
     # Create a new event loop

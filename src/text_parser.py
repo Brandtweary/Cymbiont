@@ -81,6 +81,11 @@ def combine_postscripts(paragraphs: List[str]) -> List[str]:
         if is_postscript(para):
             ps_buffer.append(para)
         else:
+            # If we have postscripts but no preceding paragraph, add them as separate paragraphs
+            if ps_buffer and not result:
+                result.extend(ps_buffer)
+                ps_buffer.clear()
+            
             if result and ps_buffer:
                 # Combine all accumulated postscripts with the previous paragraph
                 result[-1] = '\n'.join([result[-1]] + ps_buffer)
@@ -88,8 +93,12 @@ def combine_postscripts(paragraphs: List[str]) -> List[str]:
             result.append(para)
     
     # Handle any remaining postscripts at the end
-    if ps_buffer and result:
-        result[-1] = '\n'.join([result[-1]] + ps_buffer)
+    if ps_buffer:
+        if result:
+            result[-1] = '\n'.join([result[-1]] + ps_buffer)
+        else:
+            # If we only had postscripts, add them as separate paragraphs
+            result.extend(ps_buffer)
         
     return result
 

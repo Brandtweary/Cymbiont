@@ -4,23 +4,25 @@ import json
 import shutil
 from typing import List, Dict, Optional
 import time
-import re
 import asyncio
-from shared_resources import logger, FILE_RESET
+from shared_resources import logger, FILE_RESET, DATA_DIR
 from triple_extraction import process_chunk_with_ner, extract_triples_from_ner
-from utils import log_performance, generate_id, load_index, save_index
+from utils import log_performance, generate_id, load_index, save_index, setup_directories
 from custom_dataclasses import Document, Chunk, Paths, Triple
 from logging_config import ProcessLog
+from text_parser import split_into_chunks
 
-# Add at top with other globals
-_DIRS_INITIALIZED: bool = False
-_PATHS: Optional[Paths] = None
+# Initialize the main data directory at module load
+try:
+    setup_directories(DATA_DIR)
+except Exception as e:
+    logger.error(f"Failed to initialize data directory: {str(e)}")
+    raise
 
-# Utility functions
-def setup_directories(base_dir: Path) -> Paths:
-    """Create directory structure and return paths"""
+def get_paths(base_dir: Path) -> Paths:
+    """Get directory paths for the specified base directory"""
     try:
-        paths = Paths(
+        return Paths(
             base_dir=base_dir,
             docs_dir=base_dir / "input_documents",
             processed_dir=base_dir / "processed_documents",
@@ -28,41 +30,17 @@ def setup_directories(base_dir: Path) -> Paths:
             triples_dir=base_dir / "triples",
             index_dir=base_dir / "indexes",
             logs_dir=base_dir / "logs",
-            inert_docs_dir=base_dir / "inert_documents"
+            inert_docs_dir=base_dir / "inert_documents",
+            snapshots_dir=base_dir / "snapshots"
         )
-        
-        for dir_path in paths:
-            try:
-                dir_path.mkdir(parents=True, exist_ok=True)
-            except Exception as e:
-                logger.error(f"Failed to create directory {dir_path}: {str(e)}")
-                raise
-            
-        return paths
     except Exception as e:
-        logger.error(f"Directory setup failed: {str(e)}")
+        logger.error(f"Failed to get paths for {base_dir}: {str(e)}")
         raise
 
 # Document processing
 def find_unprocessed_documents(paths: Paths) -> List[Path]:
     """Find all unprocessed documents in the docs directory"""
     return list(paths.docs_dir.glob("*.txt")) + list(paths.docs_dir.glob("*.md"))
-
-def split_into_chunks(text: str, doc_id: str) -> List[Chunk]:
-    """Split document text into chunks based on paragraphs"""
-    # Split on blank lines and filter empty chunks
-    paragraphs = [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()]
-    
-    return [
-        Chunk(
-            chunk_id=f"{doc_id}-{i}",
-            doc_id=doc_id,
-            text=para,
-            position=i,
-            metadata={}
-        )
-        for i, para in enumerate(paragraphs)
-    ]
 
 def process_document(filepath: Path, paths: Paths, doc_index: Dict) -> tuple[Document, List[Chunk]]:
     """Process a single document into chunks"""
@@ -112,21 +90,6 @@ def save_chunks(chunks: List[Chunk], paths: Paths, chunk_index: Dict):
         }
     
     save_index(chunk_index, paths.index_dir / "chunks.json")
-
-def get_paths(base_dir: Path) -> Paths:
-    """Get or initialize directory paths"""
-    global _DIRS_INITIALIZED, _PATHS
-    
-    try:
-        if not _DIRS_INITIALIZED:
-            _PATHS = setup_directories(base_dir)
-            _DIRS_INITIALIZED = True
-        
-        assert _PATHS is not None  # Tell type checker _PATHS is initialized
-        return _PATHS
-    except Exception as e:
-        logger.error(f"Failed to get/initialize paths: {str(e)}")
-        raise
 
 def save_triples(triples: List[Triple], base_dir: Path) -> None:
     """Store triples from OpenAI"""
@@ -210,7 +173,14 @@ async def process_documents(base_dir: Path) -> List[Chunk]:
         for filepath in unprocessed:
             logger.info(f"Processing {filepath.name}")
             doc, chunks = process_document(filepath, paths, doc_index)
+            if not chunks:
+                logger.warning(f"No chunks were created for document {filepath.name}")
+                continue
             all_chunks.extend(chunks)
+
+        if not all_chunks:
+            logger.warning("No chunks were created from any documents")
+            return []
 
         # Create process logs for each chunk and prepare NER coroutines
         chunk_logs = [ProcessLog(f"Chunk {chunk.chunk_id}") for chunk in all_chunks]
@@ -218,13 +188,14 @@ async def process_documents(base_dir: Path) -> List[Chunk]:
             process_chunk_with_ner(chunk, paths, process_log) 
             for chunk, process_log in zip(all_chunks, chunk_logs)
         ]
-        
+
         # Process NER on all chunks concurrently
         try:
             ner_results = await asyncio.gather(*named_entities_coros, return_exceptions=True)
             # Check for exceptions in results
-            for result in ner_results:
+            for i, result in enumerate(ner_results):
                 if isinstance(result, Exception):
+                    logger.error(f"Result {i} was an exception: {result}")
                     raise result
             named_entities_results, ner_logs = zip(*ner_results)
         except Exception as e:
@@ -295,3 +266,46 @@ def get_chunk(chunk_id: str, paths: Paths, chunk_index: Dict) -> Optional[Chunk]
                 triple_ids=index_data.get("triple_ids")
             )
     return None
+
+async def create_data_snapshot(name: str) -> Path:
+    """
+    Create a snapshot of the current data directory structure.
+    Returns the path to the new snapshot directory.
+    """
+    try:
+        # Get existing paths
+        paths = get_paths(DATA_DIR)
+        
+        # Create snapshot directory
+        snapshot_base = paths.snapshots_dir / f"{name}_snapshot"
+        
+        # Set up directories in snapshot
+        snapshot_paths = Paths(
+            base_dir=snapshot_base,
+            docs_dir=snapshot_base / "input_documents",
+            processed_dir=snapshot_base / "processed_documents",
+            chunks_dir=snapshot_base / "chunks",
+            triples_dir=snapshot_base / "triples",
+            index_dir=snapshot_base / "indexes",
+            logs_dir=snapshot_base / "logs",  # This won't be used
+            inert_docs_dir=snapshot_base / "inert_documents",
+            snapshots_dir=snapshot_base / "snapshots"  # This won't be used
+        )
+        
+        # Create all directories except snapshots and logs
+        for dir_path in [p for p in snapshot_paths if p not in {snapshot_paths.snapshots_dir, snapshot_paths.logs_dir}]:
+            dir_path.mkdir(parents=True, exist_ok=True)
+
+        # Copy input documents to snapshot's input directory
+        for src_path in paths.docs_dir.glob("*.*"):
+            if src_path.suffix.lower() in ['.txt', '.md']:
+                shutil.copy2(src_path, snapshot_paths.docs_dir)
+            
+        # Process documents in the snapshot directory
+        await process_documents(snapshot_base)
+        
+        return snapshot_base
+        
+    except Exception as e:
+        logger.error(f"Failed to create snapshot '{name}': {str(e)}")
+        raise

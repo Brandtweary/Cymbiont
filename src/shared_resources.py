@@ -53,7 +53,7 @@ class TokenLogger:
     
     def print_tokens(self) -> None:
         """Print the current token count"""
-        logger.info(f"Current token count: {self.token_count}")
+        logger.info(f"Tokens used: {self.token_count}")
     
     def reset_tokens(self) -> None:
         """Reset token count to zero"""

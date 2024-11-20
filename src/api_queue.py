@@ -3,7 +3,7 @@ import time
 from typing import Any, Callable, Optional, NamedTuple, List, Dict
 from dataclasses import dataclass
 from collections import deque
-from shared_resources import logger, openai_client
+from shared_resources import logger, openai_client, token_logger
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionUserMessageParam
 from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
