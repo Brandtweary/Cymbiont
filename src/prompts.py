@@ -3,27 +3,13 @@ from typing import Any
 from shared_resources import logger
 
 
-NER_PROMPT = '''Please extract named entities from the following text.
-Return as a JSON array named "entities". Example:
+TAG_PROMPT = '''Please extract relevant tags from the following text. Tag all named entities, categories, and concepts.
+Return as a JSON array named "tags". Example:
 {{
-    "entities": ["John Smith", "UC Berkeley", "New York"]
+    "tags": ["John Smith", "UC Berkeley", "machine learning"]
 }}
 ---
 Text: {text}
----'''
-
-TRIPLE_PROMPT = '''Please create RDF triples from the following text using OpenIE. Each triple should contain at least one named entity from the list.
-Return as a JSON array named "triples". Example:
-{{
-    "triples": [
-        ["John Smith", "attended", "UC Berkeley"],
-        ["UC Berkeley", "is located in", "California"]
-    ]
-}}
----
-Text: {text}
-
-Named entities: {entities}
 ---'''
 
 

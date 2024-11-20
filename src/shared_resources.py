@@ -19,6 +19,10 @@ if not DATA_DIR.exists():
 
 LOG_DIR = DATA_DIR / "logs"
 
+# Models
+NER_OPENAI_MODEL = "gpt-4o-mini"
+
+
 # Load config
 def load_config() -> dict:
     with open("config.toml", "rb") as f:  # Note: tomllib requires binary mode ('rb')

@@ -110,7 +110,6 @@ def setup_directories(base_dir: Path) -> Paths:
             docs_dir=base_dir / "input_documents",
             processed_dir=base_dir / "processed_documents",
             chunks_dir=base_dir / "chunks",
-            triples_dir=base_dir / "triples",
             index_dir=base_dir / "indexes",
             logs_dir=base_dir / "logs",
             inert_docs_dir=base_dir / "inert_documents",

@@ -1,5 +1,5 @@
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional, NamedTuple
+from dataclasses import dataclass
+from typing import List, Dict, Optional, NamedTuple, Set
 from pathlib import Path
 
 
@@ -10,7 +10,7 @@ class Document:
     filename: str
     processed_at: float
     metadata: Dict
-    named_entities: List[str] = field(default_factory=list)
+    tags: Optional[List[str]] = None
 
 @dataclass
 class Chunk:
@@ -20,19 +20,7 @@ class Chunk:
     text: str
     position: int
     metadata: Dict
-    named_entities: Optional[List[str]] = None
-    triple_ids: Optional[List[str]] = None
-
-@dataclass
-class Triple:
-    """An RDF triple with provenance"""
-    triple_id: str
-    chunk_id: str
-    doc_id: str
-    head: str
-    relation: str
-    tail: str
-    metadata: Dict
+    tags: Optional[List[str]] = None
 
 class Paths(NamedTuple):
     """Paths for data storage"""
@@ -40,7 +28,6 @@ class Paths(NamedTuple):
     docs_dir: Path
     processed_dir: Path
     chunks_dir: Path
-    triples_dir: Path
     index_dir: Path
     logs_dir: Path
     inert_docs_dir: Path
