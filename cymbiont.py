@@ -4,15 +4,6 @@ import sys
 from pathlib import Path
 import tomllib
 
-def setup_python_path() -> None:
-    """Add project directories to Python path."""
-    project_root = Path(__file__).parent
-    src_path = project_root / 'src'
-    tests_path = project_root / 'tests'
-    
-    # Add src and tests to Python path
-    sys.path.extend([str(project_root), str(src_path), str(tests_path)])
-
 def ensure_venv() -> None:
     """Ensure we're running in a virtual environment if enabled."""
     # Load config first
@@ -44,7 +35,6 @@ def ensure_venv() -> None:
     os.execv(str(python), [str(python), __file__])
 
 if __name__ == "__main__":
-    setup_python_path()
     ensure_venv()
     
     try:

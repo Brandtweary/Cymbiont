@@ -31,6 +31,7 @@ class APICall:
     future: asyncio.Future
     timestamp: float
     mock: bool = False
+    mock_tokens: Optional[int] = None
 
 # Global state
 _pending_calls: deque[APICall] = deque()
@@ -91,8 +92,8 @@ async def _execute_call(call: APICall) -> None:
     """Execute a single API call and set its future."""
     try:
         if call.mock:
-            # For mock calls, just echo back the last message content
-            mock_tokens = sum(len(msg["content"]) for msg in call.messages)
+            # Use mock_tokens if provided, else default to message length
+            mock_tokens = call.mock_tokens if call.mock_tokens is not None else sum(len(msg["content"]) for msg in call.messages)
             result = {
                 "content": call.messages[-1]["content"],
                 "token_usage": {
@@ -143,7 +144,8 @@ def enqueue_api_call(
     model: str,
     messages: List[Dict[str, Any]],
     response_format: Dict[str, str],
-    mock: bool = False
+    mock: bool = False,
+    mock_tokens: Optional[int] = None
 ) -> asyncio.Future:
     """Add an API call to the queue and return a future for its result."""
     if _processor_task is None:
@@ -156,10 +158,21 @@ def enqueue_api_call(
         response_format=response_format,
         future=future,
         timestamp=time.time(),
-        mock=mock
+        mock=mock,
+        mock_tokens=mock_tokens
     )
     _pending_calls.append(call)
     return future
+
+def is_queue_empty() -> bool:
+    """Check if the API queue is empty."""
+    return len(_pending_calls) == 0
+
+async def clear_token_history() -> None:
+    """Clear the token history to prevent test contamination."""
+    global _token_history
+    _token_history.clear()
+    logger.debug("Token history cleared.")
 
 async def start_api_queue() -> None:
     """Start the API queue processor."""
