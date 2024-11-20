@@ -103,6 +103,8 @@ async def _execute_call(call: APICall) -> None:
                 },
                 "timestamp": time.time()
             }
+            mock_total_tokens = result["token_usage"]["total_tokens"]
+            token_logger.add_tokens(mock_total_tokens)
         else:
             # Real API call logic
             openai_messages = [
@@ -128,6 +130,7 @@ async def _execute_call(call: APICall) -> None:
                 },
                 "timestamp": time.time()
             }
+            token_logger.add_tokens(response.usage.total_tokens)
 
         # Add token usage to history (both real and mock calls)
         _token_history.append(TokenUsage(
