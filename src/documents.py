@@ -70,20 +70,32 @@ def clear_indices(paths: Paths) -> None:
     """Clear all index files when in file reset mode"""
     index_files = [
         paths.index_dir / "documents.json",
-        paths.index_dir / "chunks.json"
+        paths.index_dir / "chunks.json",
+        paths.index_dir / "folders.json"  # Add folders index
     ]
     for index_file in index_files:
         save_index({}, index_file)
 
 def move_processed_to_documents(paths: Paths) -> None:
-    """Move processed files back to documents directory in debug mode"""
+    """Move processed files and folders back to documents directory in debug mode"""
+    # Handle individual files
     for file_path in paths.processed_dir.glob("*.*"):
         if file_path.suffix.lower() in ['.txt', '.md']:
             try:
                 shutil.move(str(file_path), str(paths.docs_dir / file_path.name))
-                logger.debug(f"Moved {file_path.name} back to documents directory")
+                logger.debug(f"Moved file {file_path.name} back to documents directory")
             except Exception as e:
-                logger.error(f"Failed to move {file_path.name}: {str(e)}")
+                logger.error(f"Failed to move file {file_path.name}: {str(e)}")
+    
+    # Handle folders
+    for folder_path in paths.processed_dir.glob("*"):
+        if folder_path.is_dir():
+            try:
+                # Move entire folder back to documents directory
+                shutil.move(str(folder_path), str(paths.docs_dir / folder_path.name))
+                logger.debug(f"Moved folder {folder_path.name} back to documents directory")
+            except Exception as e:
+                logger.error(f"Failed to move folder {folder_path.name}: {str(e)}")
 
 def clean_directories(paths: Paths) -> None:
     """Remove all files from chunks directory"""
@@ -98,32 +110,44 @@ def reset_files(paths: Paths) -> None:
     clean_directories(paths)
 
 async def get_processed_chunks(paths: Paths, doc_index: Dict, doc_name: str | None = None) -> List[Chunk]:
+    """Process both individual documents and document folders."""
+    all_chunks: List[Chunk] = []
+    folder_index = load_index(paths.index_dir / "folders.json")
+    
     if doc_name:
         filepath = paths.docs_dir / doc_name
         if not filepath.exists():
             logger.error(f"Document not found: {doc_name}")
             return []
-        unprocessed = [filepath]
-    else:
-        unprocessed = find_unprocessed_documents(paths)
         
-    logger.info(f"Found {len(unprocessed)} documents to process")
-    if not unprocessed:
-        logger.warning("No documents to process")
-        return []
-
-    all_chunks: List[Chunk] = []
-    for filepath in unprocessed:
-        logger.info(f"Processing {filepath.name}")
-        doc, chunks = parse_document(filepath, paths, doc_index)
-        if not chunks:
-            logger.warning(f"No chunks were created for document {filepath.name}")
-            continue
-        all_chunks.extend(chunks)
-
+        if filepath.is_dir():
+            # Process as folder
+            results = parse_document_folder(filepath, paths, doc_index, folder_index)
+            for _, chunks in results:
+                all_chunks.extend(chunks)
+        else:
+            # Process as single document
+            doc, chunks = parse_document(filepath, paths, doc_index)
+            all_chunks.extend(chunks)
+    else:
+        # Process all unprocessed folders first
+        folders = find_unprocessed_doc_folders(paths)
+        for folder in folders:
+            logger.info(f"Processing folder: {folder.name}")
+            results = parse_document_folder(folder, paths, doc_index, folder_index)
+            for _, chunks in results:
+                all_chunks.extend(chunks)
+        
+        # Then process remaining individual documents
+        individual_docs = find_unprocessed_documents(paths)
+        for filepath in individual_docs:
+            logger.info(f"Processing document: {filepath.name}")
+            doc, chunks = parse_document(filepath, paths, doc_index)
+            all_chunks.extend(chunks)
+    
     if not all_chunks:
         logger.warning("No chunks were created from any documents")
-        
+    
     return all_chunks
 
 async def process_chunk_tags(chunks: List[Chunk], doc_index: Dict) -> set:
@@ -211,14 +235,9 @@ def get_chunk(chunk_id: str, paths: Paths, chunk_index: Dict) -> Optional[Chunk]
     return None
 
 async def create_data_snapshot(name: str, doc_name: str | None = None) -> Path:
-    """
-    Create a snapshot of the current data directory structure and process selected documents.
-    """
+    """Create a snapshot of the current data directory structure and process selected documents."""
     try:
-        # Get existing paths
         paths = get_paths(DATA_DIR)
-        
-        # Create snapshot directory
         snapshot_base = paths.snapshots_dir / f"{name}_snapshot"
         
         # Set up directories in snapshot
@@ -228,9 +247,9 @@ async def create_data_snapshot(name: str, doc_name: str | None = None) -> Path:
             processed_dir=snapshot_base / "processed_documents",
             chunks_dir=snapshot_base / "chunks",
             index_dir=snapshot_base / "indexes",
-            logs_dir=snapshot_base / "logs",  # This won't be used
+            logs_dir=snapshot_base / "logs",
             inert_docs_dir=snapshot_base / "inert_documents",
-            snapshots_dir=snapshot_base / "snapshots"  # This won't be used
+            snapshots_dir=snapshot_base / "snapshots"
         )
         
         # Create all directories except snapshots and logs
@@ -242,18 +261,67 @@ async def create_data_snapshot(name: str, doc_name: str | None = None) -> Path:
             src_path = paths.docs_dir / doc_name
             if not src_path.exists():
                 raise FileNotFoundError(f"Document not found: {doc_name}")
-            if src_path.suffix.lower() in ['.txt', '.md']:
+            if src_path.is_dir():
+                # Copy entire folder
+                shutil.copytree(src_path, snapshot_paths.docs_dir / doc_name)
+            elif src_path.suffix.lower() in ['.txt', '.md']:
                 shutil.copy2(src_path, snapshot_paths.docs_dir)
         else:
-            for src_path in paths.docs_dir.glob("*.*"):
-                if src_path.suffix.lower() in ['.txt', '.md']:
+            # Copy all documents and folders
+            for src_path in paths.docs_dir.iterdir():
+                if src_path.is_dir():
+                    shutil.copytree(src_path, snapshot_paths.docs_dir / src_path.name)
+                elif src_path.suffix.lower() in ['.txt', '.md']:
                     shutil.copy2(src_path, snapshot_paths.docs_dir)
             
-        # Process documents in the snapshot directory
         await process_documents(snapshot_base)
-        
         return snapshot_base
         
     except Exception as e:
         logger.error(f"Failed to create snapshot '{name}': {str(e)}")
-        raise  # Re-raise to handle in shell
+        raise
+
+def find_unprocessed_doc_folders(paths: Paths) -> List[Path]:
+    """Find all unprocessed document folders in the docs directory"""
+    return [p for p in paths.docs_dir.glob("*") if p.is_dir()]
+
+def parse_document_folder(folder_path: Path, paths: Paths, doc_index: Dict, folder_index: Dict) -> List[tuple[Document, List[Chunk]]]:
+    """Parse all documents in a folder and prepare for moving."""
+    folder_id = generate_id(folder_path.name)
+    results: List[tuple[Document, List[Chunk]]] = []
+    
+    # Create/update folder index entry
+    folder_index[folder_id] = {
+        "folder_name": folder_path.name,
+        "processed_at": time.time(),
+        "metadata": {}
+    }
+    
+    # Process each document in the folder
+    for filepath in folder_path.glob("*"):
+        if filepath.suffix.lower() not in ['.txt', '.md']:
+            continue
+            
+        content = filepath.read_text()
+        doc_id = generate_id(content)
+        
+        doc = Document(
+            doc_id=doc_id,
+            filename=filepath.name,
+            processed_at=time.time(),
+            metadata={},
+            tags=[],
+            folder_id=folder_id
+        )
+        
+        chunks = split_into_chunks(content, doc_id)
+        doc_index[doc_id] = asdict(doc)
+        results.append((doc, chunks))
+    
+    # Move folder to processed directory
+    shutil.move(str(folder_path), str(paths.processed_dir))
+    
+    save_index(folder_index, paths.index_dir / "folders.json")
+    save_index(doc_index, paths.index_dir / "documents.json")
+    
+    return results

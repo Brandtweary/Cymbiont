@@ -208,21 +208,33 @@ def test_parse(doc_name: Optional[str] = None) -> None:
     log_file = paths.logs_dir / "parse_test_results.log"
     
     # Get list of documents to process
+    docs: List[Path] = []
     if doc_name:
-        docs = [paths.docs_dir / doc_name]
-        if not docs[0].exists():
+        doc_path = paths.docs_dir / doc_name
+        if not doc_path.exists():
             logger.error(f"Document not found: {doc_name}")
             return
+        if doc_path.is_dir():
+            # Add all documents from the folder
+            docs.extend(list(doc_path.glob("*.txt")) + list(doc_path.glob("*.md")))
+        else:
+            docs = [doc_path]
     else:
-        # Only look for .txt and .md files
-        docs = list(paths.docs_dir.glob("*.txt")) + list(paths.docs_dir.glob("*.md"))
+        # Process all documents and folders
+        for path in paths.docs_dir.iterdir():
+            if path.is_dir():
+                docs.extend(list(path.glob("*.txt")) + list(path.glob("*.md")))
+            elif path.suffix.lower() in ['.txt', '.md']:
+                docs.append(path)
     
     # Process each document
     with open(log_file, "w") as f:
         for doc_path in docs:
             f.write(f"\n{'='*80}\n")
-            f.write(f"Processing document: {doc_path.name}\n")
-            f.write(f"{'='*80}\n\n")
+            f.write(f"Processing document: {doc_path.name}")
+            if doc_path.parent.name != paths.docs_dir.name:
+                f.write(f" (in folder: {doc_path.parent.name})")
+            f.write(f"\n{'='*80}\n\n")
             
             try:
                 text = doc_path.read_text(encoding='utf-8')

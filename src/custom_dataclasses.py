@@ -12,6 +12,7 @@ class Document:
     processed_at: float
     metadata: Dict
     tags: Optional[List[str]] = None
+    folder_id: Optional[str] = None
 
 @dataclass
 class Chunk:
