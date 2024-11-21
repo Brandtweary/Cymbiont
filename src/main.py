@@ -20,7 +20,7 @@ from api_queue import start_api_queue, stop_api_queue
 from shared_resources import logger, DATA_DIR
 import threading
 from cymbiont_shell import CymbiontShell
-from utils import setup_directories
+from utils import setup_directories, delete_logs
 
 
 
@@ -52,6 +52,7 @@ def main():
         # Cleanup
         loop.run_until_complete(stop_api_queue())
         loop.close()
+        delete_logs(DATA_DIR)
         logger.debug("Cymbiont shutdown complete")
 
 if __name__ == "__main__":

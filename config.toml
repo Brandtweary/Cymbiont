@@ -1,9 +1,10 @@
 [app]
 benchmark = true
 debug = true
-file_reset = true
 prompt = false
 response = false
+delete_logs = true 
+file_reset = true  # move processed documents back to input_documents
 
 [environment]
 manage_venv = true

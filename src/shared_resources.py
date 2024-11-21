@@ -34,6 +34,7 @@ BENCHMARK = config["app"]["benchmark"]
 FILE_RESET = config["app"]["file_reset"]
 PROMPT = config["app"]["prompt"]
 RESPONSE = config["app"]["response"]
+DELETE_LOGS = config["app"]["delete_logs"]
 
 # Initialize logging first
 logger = setup_logging(

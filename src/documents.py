@@ -40,9 +40,6 @@ def parse_document(filepath: Path, paths: Paths, doc_index: Dict) -> tuple[Docum
     # Split into chunks
     chunks = split_into_chunks(content, doc_id)
     
-    # Move original file to processed directory
-    shutil.move(str(filepath), str(paths.processed_dir / filepath.name))
-    
     # Update document index
     doc_index[doc_id] = asdict(doc)
     save_index(doc_index, paths.index_dir / "documents.json")
@@ -65,49 +62,6 @@ def save_chunks(chunks: List[Chunk], paths: Paths, chunk_index: Dict):
         }
     
     save_index(chunk_index, paths.index_dir / "chunks.json")
-
-def clear_indices(paths: Paths) -> None:
-    """Clear all index files when in file reset mode"""
-    index_files = [
-        paths.index_dir / "documents.json",
-        paths.index_dir / "chunks.json",
-        paths.index_dir / "folders.json"  # Add folders index
-    ]
-    for index_file in index_files:
-        save_index({}, index_file)
-
-def move_processed_to_documents(paths: Paths) -> None:
-    """Move processed files and folders back to documents directory in debug mode"""
-    # Handle individual files
-    for file_path in paths.processed_dir.glob("*.*"):
-        if file_path.suffix.lower() in ['.txt', '.md']:
-            try:
-                shutil.move(str(file_path), str(paths.docs_dir / file_path.name))
-                logger.debug(f"Moved file {file_path.name} back to documents directory")
-            except Exception as e:
-                logger.error(f"Failed to move file {file_path.name}: {str(e)}")
-    
-    # Handle folders
-    for folder_path in paths.processed_dir.glob("*"):
-        if folder_path.is_dir():
-            try:
-                # Move entire folder back to documents directory
-                shutil.move(str(folder_path), str(paths.docs_dir / folder_path.name))
-                logger.debug(f"Moved folder {folder_path.name} back to documents directory")
-            except Exception as e:
-                logger.error(f"Failed to move folder {folder_path.name}: {str(e)}")
-
-def clean_directories(paths: Paths) -> None:
-    """Remove all files from chunks directory"""
-    # Clean chunks directory
-    for chunk_file in paths.chunks_dir.glob("*.txt"):
-        chunk_file.unlink()
-
-def reset_files(paths: Paths) -> None:
-    """Clear indices, move processed documents back, and clean generated files"""
-    clear_indices(paths)
-    move_processed_to_documents(paths)
-    clean_directories(paths)
 
 async def get_processed_chunks(paths: Paths, doc_index: Dict, doc_name: str | None = None) -> List[Chunk]:
     """Process both individual documents and document folders."""
@@ -202,10 +156,6 @@ async def process_documents(base_dir: Path, doc_name: str | None = None) -> List
         paths = get_paths(base_dir)
         logger.info("Starting document processing pipeline")
         
-        if FILE_RESET:
-            logger.info("File reset mode on: processed documents will be re-processed")
-            reset_files(paths)
-
         # Load indices
         doc_index = load_index(paths.index_dir / "documents.json")
         chunk_index = load_index(paths.index_dir / "chunks.json")

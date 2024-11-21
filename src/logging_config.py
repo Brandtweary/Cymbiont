@@ -181,7 +181,7 @@ def setup_logging(
     
     # Log startup information
     cymbiont_logger.debug("Cymbiont logging initialized")
-    cymbiont_logger.debug(f"Concise log created at: {cymbiont_log_file}") # only Cymbiont logs
-    cymbiont_logger.debug(f"Complete log created at: {complete_log_file}") # includes logs from all modules, not just Cymbiont
+    cymbiont_logger.debug(f"App log created at: {cymbiont_log_file}") # only Cymbiont logs
+    cymbiont_logger.debug(f"Full log created at: {complete_log_file}") # includes logs from all modules, not just Cymbiont
     
     return cymbiont_logger
