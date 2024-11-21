@@ -54,12 +54,14 @@ class CymbiontShell(cmd.Cmd):
             super().do_help(arg)
     
     def do_process_documents(self, arg: str) -> None:
-        """Process documents in the data directory.
-        Usage: process_documents"""
+        """Process documents in the data/input_documents directory.
+        Usage: process_documents [document_name]
+        - document_name: Optional. If provided, only this file will be processed.
+                        Otherwise, processes all unprocessed .txt and .md files."""
         try:
             token_logger.reset_tokens()
             future = asyncio.run_coroutine_threadsafe(
-                process_documents(DATA_DIR),
+                process_documents(DATA_DIR, arg if arg else None),
                 self.loop
             )
             future.result()
@@ -85,15 +87,23 @@ class CymbiontShell(cmd.Cmd):
             logger.error(f"API queue tests failed: {str(e)}")
     
     def do_create_data_snapshot(self, arg: str) -> None:
-        """Create a snapshot of the data directory structure."""
-        if not arg:
+        """Creates an isolated snapshot by processing documents in the data/input_documents directory.
+        The snapshot contains all processing artifacts (chunks, indexes, etc.) as if you had
+        only ever processed the specified documents.
+
+        Usage: create_data_snapshot <snapshot_name> [document_name]
+        - snapshot_name: Name for the new snapshot directory
+        - document_name: Optional. If provided, only this file will be processed.
+                        Otherwise, processes all .txt and .md files."""
+        args = arg.split()
+        if not args:
             print("Error: Please provide a name for the snapshot")
             return
         
         try:
             token_logger.reset_tokens()
             future = asyncio.run_coroutine_threadsafe(
-                create_data_snapshot(arg),
+                create_data_snapshot(args[0], args[1] if len(args) > 1 else None),
                 self.loop
             )
             snapshot_path = future.result()
@@ -103,8 +113,12 @@ class CymbiontShell(cmd.Cmd):
             logger.error(f"Snapshot creation failed: {str(e)}")
     
     def do_test_parse(self, arg: str) -> None:
-        """Test document parsing without LLM tag extraction.
-        Usage: test_parse [document_name] or just test_parse for all input documents"""
+        """Test document parsing without running LLM tag extraction.
+        This command parses documents in data/input_documents into chunks and records the results to logs/parse_test_results.log.
+
+        Usage: test_parse [document_name]
+        - document_name: Optional. If provided, only this file will be tested.
+                        Otherwise, tests all .txt and .md files."""
         try:
             test_parse(arg if arg else None)
         except Exception as e:

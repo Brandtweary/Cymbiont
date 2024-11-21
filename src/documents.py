@@ -97,11 +97,17 @@ def reset_files(paths: Paths) -> None:
     move_processed_to_documents(paths)
     clean_directories(paths)
 
-async def get_processed_chunks(paths: Paths, doc_index: Dict) -> List[Chunk]:
-    """Get chunks from all unprocessed documents."""
-    unprocessed = find_unprocessed_documents(paths)
+async def get_processed_chunks(paths: Paths, doc_index: Dict, doc_name: str | None = None) -> List[Chunk]:
+    if doc_name:
+        filepath = paths.docs_dir / doc_name
+        if not filepath.exists():
+            logger.error(f"Document not found: {doc_name}")
+            return []
+        unprocessed = [filepath]
+    else:
+        unprocessed = find_unprocessed_documents(paths)
+        
     logger.info(f"Found {len(unprocessed)} documents to process")
-
     if not unprocessed:
         logger.warning("No documents to process")
         return []
@@ -154,7 +160,7 @@ async def process_chunk_tags(chunks: List[Chunk], doc_index: Dict) -> set:
     return all_unique_tags
 
 @log_performance
-async def process_documents(base_dir: Path) -> List[Chunk]:
+async def process_documents(base_dir: Path, doc_name: str | None = None) -> List[Chunk]:
     """Main document processing pipeline."""
     try:
         paths = get_paths(base_dir)
@@ -169,7 +175,7 @@ async def process_documents(base_dir: Path) -> List[Chunk]:
         chunk_index = load_index(paths.index_dir / "chunks.json")
 
         # Get chunks from documents
-        all_chunks = await get_processed_chunks(paths, doc_index)
+        all_chunks = await get_processed_chunks(paths, doc_index, doc_name)
         if not all_chunks:
             return []
 
@@ -204,10 +210,9 @@ def get_chunk(chunk_id: str, paths: Paths, chunk_index: Dict) -> Optional[Chunk]
             )
     return None
 
-async def create_data_snapshot(name: str) -> Path:
+async def create_data_snapshot(name: str, doc_name: str | None = None) -> Path:
     """
-    Create a snapshot of the current data directory structure.
-    Returns the path to the new snapshot directory.
+    Create a snapshot of the current data directory structure and process selected documents.
     """
     try:
         # Get existing paths
@@ -233,9 +238,16 @@ async def create_data_snapshot(name: str) -> Path:
             dir_path.mkdir(parents=True, exist_ok=True)
 
         # Copy input documents to snapshot's input directory
-        for src_path in paths.docs_dir.glob("*.*"):
+        if doc_name:
+            src_path = paths.docs_dir / doc_name
+            if not src_path.exists():
+                raise FileNotFoundError(f"Document not found: {doc_name}")
             if src_path.suffix.lower() in ['.txt', '.md']:
                 shutil.copy2(src_path, snapshot_paths.docs_dir)
+        else:
+            for src_path in paths.docs_dir.glob("*.*"):
+                if src_path.suffix.lower() in ['.txt', '.md']:
+                    shutil.copy2(src_path, snapshot_paths.docs_dir)
             
         # Process documents in the snapshot directory
         await process_documents(snapshot_base)
@@ -244,4 +256,4 @@ async def create_data_snapshot(name: str) -> Path:
         
     except Exception as e:
         logger.error(f"Failed to create snapshot '{name}': {str(e)}")
-        raise
+        raise  # Re-raise to handle in shell
