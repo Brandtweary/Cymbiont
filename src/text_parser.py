@@ -215,25 +215,23 @@ def test_parse(doc_name: Optional[str] = None) -> None:
             logger.error(f"Document not found: {doc_name}")
             return
         if doc_path.is_dir():
-            # Add all documents from the folder
-            docs.extend(list(doc_path.glob("*.txt")) + list(doc_path.glob("*.md")))
+            # Recursively add all documents from the folder and subfolders
+            docs.extend(list(doc_path.rglob("*.txt")) + list(doc_path.rglob("*.md")))
         else:
             docs = [doc_path]
     else:
-        # Process all documents and folders
-        for path in paths.docs_dir.iterdir():
-            if path.is_dir():
-                docs.extend(list(path.glob("*.txt")) + list(path.glob("*.md")))
-            elif path.suffix.lower() in ['.txt', '.md']:
-                docs.append(path)
+        # Recursively process all documents in all folders
+        docs.extend(list(paths.docs_dir.rglob("*.txt")) + list(paths.docs_dir.rglob("*.md")))
     
     # Process each document
     with open(log_file, "w") as f:
         for doc_path in docs:
             f.write(f"\n{'='*80}\n")
             f.write(f"Processing document: {doc_path.name}")
-            if doc_path.parent.name != paths.docs_dir.name:
-                f.write(f" (in folder: {doc_path.parent.name})")
+            if doc_path.parent != paths.docs_dir:
+                # Show full relative path for nested documents
+                relative_path = doc_path.parent.relative_to(paths.docs_dir)
+                f.write(f" (in folder: {relative_path})")
             f.write(f"\n{'='*80}\n\n")
             
             try:
