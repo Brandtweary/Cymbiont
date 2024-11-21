@@ -1,11 +1,26 @@
 import re
-from typing import List
+from typing import List, Optional
 from custom_dataclasses import Chunk
+from pathlib import Path
+from shared_resources import DATA_DIR, logger
+from utils import get_paths
+
 
 def is_header(text: str) -> bool:
-    """Determine if a paragraph is a header based on word count and ending."""
-    text = text.strip()
-    return len(text.split()) < 10 and not text.endswith('.')
+    """Determine if a paragraph is a header based on word count per line and ending."""
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    
+    # Not a header if too many lines
+    MAX_HEADER_LINES = 5
+    if len(lines) > MAX_HEADER_LINES:
+        return False
+    
+    # Check each line individually
+    for line in lines:
+        if len(line.split()) >= 10 or (line.endswith('.') and not line.endswith('Ph.D.')):
+            return False
+    
+    return True
 
 def combine_headers(paragraphs: List[str]) -> List[str]:
     """Combine headers with their following paragraphs, preserving line breaks."""
@@ -104,7 +119,17 @@ def combine_postscripts(paragraphs: List[str]) -> List[str]:
 
 def is_diagram(text: str) -> bool:
     """Determine if a paragraph is part of a diagram based on repeated dashes."""
-    return text.count('-') >= 3
+    # Look for lines that are primarily made up of dashes (e.g., "----" or "---|---")
+    lines = text.split('\n')
+    for line in lines:
+        stripped = line.strip()
+        if stripped and (
+            stripped.count('-') / len(stripped) >= 0.5  # At least 50% dashes
+            or stripped.startswith('|')  # Common in ASCII diagrams
+            or stripped.endswith('|')    # Common in ASCII diagrams
+        ):
+            return True
+    return False
 
 def combine_diagrams(paragraphs: List[str]) -> List[str]:
     """Combine diagram paragraphs with their preceding paragraphs."""
@@ -155,8 +180,9 @@ def combine_quotes(paragraphs: List[str]) -> List[str]:
 
 def split_into_chunks(text: str, doc_id: str) -> List[Chunk]:
     """Split document text into chunks based on paragraphs"""
-    # First split into basic paragraphs
-    paragraphs = [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()]
+    # Normalize newlines and split into basic paragraphs
+    normalized_text = text.replace('\r\n', '\n')
+    paragraphs = [p.strip() for p in normalized_text.split('\n\n') if p.strip()]
     
     # Apply paragraph combination rules in order, from most specific to least
     processed_paragraphs = combine_references(paragraphs)  # Most specific
@@ -175,6 +201,45 @@ def split_into_chunks(text: str, doc_id: str) -> List[Chunk]:
         )
         for i, para in enumerate(processed_paragraphs)
     ]
+
+def test_parse(doc_name: Optional[str] = None) -> None:
+    """Test the text parsing functionality on input documents"""
+    paths = get_paths(DATA_DIR)
+    log_file = paths.logs_dir / "parse_test_results.log"
+    
+    # Get list of documents to process
+    if doc_name:
+        docs = [paths.docs_dir / doc_name]
+        if not docs[0].exists():
+            logger.error(f"Document not found: {doc_name}")
+            return
+    else:
+        # Only look for .txt and .md files
+        docs = list(paths.docs_dir.glob("*.txt")) + list(paths.docs_dir.glob("*.md"))
+    
+    # Process each document
+    with open(log_file, "w") as f:
+        for doc_path in docs:
+            f.write(f"\n{'='*80}\n")
+            f.write(f"Processing document: {doc_path.name}\n")
+            f.write(f"{'='*80}\n\n")
+            
+            try:
+                text = doc_path.read_text(encoding='utf-8')
+                chunks = split_into_chunks(text, doc_path.stem)
+                
+                for i, chunk in enumerate(chunks, 1):
+                    f.write(f"\nCHUNK {i}:\n")
+                    f.write(f"{'-'*40}\n")
+                    f.write(f"{chunk.text}\n")
+                    f.write(f"{'-'*40}\n")
+            
+            except Exception as e:
+                error_msg = f"Error processing {doc_path.name}: {str(e)}"
+                logger.error(error_msg)
+                f.write(f"\nERROR: {error_msg}\n")
+    
+    logger.info(f"Parse test results written to {log_file}")
 
 def run_test() -> None:
     """Test the text parsing functionality with a sample document."""

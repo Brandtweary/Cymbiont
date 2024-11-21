@@ -1,40 +1,16 @@
 from dataclasses import asdict
 from pathlib import Path
-import json
 import shutil
 from typing import List, Dict, Optional
 import time
 import asyncio
 from shared_resources import logger, FILE_RESET, DATA_DIR
 from tag_extraction import extract_tags
-from utils import log_performance, generate_id, load_index, save_index, setup_directories
+from utils import log_performance, generate_id, load_index, save_index, get_paths
 from custom_dataclasses import Document, Chunk, Paths
 from logging_config import ProcessLog
 from text_parser import split_into_chunks
 
-# Initialize the main data directory at module load
-try:
-    setup_directories(DATA_DIR)
-except Exception as e:
-    logger.error(f"Failed to initialize data directory: {str(e)}")
-    raise
-
-def get_paths(base_dir: Path) -> Paths:
-    """Get directory paths for the specified base directory"""
-    try:
-        return Paths(
-            base_dir=base_dir,
-            docs_dir=base_dir / "input_documents",
-            processed_dir=base_dir / "processed_documents",
-            chunks_dir=base_dir / "chunks",
-            index_dir=base_dir / "indexes",
-            logs_dir=base_dir / "logs",
-            inert_docs_dir=base_dir / "inert_documents",
-            snapshots_dir=base_dir / "snapshots"
-        )
-    except Exception as e:
-        logger.error(f"Failed to get paths for {base_dir}: {str(e)}")
-        raise
 
 # Document processing
 def find_unprocessed_documents(paths: Paths) -> List[Path]:

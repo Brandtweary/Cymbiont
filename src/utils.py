@@ -105,7 +105,22 @@ def save_index(data: Dict, index_path: Path) -> None:
 def setup_directories(base_dir: Path) -> Paths:
     """Create directory structure and return paths"""
     try:
-        paths = Paths(
+        paths = get_paths(base_dir)
+        for dir_path in paths:
+            try:
+                dir_path.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                logger.error(f"Failed to create directory {dir_path}: {str(e)}")
+                raise
+        return paths
+    except Exception as e:
+        logger.error(f"Directory setup failed: {str(e)}")
+        raise
+
+def get_paths(base_dir: Path) -> Paths:
+    """Get directory paths for the specified base directory"""
+    try:
+        return Paths(
             base_dir=base_dir,
             docs_dir=base_dir / "input_documents",
             processed_dir=base_dir / "processed_documents",
@@ -115,15 +130,6 @@ def setup_directories(base_dir: Path) -> Paths:
             inert_docs_dir=base_dir / "inert_documents",
             snapshots_dir=base_dir / "snapshots"
         )
-        
-        for dir_path in paths:
-            try:
-                dir_path.mkdir(parents=True, exist_ok=True)
-            except Exception as e:
-                logger.error(f"Failed to create directory {dir_path}: {str(e)}")
-                raise
-            
-        return paths
     except Exception as e:
-        logger.error(f"Directory setup failed: {str(e)}")
+        logger.error(f"Failed to get paths for {base_dir}: {str(e)}")
         raise

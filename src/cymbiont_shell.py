@@ -3,6 +3,7 @@ import cmd
 from shared_resources import DATA_DIR, logger, token_logger
 from documents import create_data_snapshot, process_documents
 from tests import test_api_queue
+from text_parser import test_parse
 
 
 # ANSI color codes
@@ -100,3 +101,11 @@ class CymbiontShell(cmd.Cmd):
             token_logger.print_tokens()
         except Exception as e:
             logger.error(f"Snapshot creation failed: {str(e)}")
+    
+    def do_test_parse(self, arg: str) -> None:
+        """Test document parsing without LLM tag extraction.
+        Usage: test_parse [document_name] or just test_parse for all input documents"""
+        try:
+            test_parse(arg if arg else None)
+        except Exception as e:
+            logger.error(f"Parse testing failed: {str(e)}")

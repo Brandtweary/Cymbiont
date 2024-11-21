@@ -17,13 +17,17 @@ setup_python_path()
 
 # Project imports
 from api_queue import start_api_queue, stop_api_queue
-from shared_resources import logger
+from shared_resources import logger, DATA_DIR
 import threading
 from cymbiont_shell import CymbiontShell
+from utils import setup_directories
 
 
 
 def main():
+    # Setup directories
+    setup_directories(DATA_DIR)
+    
     # Create a new event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
