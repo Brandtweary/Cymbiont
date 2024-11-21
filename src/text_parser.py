@@ -178,18 +178,111 @@ def combine_quotes(paragraphs: List[str]) -> List[str]:
         
     return result
 
+def get_indentation_level(text: str) -> int:
+    """Get indentation level of first non-empty line in text.
+    Returns number of spaces/characters of indentation."""
+    for line in text.split('\n'):
+        if line.strip():  # First non-empty line
+            # Count leading spaces and common indent markers
+            indent = len(line) - len(line.lstrip(' \t>-*•'))
+            return indent
+    return 0
+
+def combine_indented_paragraphs(paragraphs: List[str]) -> List[str]:
+    """Combine paragraphs that share the same indentation level."""
+    result: List[str] = []
+    current_text: List[str] = []
+    current_words = 0
+    MAX_WORDS = 1000
+    
+    def flush_current() -> None:
+        """Helper to flush current_text to result."""
+        if current_text:
+            result.append('\n\n'.join(current_text))
+            current_text.clear()
+            nonlocal current_words
+            current_words = 0
+    
+    for para in paragraphs:
+        para_words = len(para.split())
+        
+        # Start new chunk if this paragraph alone exceeds limit
+        if para_words > MAX_WORDS:
+            flush_current()
+            result.append(para)
+            continue
+            
+        # Get indentation levels
+        current_level = get_indentation_level(current_text[-1]) if current_text else 0
+        new_level = get_indentation_level(para)
+        
+        # Combine if either:
+        # 1. This is first indented paragraph after its parent (new_level > current_level)
+        # 2. This continues a sequence of same-level indented paragraphs (both must be > 0)
+        # 3. Won't exceed word limit
+        if (current_text and 
+            ((new_level > current_level) or (new_level == current_level and new_level > 0)) and 
+            current_words + para_words <= MAX_WORDS):
+            current_text.append(para)
+            current_words += para_words
+        else:
+            flush_current()
+            current_text.append(para)
+            current_words = para_words
+    
+    flush_current()  # Handle any remaining paragraphs
+    return result
+
+def enforce_max_chunk_size(paragraphs: List[str], max_words: int = 1500) -> List[str]:
+    """Split any chunks that exceed max_words as a last resort."""
+    result: List[str] = []
+    
+    for para in paragraphs:
+        words = para.split()
+        
+        # If paragraph is within limit, keep as is
+        if len(words) <= max_words:
+            result.append(para)
+            continue
+            
+        # Otherwise split into chunks of max_words
+        current_pos = 0
+        while current_pos < len(words):
+            # Get next chunk of words
+            chunk_words = words[current_pos:current_pos + max_words]
+            
+            # Create chunk text
+            chunk_text = ' '.join(chunk_words)
+            
+            # Add ellipsis at start if not first chunk
+            if current_pos > 0:
+                chunk_text = '...' + chunk_text
+                
+            # Add ellipsis at end if not last chunk
+            if current_pos + max_words < len(words):
+                chunk_text = chunk_text + '...'
+                
+            result.append(chunk_text)
+            current_pos += max_words
+            
+    return result
+
 def split_into_chunks(text: str, doc_id: str) -> List[Chunk]:
     """Split document text into chunks based on paragraphs"""
     # Normalize newlines and split into basic paragraphs
     normalized_text = text.replace('\r\n', '\n')
-    paragraphs = [p.strip() for p in normalized_text.split('\n\n') if p.strip()]
+    paragraphs = [p for p in normalized_text.split('\n\n') if p.strip()]
     
-    # Apply paragraph combination rules in order, from most specific to least
-    processed_paragraphs = combine_references(paragraphs)  # Most specific
+    # Apply paragraph combination rules in order
+    processed_paragraphs = combine_references(paragraphs)
     processed_paragraphs = combine_diagrams(processed_paragraphs)
     processed_paragraphs = combine_quotes(processed_paragraphs)
     processed_paragraphs = combine_postscripts(processed_paragraphs)
-    processed_paragraphs = combine_headers(processed_paragraphs)  # Most general
+    processed_paragraphs = combine_indented_paragraphs(processed_paragraphs)
+    processed_paragraphs = combine_headers(processed_paragraphs)
+    
+    # Final safety check for maximum chunk size
+    processed_paragraphs = enforce_max_chunk_size(processed_paragraphs)
     
     return [
         Chunk(
@@ -261,6 +354,19 @@ The fundamental principles of magic have been well studied. Here we shall
 examine them in detail, starting with sympathetic magic, which relies on
 hidden connections between objects.[1] This principle has been observed
 across many cultures.[2]
+
+    The Law of Similarity states that like produces like. This means that
+    an effect resembles its cause. For example, a yellow flower might be
+    used to treat jaundice, or a heart-shaped leaf for heart problems.
+
+    The Law of Contagion states that things which have once been in contact
+    continue to act on each other at a distance. This explains why personal
+    belongings are often used in spells targeting specific individuals.
+
+        • Sub-principles of Contagion:
+          • Once connected, always connected
+          • Part equals whole
+          • Essence persists through time
 
 A simple example of sympathetic magic can be illustrated as follows:
 
