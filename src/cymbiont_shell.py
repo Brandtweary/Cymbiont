@@ -56,8 +56,8 @@ class CymbiontShell(cmd.Cmd):
     def do_process_documents(self, arg: str) -> None:
         """Process documents in the data/input_documents directory.
         Usage: process_documents [document_name]
-        - document_name: Optional. If provided, only this file will be processed.
-                        Otherwise, processes all unprocessed .txt and .md files."""
+        - document_name: Optional. If provided, only this file or folder will be processed.
+                        Otherwise, processes all .txt and .md files."""
         try:
             token_logger.reset_tokens()
             future = asyncio.run_coroutine_threadsafe(
@@ -89,11 +89,11 @@ class CymbiontShell(cmd.Cmd):
     def do_create_data_snapshot(self, arg: str) -> None:
         """Creates an isolated snapshot by processing documents in the data/input_documents directory.
         The snapshot contains all processing artifacts (chunks, indexes, etc.) as if you had
-        only ever processed the specified documents.
+        only processed the specified documents.
 
         Usage: create_data_snapshot <snapshot_name> [document_name]
         - snapshot_name: Name for the new snapshot directory
-        - document_name: Optional. If provided, only this file will be processed.
+        - document_name: Optional. If provided, only this file or folder will be processed.
                         Otherwise, processes all .txt and .md files."""
         args = arg.split()
         if not args:
@@ -117,7 +117,7 @@ class CymbiontShell(cmd.Cmd):
         This command parses documents in data/input_documents into chunks and records the results to logs/parse_test_results.log.
 
         Usage: test_parse [document_name]
-        - document_name: Optional. If provided, only this file will be tested.
+        - document_name: Optional. If provided, only this file or folder will be tested.
                         Otherwise, tests all .txt and .md files."""
         try:
             test_parse(arg if arg else None)
