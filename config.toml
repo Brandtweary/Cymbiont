@@ -1,10 +1,10 @@
 [app]
-benchmark = true
-debug = true
-prompt = false
-response = false
-delete_logs = true 
-file_reset = true  # move processed documents back to input_documents
+benchmark = true  # show performance metrics
+debug = true  # show debug logs
+prompt = false  # show prompts
+response = false  # show responses
+delete_logs = false  # delete logs on shutdown
+file_reset = true  # move processed documents back to input_documents on startup
 
 [environment]
-manage_venv = true
+manage_venv = true  # let Cymbiont manage the Python environment

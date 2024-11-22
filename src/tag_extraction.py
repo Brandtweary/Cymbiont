@@ -24,7 +24,7 @@ async def extract_tags(
 
         # Track expiration counter for retries
         expiration_counter = 0
-        while expiration_counter < 5:  # Allow up to 5 total attempts
+        while expiration_counter < 3:  # Allow up to 3 total attempts
             future = enqueue_api_call(
                 model=TAG_EXTRACTION_OPENAI_MODEL,
                 messages=[{"role": "user", "content": mock_content if mock else tag_prompt}],
@@ -41,7 +41,7 @@ async def extract_tags(
             
             if not response["content"]:
                 process_log.warning(f"Empty tag extraction response (attempt {expiration_counter})")
-                if expiration_counter >= 4:
+                if expiration_counter >= 2:
                     chunk.tags = []
                     return
                 continue
@@ -49,7 +49,7 @@ async def extract_tags(
             tags = validate_tag_response(response["content"])
             if tags is None or not tags:  # Check for empty tag list
                 process_log.error(f"Failed to validate tag response or empty tags (attempt {expiration_counter})")
-                if expiration_counter >= 4:
+                if expiration_counter >= 2:
                     chunk.tags = []
                     return
                 continue

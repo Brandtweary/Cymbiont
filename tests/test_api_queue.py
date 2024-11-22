@@ -143,25 +143,25 @@ async def test_retry_mechanism() -> None:
         {
             "name": "empty_response",
             "mock_content": "",
-            "expected_retries": 5,
+            "expected_retries": 3,
             "expected_tags": []
         },
         {
             "name": "invalid_json",
             "mock_content": "not json at all",
-            "expected_retries": 5,
+            "expected_retries": 3,
             "expected_tags": []
         },
         {
             "name": "empty_tag_array",
             "mock_content": '{"tags": []}',
-            "expected_retries": 5,
+            "expected_retries": 3,
             "expected_tags": []
         },
         {
             "name": "execution_error",
             "mock_content": None,
-            "expected_retries": 5,
+            "expected_retries": 3,
             "expected_tags": []
         },
         {

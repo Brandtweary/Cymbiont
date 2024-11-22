@@ -129,7 +129,7 @@ async def _execute_call(call: APICall) -> None:
         
         call.future.set_result(result)
     except Exception as e:
-        if call.expiration_counter < 4:  # Allow up to 5 total attempts (0-4)
+        if call.expiration_counter < 2:  # Allow up to 3 total attempts (0-2)
             logger.warning(f"API call failed (attempt {call.expiration_counter + 1}), retrying: {str(e)}")
             # Re-queue with incremented counter
             new_future = enqueue_api_call(
@@ -146,7 +146,7 @@ async def _execute_call(call: APICall) -> None:
                 else call.future.set_exception(f.exception() or RuntimeError("Unknown error occurred"))
             )
         else:
-            logger.error(f"API call failed after 5 attempts: {str(e)}")
+            logger.error(f"API call failed after 3 attempts: {str(e)}")
             call.future.set_exception(e)
 
 def enqueue_api_call(
