@@ -6,6 +6,7 @@
 # Custom
 .archive/
 .notes/
+docs/
 data/chunks/*
 data/input_documents/*
 data/indexes/*
@@ -22,6 +23,8 @@ data/snapshots/*
 !data/inert_documents/.gitkeep
 !data/logs/.gitkeep
 !data/snapshots/.gitkeep
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -4,6 +4,7 @@ from shared_resources import DATA_DIR, logger, token_logger
 from documents import create_data_snapshot, process_documents
 from tests import test_api_queue
 from text_parser import test_parse
+from tests.test_logger import run_logger_test
 
 
 # ANSI color codes
@@ -123,3 +124,11 @@ class CymbiontShell(cmd.Cmd):
             test_parse(arg if arg else None)
         except Exception as e:
             logger.error(f"Parse testing failed: {str(e)}")
+    
+    def do_test_logger(self, arg: str) -> None:
+        """Test all logging levels with colored output.
+        Usage: test_logger"""
+        try:
+            run_logger_test()
+        except Exception as e:
+            logger.error(f"Logger testing failed: {str(e)}")
