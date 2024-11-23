@@ -38,7 +38,7 @@ def load_config() -> dict:
         if not example_config_path.exists():
             raise FileNotFoundError("Neither config.toml nor config.example.toml found")
         
-        logger.info("Creating config.toml from example template")
+        print("Creating config.toml from example template")
         with open(example_config_path, "rb") as src, open(config_path, "wb") as dst:
             dst.write(src.read())
     

@@ -1,10 +1,10 @@
 [app]
-benchmark = true  # show performance metrics
-debug = true  # show debug logs
+benchmark = false  # show performance metrics
+debug = false  # show debug logs
 prompt = false  # show prompts
 response = false  # show responses
 delete_logs = false  # delete logs on shutdown
-file_reset = true  # move processed documents back to input_documents on startup
+file_reset = false  # move processed documents back to input_documents on startup
 
 [shell]
 user_name = "user"  # name shown in shell prompt

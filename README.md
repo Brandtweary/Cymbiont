@@ -85,9 +85,20 @@ If you encounter any environment-related errors, you can re-run the bootstrap sc
 ```
 This will repair the virtual environment and reinstall dependencies if needed.
 
+### Configuration
+
+Cymbiont uses `config.toml` for configuration. If this file doesn't exist, it will be automatically created from `config.example.toml` when you first run the program.
+
+To customize settings before first run:
+```bash
+cp config.example.toml config.toml
+# Edit config.toml with your preferred settings
+```
+
 ### Alternative Environment Managers
 If you prefer to use conda, poetry, or another environment manager:
-1. Set `manage_venv = false` in config.toml
-2. Activate your preferred environment
-3. Run `./bootstrap.sh` to install dependencies into that environment, or follow the manual setup instructions for steps 3 and 4.
-4. Run `python cymbiont.py` from the activated environment.
+1. Create your config file if you haven't done so already: `cp config.example.toml config.toml`
+2. Set `manage_venv = false` in config.toml
+3. Activate your preferred environment
+4. Run `./bootstrap.sh` to install dependencies into that environment, or follow the manual setup instructions for steps 3 and 4.
+5. Run `python cymbiont.py` from the activated environment.
