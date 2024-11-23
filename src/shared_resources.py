@@ -21,11 +21,29 @@ LOG_DIR = DATA_DIR / "logs"
 
 # Models
 TAG_EXTRACTION_OPENAI_MODEL = "gpt-4o-mini"
+CHAT_AGENT_MODEL = "gpt-4o-mini"
+
+# Initialize OpenAI client
+openai_client = AsyncOpenAI()
 
 
 # Load config
 def load_config() -> dict:
-    with open("config.toml", "rb") as f:  # Note: tomllib requires binary mode ('rb')
+    """Load config from config.toml, creating it from example if it doesn't exist"""
+    config_path = Path("config.toml")
+    example_config_path = Path("config.example.toml")
+    
+    # If config.toml doesn't exist, copy from example
+    if not config_path.exists():
+        if not example_config_path.exists():
+            raise FileNotFoundError("Neither config.toml nor config.example.toml found")
+        
+        logger.info("Creating config.toml from example template")
+        with open(example_config_path, "rb") as src, open(config_path, "wb") as dst:
+            dst.write(src.read())
+    
+    # Load the config
+    with open(config_path, "rb") as f:
         return tomllib.load(f)
 
 config = load_config()
@@ -36,6 +54,10 @@ PROMPT = config["app"]["prompt"]
 RESPONSE = config["app"]["response"]
 DELETE_LOGS = config["app"]["delete_logs"]
 
+# Shell config
+USER_NAME = config["shell"]["user_name"]
+AGENT_NAME = config["shell"]["agent_name"]
+
 # Initialize logging first
 logger = setup_logging(
     LOG_DIR, 
@@ -44,9 +66,6 @@ logger = setup_logging(
     prompt=PROMPT,
     response=RESPONSE
 )
-
-# Initialize OpenAI client
-openai_client = AsyncOpenAI()
 
 @dataclass
 class TokenLogger:

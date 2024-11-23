@@ -6,5 +6,9 @@ response = false  # show responses
 delete_logs = false  # delete logs on shutdown
 file_reset = true  # move processed documents back to input_documents on startup
 
+[shell]
+user_name = "user"  # name shown in shell prompt
+agent_name = "chat_agent"  # name shown for AI responses
+
 [environment]
 manage_venv = true  # let Cymbiont manage the Python environment

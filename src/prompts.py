@@ -12,6 +12,9 @@ Return as a JSON array named "tags". Example:
 Text: {text}
 ---'''
 
+CHAT_PROMPT = '''You are an autonomous agent.
+'''
+
 
 def safe_format_prompt(prompt_template: str, **kwargs: Any) -> str:
     """Safely format a prompt template with provided fields.

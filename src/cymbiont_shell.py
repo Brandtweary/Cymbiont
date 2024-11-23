@@ -1,10 +1,11 @@
 import asyncio
 import cmd
-from shared_resources import DATA_DIR, logger, token_logger
+from shared_resources import DATA_DIR, logger, token_logger, USER_NAME, AGENT_NAME
 from documents import create_data_snapshot, process_documents
 from tests import test_api_queue
 from text_parser import test_parse
 from tests.test_logger import run_logger_test
+from chat_agent import get_chat_response
 
 
 # ANSI color codes
@@ -14,7 +15,7 @@ RESET = "\033[0m"
 
 class CymbiontShell(cmd.Cmd):
     intro = f'{GREEN}Welcome to Cymbiont. Type help or ? to list commands.{RESET}\n'
-    prompt = f'{BLUE}cymbiont>{RESET} '
+    prompt = f'{BLUE}{USER_NAME}>{RESET} '
     
     def __init__(self, loop: asyncio.AbstractEventLoop):
         super().__init__()
@@ -132,3 +133,23 @@ class CymbiontShell(cmd.Cmd):
             run_logger_test()
         except Exception as e:
             logger.error(f"Logger testing failed: {str(e)}")
+    
+    def get_commands(self) -> list[str]:
+        """Get a list of all available commands"""
+        return [attr[3:] for attr in dir(self) if attr.startswith('do_')]
+
+    def default(self, line: str) -> None:
+        """Handle any input that isn't a recognized command by sending it to the chat agent"""
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                get_chat_response(line),
+                self.loop
+            )
+            response = future.result()  # This blocks until we get the response
+            print(f"{BLUE}{AGENT_NAME}>{RESET} {response}")
+        except Exception as e:
+            logger.error(f"Chat response failed: {str(e)}")
+
+    def completenames(self, text: str, *ignored) -> list[str]:
+        """Override completenames to only show actual commands"""
+        return [name for name in self.get_commands() if name.startswith(text)]
