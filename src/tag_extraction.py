@@ -2,9 +2,9 @@ import json
 from json.decoder import JSONDecodeError
 from typing import List, Optional
 
-from shared_resources import logger, DEBUG, TAG_EXTRACTION_OPENAI_MODEL
+from shared_resources import logger, DEBUG_ENABLED, TAG_EXTRACTION_OPENAI_MODEL
 from prompts import TAG_PROMPT, safe_format_prompt
-from custom_dataclasses import Chunk
+from custom_dataclasses import Chunk, ChatMessage
 from utils import log_performance
 from api_queue import enqueue_api_call
 from logging_config import ProcessLog
@@ -15,7 +15,7 @@ async def extract_tags(
     chunk: Chunk, 
     process_log: ProcessLog,
     mock: bool = False,
-    mock_content: Optional[str] = None
+    mock_content: str = ""
 ) -> None:
     """Extract relevant tags from a chunk of text."""
     try:
@@ -27,7 +27,10 @@ async def extract_tags(
         while expiration_counter < 3:  # Allow up to 3 total attempts
             future = enqueue_api_call(
                 model=TAG_EXTRACTION_OPENAI_MODEL,
-                messages=[{"role": "user", "content": mock_content if mock else tag_prompt}],
+                messages=[ChatMessage(
+                    role="user",
+                    content=mock_content if mock else tag_prompt
+                )],
                 response_format={"type": "json_object"},
                 mock=mock,
                 mock_tokens=100,
@@ -63,7 +66,7 @@ async def extract_tags(
     except Exception as e:
         process_log.error(f"Failed to process chunk {chunk.chunk_id}: {str(e)}")
         chunk.tags = []
-        if DEBUG:
+        if DEBUG_ENABLED:
             raise
 
 def validate_tag_response(content: str) -> Optional[List[str]]:

@@ -2,6 +2,7 @@ import asyncio
 from typing import List
 from api_queue import enqueue_api_call, BATCH_TIMER, BATCH_LIMIT, TOKENS_PER_MINUTE, TPM_SOFT_LIMIT, is_queue_empty, clear_token_history
 from shared_resources import logger
+from custom_dataclasses import ChatMessage, Chunk
 
 async def test_rpm_rate_limiting() -> None:
     """Test RPM rate limiting processes correct batch size."""
@@ -12,7 +13,10 @@ async def test_rpm_rate_limiting() -> None:
     for i in range(num_requests):
         future = enqueue_api_call(
             model="gpt-4",
-            messages=[{"role": "user", "content": f"Test message {i}"}],
+            messages=[ChatMessage(
+                role="user",
+                content=f"Test message {i}"
+            )],
             response_format={"type": "text"},
             mock=True,
             mock_tokens=mock_tokens
@@ -51,7 +55,10 @@ async def test_tpm_throttle() -> None:
     tokens_per_call: int = int(TOKENS_PER_MINUTE * 1.1)  # Exceeds TPM limit
     high_token_call = enqueue_api_call(
         model="gpt-4",
-        messages=[{"role": "user", "content": "High token usage test"}],
+        messages=[ChatMessage(
+            role="user",
+            content="High token usage test"
+        )],
         response_format={"type": "text"},
         mock=True,
         mock_tokens=tokens_per_call
@@ -66,7 +73,10 @@ async def test_tpm_throttle() -> None:
     for i in range(3):
         future = enqueue_api_call(
             model="gpt-4",
-            messages=[{"role": "user", "content": f"Throttled message {i}"}],
+            messages=[ChatMessage(
+                role="user",
+                content=f"Throttled message {i}"
+            )],
             response_format={"type": "text"},
             mock=True,
             mock_tokens=100  # Regular token usage
@@ -95,7 +105,10 @@ async def test_tpm_soft_limit() -> None:
     tokens_per_call: int = int(TOKENS_PER_MINUTE * TPM_SOFT_LIMIT * 1.1)  # 10% over soft limit
     high_token_call = enqueue_api_call(
         model="gpt-4",
-        messages=[{"role": "user", "content": "High token usage test"}],
+        messages=[ChatMessage(
+            role="user",
+            content="High token usage test"
+        )],
         response_format={"type": "text"},
         mock=True,
         mock_tokens=tokens_per_call
@@ -110,7 +123,10 @@ async def test_tpm_soft_limit() -> None:
     for i in range(3):
         future = enqueue_api_call(
             model="gpt-4",
-            messages=[{"role": "user", "content": f"Throttled message {i}"}],
+            messages=[ChatMessage(
+                role="user",
+                content=f"Throttled message {i}"
+            )],
             response_format={"type": "text"},
             mock=True,
             mock_tokens=100  # Regular token usage
@@ -160,7 +176,7 @@ async def test_retry_mechanism() -> None:
         },
         {
             "name": "execution_error",
-            "mock_content": None,
+            "mock_content": "halt and catch fire",  # Our special error trigger
             "expected_retries": 3,
             "expected_tags": []
         },

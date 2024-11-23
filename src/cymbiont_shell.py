@@ -1,11 +1,13 @@
 import asyncio
 import cmd
-from shared_resources import DATA_DIR, logger, token_logger, USER_NAME, AGENT_NAME
+from shared_resources import DATA_DIR, logger, token_logger, USER_NAME, AGENT_NAME, chat_history_handler
+from logging_config import RESPONSE
 from documents import create_data_snapshot, process_documents
 from tests import test_api_queue
 from text_parser import test_parse
 from tests.test_logger import run_logger_test
 from chat_agent import get_chat_response
+from custom_dataclasses import ChatHistory
 
 
 # ANSI color codes
@@ -20,6 +22,9 @@ class CymbiontShell(cmd.Cmd):
     def __init__(self, loop: asyncio.AbstractEventLoop):
         super().__init__()
         self.loop: asyncio.AbstractEventLoop = loop
+        self.chat_history = ChatHistory()
+        # Connect chat history to logger
+        chat_history_handler.chat_history = self.chat_history
     
     def print_topics(self, header: str, cmds: list[str] | None, cmdlen: int, maxcol: int) -> None:
         """Override to add color to help topics"""
@@ -139,14 +144,22 @@ class CymbiontShell(cmd.Cmd):
         return [attr[3:] for attr in dir(self) if attr.startswith('do_')]
 
     def default(self, line: str) -> None:
-        """Handle any input that isn't a recognized command by sending it to the chat agent"""
+        """Handle chat messages"""
         try:
+            # Record user message
+            self.chat_history.add_message("user", line)
+            
             future = asyncio.run_coroutine_threadsafe(
-                get_chat_response(line),
+                get_chat_response(line, self.chat_history.get_recent_messages()),
                 self.loop
             )
-            response = future.result()  # This blocks until we get the response
-            print(f"{BLUE}{AGENT_NAME}>{RESET} {response}")
+            response = future.result()
+            
+            # Record and log assistant response
+            self.chat_history.add_message("assistant", response)
+            logger.log(RESPONSE, f"Agent response: {response}")
+            # Print response directly to user
+            print(f"{BLUE}{AGENT_NAME}>{RESET} {response}\n")
         except Exception as e:
             logger.error(f"Chat response failed: {str(e)}")
 

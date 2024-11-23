@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional, List, Tuple
 from datetime import datetime
 from dataclasses import dataclass, field
+from custom_dataclasses import ChatHistory
 
 BENCHMARK = logging.INFO + 5  # Custom level between INFO and WARNING
 PROMPT = logging.INFO + 6
@@ -118,6 +119,16 @@ class ProcessLog:
             
         logger.info(f"=== END ===")
 
+class ChatHistoryHandler(logging.Handler):
+    """Handler that adds log messages to chat history"""
+    def __init__(self, chat_history: Optional[ChatHistory] = None):
+        super().__init__()
+        self.chat_history = chat_history
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if self.chat_history is not None and record.levelno not in (PROMPT, RESPONSE):
+            self.chat_history.add_message("system", self.format(record))
+
 def setup_logging(
     log_dir: Path,
     debug: bool = False,
@@ -125,7 +136,7 @@ def setup_logging(
     prompt: bool = False,
     response: bool = False,
     log_prefix: Optional[str] = None
-) -> logging.Logger:
+) -> Tuple[logging.Logger, ChatHistoryHandler]:  # Return both logger and handler
     """Configure logging with separate handlers for cymbiont and all logs"""
     # Create logs directory
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -184,4 +195,9 @@ def setup_logging(
     cymbiont_logger.debug(f"App log created at: {cymbiont_log_file}") # only Cymbiont logs
     cymbiont_logger.debug(f"Full log created at: {complete_log_file}") # includes logs from all modules, not just Cymbiont
     
-    return cymbiont_logger
+    # Create chat history handler (initially without chat history)
+    chat_history_handler = ChatHistoryHandler()
+    chat_history_handler.setFormatter(logging.Formatter('%(message)s'))
+    cymbiont_logger.addHandler(chat_history_handler)
+    
+    return cymbiont_logger, chat_history_handler

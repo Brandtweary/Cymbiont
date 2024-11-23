@@ -47,11 +47,11 @@ def load_config() -> dict:
         return tomllib.load(f)
 
 config = load_config()
-DEBUG = config["app"]["debug"]
-BENCHMARK = config["app"]["benchmark"]
+DEBUG_ENABLED = config["app"]["debug"]
+BENCHMARK_ENABLED = config["app"]["benchmark"]
 FILE_RESET = config["app"]["file_reset"]
-PROMPT = config["app"]["prompt"]
-RESPONSE = config["app"]["response"]
+PROMPT_ENABLED = config["app"]["prompt"]
+RESPONSE_ENABLED = config["app"]["response"]
 DELETE_LOGS = config["app"]["delete_logs"]
 
 # Shell config
@@ -59,12 +59,12 @@ USER_NAME = config["shell"]["user_name"]
 AGENT_NAME = config["shell"]["agent_name"]
 
 # Initialize logging first
-logger = setup_logging(
+logger, chat_history_handler = setup_logging(
     LOG_DIR, 
-    debug=DEBUG, 
-    benchmark=BENCHMARK,
-    prompt=PROMPT,
-    response=RESPONSE
+    debug=DEBUG_ENABLED,
+    benchmark=BENCHMARK_ENABLED,
+    prompt=PROMPT_ENABLED,
+    response=RESPONSE_ENABLED
 )
 
 @dataclass

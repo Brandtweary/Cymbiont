@@ -1,8 +1,28 @@
 import asyncio
-from dataclasses import dataclass
-from typing import Any, List, Dict, Optional, NamedTuple, Set
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, List, Dict, Literal, Optional, NamedTuple
 from pathlib import Path
 
+
+MessageRole = Literal["user", "assistant", "system"]
+
+@dataclass
+class ChatMessage:
+    role: MessageRole
+    content: str
+    timestamp: datetime = field(default_factory=datetime.now)
+
+@dataclass
+class ChatHistory:
+    messages: List[ChatMessage] = field(default_factory=list)
+    
+    def add_message(self, role: MessageRole, content: str) -> None:
+        self.messages.append(ChatMessage(role=role, content=content))
+    
+    def get_recent_messages(self, limit: int = 10) -> List[ChatMessage]:
+        """Get the most recent messages"""
+        return self.messages[-limit:]
 
 @dataclass
 class Document:
@@ -38,13 +58,14 @@ class Paths(NamedTuple):
 @dataclass
 class APICall:
     model: str
-    messages: List[Dict[str, Any]]
+    messages: List[ChatMessage]
     response_format: Dict[str, str]
-    future: asyncio.Future
     timestamp: float
-    mock: bool = False
-    mock_tokens: Optional[int] = None
-    expiration_counter: int = 0
+    mock: bool
+    mock_tokens: Optional[int]
+    expiration_counter: int
+    future: asyncio.Future[Dict[str, Any]]
+    temperature: float = 0.7  # Default temperature
 
 @dataclass
 class TokenUsage:

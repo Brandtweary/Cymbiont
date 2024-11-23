@@ -4,11 +4,11 @@ from typing import Any, Callable, Optional, NamedTuple, List, Dict
 from dataclasses import dataclass
 from collections import deque
 from shared_resources import logger, openai_client, token_logger
-from openai.types.chat import ChatCompletionMessageParam, ChatCompletionUserMessageParam
+from openai.types.chat import ChatCompletionMessageParam, ChatCompletionUserMessageParam, ChatCompletionSystemMessageParam, ChatCompletionAssistantMessageParam
 from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from openai.types.shared_params.response_format_text import ResponseFormatText
-from custom_dataclasses import APICall, TokenUsage
+from custom_dataclasses import APICall, TokenUsage, ChatMessage
 
 
 # Constants
@@ -79,10 +79,14 @@ async def _execute_call(call: APICall) -> None:
     """Execute a single API call with retry logic."""
     try:
         if call.mock:
-            # Use mock_tokens if provided, else default to message length
-            mock_tokens = call.mock_tokens if call.mock_tokens is not None else sum(len(msg["content"]) for msg in call.messages)
+            # Check for the special error-triggering message
+            if any(msg.content == "halt and catch fire" for msg in call.messages):
+                raise RuntimeError("🔥 The system caught fire, as requested")
+                
+            # Regular mock logic continues...
+            mock_tokens = call.mock_tokens if call.mock_tokens is not None else sum(len(msg.content) for msg in call.messages)
             result = {
-                "content": call.messages[-1]["content"],
+                "content": call.messages[-1].content,
                 "token_usage": {
                     "prompt_tokens": mock_tokens,
                     "completion_tokens": mock_tokens,
@@ -96,16 +100,17 @@ async def _execute_call(call: APICall) -> None:
         else:
             # Real API call logic
             openai_messages = [
-                ChatCompletionUserMessageParam(
-                    role=msg["role"],
-                    content=msg["content"]
-                ) for msg in call.messages
+                ChatCompletionSystemMessageParam(role="system", content=msg.content) if msg.role == "system"
+                else ChatCompletionUserMessageParam(role="user", content=msg.content) if msg.role == "user"
+                else ChatCompletionAssistantMessageParam(role="assistant", content=msg.content)
+                for msg in call.messages
             ]
             
             response = await openai_client.chat.completions.create(
                 model=call.model,
                 messages=openai_messages,
-                response_format=_convert_response_format(call.response_format)
+                response_format=_convert_response_format(call.response_format),
+                temperature=call.temperature
             )
             assert response.usage is not None, "API response missing 'usage'"
 
@@ -138,7 +143,8 @@ async def _execute_call(call: APICall) -> None:
                 response_format=call.response_format,
                 mock=call.mock,
                 mock_tokens=call.mock_tokens,
-                expiration_counter=call.expiration_counter + 1
+                expiration_counter=call.expiration_counter + 1,
+                temperature=call.temperature
             )
             # Link the futures
             new_future.add_done_callback(
@@ -151,11 +157,12 @@ async def _execute_call(call: APICall) -> None:
 
 def enqueue_api_call(
     model: str,
-    messages: List[Dict[str, Any]],
+    messages: List[ChatMessage],
     response_format: Dict[str, str],
     mock: bool = False,
     mock_tokens: Optional[int] = None,
-    expiration_counter: int = 0
+    expiration_counter: int = 0,
+    temperature: float = 0.7
 ) -> asyncio.Future[Dict[str, Any]]:
     """Enqueue an API call with retry counter."""
     call = APICall(
@@ -166,7 +173,8 @@ def enqueue_api_call(
         mock=mock,
         mock_tokens=mock_tokens,
         expiration_counter=expiration_counter,
-        future=asyncio.Future()
+        future=asyncio.Future(),
+        temperature=temperature
     )
     _pending_calls.append(call)
     return call.future
