@@ -201,18 +201,31 @@ async def test_retry_mechanism() -> None:
         process_log = ProcessLog(name=f"test_{case['name']}")
 
         await clear_token_history()
-        await extract_tags(chunk, process_log, mock=True, mock_content=case["mock_content"])
-
-        assert chunk.tags == case["expected_tags"], (
-            f"{case['name']}: Expected tags {case['expected_tags']}, got {chunk.tags}"
-        )
         
-        # Check process_log messages for retry count
-        retry_messages = [msg for msg in process_log.messages if "attempt" in msg[1]]
-        retry_count = len(retry_messages)
-        assert retry_count == case["expected_retries"] - 1, (
-            f"{case['name']}: Expected {case['expected_retries'] - 1} retries in logs, "
-            f"got {retry_count}\nRetry messages:\n" + "\n".join(msg[1] for msg in retry_messages)
+        # Handle the expected error case
+        try:
+            await extract_tags(chunk, process_log, mock=True, mock_content=case["mock_content"])
+        except RuntimeError as e:
+            if case["name"] == "execution_error":
+                # Verify the error message matches our expectation
+                assert str(e) == "🔥 The system caught fire, as requested", (
+                    f"Expected specific error message, got: {str(e)}"
+                )
+            else:
+                raise  # Re-raise if this wasn't the expected error case
+        
+        # For non-error cases, verify tags
+        if case["name"] != "execution_error":
+            assert chunk.tags == case["expected_tags"], (
+                f"{case['name']}: Expected tags {case['expected_tags']}, got {chunk.tags}"
+            )
+
+        # Check final attempt count
+        final_attempt_msgs = [msg for msg in process_log.messages if "Final attempt count:" in msg[1]]
+        assert len(final_attempt_msgs) == 1, "Expected exactly one final attempt count message"
+        final_count = int(final_attempt_msgs[0][1].split(": ")[1])
+        assert final_count == case["expected_retries"], (
+            f"{case['name']}: Expected {case['expected_retries']} attempts, got {final_count}"
         )
 
     logger.info("test_retry_mechanism passed.")

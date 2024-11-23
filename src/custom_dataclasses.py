@@ -1,8 +1,10 @@
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, List, Dict, Literal, Optional, NamedTuple
+from typing import Any, List, Dict, Literal, Optional, NamedTuple, Tuple
 from pathlib import Path
+import logging
+from constants import BENCHMARK, PROMPT, RESPONSE
 
 
 MessageRole = Literal["user", "assistant", "system"]
@@ -56,6 +58,33 @@ class Paths(NamedTuple):
     snapshots_dir: Path
 
 @dataclass
+class ProcessLog:
+    """Collects logs for a specific process/task"""
+    name: str
+    messages: List[Tuple[int, str]] = field(default_factory=list)
+    
+    def debug(self, message: str) -> None:
+        self.messages.append((logging.DEBUG, message))
+    
+    def info(self, message: str) -> None:
+        self.messages.append((logging.INFO, message))
+        
+    def warning(self, message: str) -> None:
+        self.messages.append((logging.WARNING, message))
+        
+    def error(self, message: str) -> None:
+        self.messages.append((logging.ERROR, message))
+        
+    def benchmark(self, message: str) -> None:
+        self.messages.append((BENCHMARK, message))
+        
+    def prompt(self, message: str) -> None:
+        self.messages.append((PROMPT, message))
+        
+    def response(self, message: str) -> None:
+        self.messages.append((RESPONSE, message))
+
+@dataclass
 class APICall:
     model: str
     messages: List[ChatMessage]
@@ -65,7 +94,8 @@ class APICall:
     mock_tokens: Optional[int]
     expiration_counter: int
     future: asyncio.Future[Dict[str, Any]]
-    temperature: float = 0.7  # Default temperature
+    temperature: float = 0.7
+    process_log: Optional[ProcessLog] = None
 
 @dataclass
 class TokenUsage:

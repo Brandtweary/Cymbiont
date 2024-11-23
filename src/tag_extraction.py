@@ -34,7 +34,8 @@ async def extract_tags(
                 response_format={"type": "json_object"},
                 mock=mock,
                 mock_tokens=100,
-                expiration_counter=expiration_counter
+                expiration_counter=expiration_counter,
+                process_log=process_log
             )
             response = await future
             expiration_counter = response.get("expiration_counter", 5)  # Default to max if missing
@@ -45,6 +46,7 @@ async def extract_tags(
             if not response["content"]:
                 process_log.warning(f"Empty tag extraction response (attempt {expiration_counter})")
                 if expiration_counter >= 2:
+                    process_log.info(f"Final attempt count: {expiration_counter + 1}")
                     chunk.tags = []
                     return
                 continue
@@ -53,6 +55,7 @@ async def extract_tags(
             if tags is None or not tags:  # Check for empty tag list
                 process_log.error(f"Failed to validate tag response or empty tags (attempt {expiration_counter})")
                 if expiration_counter >= 2:
+                    process_log.info(f"Final attempt count: {expiration_counter + 1}")
                     chunk.tags = []
                     return
                 continue
@@ -61,6 +64,7 @@ async def extract_tags(
             chunk.tags = tags
             chunk.metadata['tag_extraction_model'] = TAG_EXTRACTION_OPENAI_MODEL
             process_log.debug(f"Extracted tags: {tags}")
+            process_log.info(f"Final attempt count: {expiration_counter}")
             return
 
     except Exception as e:

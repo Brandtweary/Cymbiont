@@ -8,7 +8,7 @@ from openai.types.chat import ChatCompletionMessageParam, ChatCompletionUserMess
 from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from openai.types.shared_params.response_format_text import ResponseFormatText
-from custom_dataclasses import APICall, TokenUsage, ChatMessage
+from custom_dataclasses import APICall, TokenUsage, ChatMessage, ProcessLog
 
 
 # Constants
@@ -135,7 +135,11 @@ async def _execute_call(call: APICall) -> None:
         call.future.set_result(result)
     except Exception as e:
         if call.expiration_counter < 2:  # Allow up to 3 total attempts (0-2)
-            logger.warning(f"API call failed (attempt {call.expiration_counter + 1}), retrying: {str(e)}")
+            error_msg = f"API call failed (attempt {call.expiration_counter + 1}), retrying: {str(e)}"
+            logger.warning(error_msg)
+            if call.process_log:
+                call.process_log.warning(error_msg)
+                
             # Re-queue with incremented counter
             new_future = enqueue_api_call(
                 model=call.model,
@@ -144,7 +148,8 @@ async def _execute_call(call: APICall) -> None:
                 mock=call.mock,
                 mock_tokens=call.mock_tokens,
                 expiration_counter=call.expiration_counter + 1,
-                temperature=call.temperature
+                temperature=call.temperature,
+                process_log=call.process_log
             )
             # Link the futures
             new_future.add_done_callback(
@@ -152,7 +157,17 @@ async def _execute_call(call: APICall) -> None:
                 else call.future.set_exception(f.exception() or RuntimeError("Unknown error occurred"))
             )
         else:
-            logger.error(f"API call failed after 3 attempts: {str(e)}")
+            # Add standardized attempt count message
+            attempt_msg = f"Final attempt count: {call.expiration_counter + 1}"
+            if call.process_log:
+                call.process_log.info(attempt_msg)
+            logger.info(attempt_msg)
+            
+            # Original error message
+            error_msg = f"API call failed after 3 attempts: {str(e)}"
+            logger.error(error_msg)
+            if call.process_log:
+                call.process_log.error(error_msg)
             call.future.set_exception(e)
 
 def enqueue_api_call(
@@ -162,7 +177,8 @@ def enqueue_api_call(
     mock: bool = False,
     mock_tokens: Optional[int] = None,
     expiration_counter: int = 0,
-    temperature: float = 0.7
+    temperature: float = 0.7,
+    process_log: Optional[ProcessLog] = None
 ) -> asyncio.Future[Dict[str, Any]]:
     """Enqueue an API call with retry counter."""
     call = APICall(
@@ -174,7 +190,8 @@ def enqueue_api_call(
         mock_tokens=mock_tokens,
         expiration_counter=expiration_counter,
         future=asyncio.Future(),
-        temperature=temperature
+        temperature=temperature,
+        process_log=process_log
     )
     _pending_calls.append(call)
     return call.future

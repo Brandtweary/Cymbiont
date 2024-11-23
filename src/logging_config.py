@@ -4,11 +4,9 @@ from pathlib import Path
 from typing import Optional, List, Tuple
 from datetime import datetime
 from dataclasses import dataclass, field
-from custom_dataclasses import ChatHistory
+from custom_dataclasses import ChatHistory, ProcessLog
+from constants import BENCHMARK, PROMPT, RESPONSE
 
-BENCHMARK = logging.INFO + 5  # Custom level between INFO and WARNING
-PROMPT = logging.INFO + 6
-RESPONSE = logging.INFO + 7
 
 logging.addLevelName(BENCHMARK, 'BENCHMARK')
 logging.addLevelName(PROMPT, 'PROMPT')
@@ -70,54 +68,6 @@ class ColoredFormatter(logging.Formatter):
         # Format the message with color
         record.msg = f"{color}{prefix}{record.msg}{RESET}"
         return super().format(record)
-
-@dataclass
-class ProcessLog:
-    """Collects logs for a specific process/task to be written together later"""
-    name: str
-    messages: List[Tuple[int, str]] = field(default_factory=list)
-    
-    def debug(self, message: str) -> None:
-        """Store a debug level message"""
-        self.messages.append((logging.DEBUG, message))
-    
-    def info(self, message: str) -> None:
-        """Store an info level message"""
-        self.messages.append((logging.INFO, message))
-        
-    def benchmark(self, message: str) -> None:
-        """Store a benchmark level message"""
-        self.messages.append((BENCHMARK, message))
-        
-    def warning(self, message: str) -> None:
-        """Store a warning level message"""
-        self.messages.append((logging.WARNING, message))
-        
-    def error(self, message: str) -> None:
-        """Store an error level message"""
-        self.messages.append((logging.ERROR, message))
-        
-    def prompt(self, message: str) -> None:
-        """Store a prompt level message"""
-        self.messages.append((PROMPT, message))
-        
-    def response(self, message: str) -> None:
-        """Store a response level message"""
-        self.messages.append((RESPONSE, message))
-        
-    def add_to_logger(self, logger: logging.Logger) -> None:
-        """Write all collected messages to the provided logger"""
-        if not self.messages:
-            return
-            
-        # Create a process group header
-        logger.info(f"=== Process Log: {self.name} ===")
-        
-        # Write all messages, respecting their original levels
-        for level, message in self.messages:
-            logger.log(level, message)
-            
-        logger.info(f"=== END ===")
 
 class ChatHistoryHandler(logging.Handler):
     """Handler that adds log messages to chat history"""
