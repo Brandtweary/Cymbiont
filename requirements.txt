@@ -3,3 +3,4 @@ openai
 python-dotenv
 sphinx
 html2text
+pdftotext

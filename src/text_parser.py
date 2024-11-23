@@ -4,7 +4,32 @@ from custom_dataclasses import Chunk
 from pathlib import Path
 from shared_resources import DATA_DIR, logger
 from utils import get_paths
+import unicodedata
 
+
+def sanitize_text(text: str) -> str:
+    """Clean text by removing invalid/non-printable characters while preserving indentation."""
+    # Process the text line by line to preserve indentation
+    lines = text.split('\n')
+    cleaned_lines = []
+    
+    for line in lines:
+        # Preserve leading whitespace
+        leading_space = len(line) - len(line.lstrip())
+        line_content = line[leading_space:]
+        
+        # Clean the content part
+        cleaned_content = ''.join(
+            char for char in line_content 
+            if unicodedata.category(char)[0] != "C" or char in '\n\t'
+        )
+        cleaned_content = unicodedata.normalize('NFKC', cleaned_content)
+        
+        # Restore the exact same number of leading spaces
+        cleaned_lines.append(' ' * leading_space + cleaned_content)
+    
+    # Rejoin lines and preserve paragraph breaks
+    return '\n'.join(cleaned_lines)
 
 def is_header(text: str) -> bool:
     """Determine if a paragraph is a header based on word count per line and ending."""
@@ -269,6 +294,9 @@ def enforce_max_chunk_size(paragraphs: List[str], max_words: int = 1500) -> List
 
 def split_into_chunks(text: str, doc_id: str) -> List[Chunk]:
     """Split document text into chunks based on paragraphs"""
+    # Sanitize text
+    text = sanitize_text(text)
+    
     # Normalize newlines and split into basic paragraphs
     normalized_text = text.replace('\r\n', '\n')
     paragraphs = [p for p in normalized_text.split('\n\n') if p.strip()]
@@ -346,7 +374,7 @@ def test_parse(doc_name: Optional[str] = None) -> None:
 
 def run_test() -> None:
     """Test the text parsing functionality with a sample document."""
-    test_text = '''I. The Principles of Magic
+    test_text = '''I. The Principles of Magic\u0000\u001F
 
 1. The Laws of Magic
 
