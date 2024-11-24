@@ -60,17 +60,17 @@ of Magical Practices," 1901.
     
     # Expected output for each chunk
     expected_chunks = [
-        '''I. The Principles of Magic
+        '''I. The Principles of MagicC
 1. The Laws of Magic
 The fundamental principles of magic have been well studied. Here we shall
 examine them in detail, starting with sympathetic magic, which relies on
 hidden connections between objects.[1] This principle has been observed
 across many cultures.[2]
+[1] See Smith, J. "Principles of Sympathetic Magic," Journal of 
+Anthropology, 1899.
 [2] For additional examples, see Brown, R. "Cross-Cultural Survey 
 of Magical Practices," 1901.
 
-[1] See Smith, J. "Principles of Sympathetic Magic," Journal of 
-Anthropology, 1899.
 
     The Law of Similarity states that like produces like. This means that
     an effect resembles its cause. For example, a yellow flower might be

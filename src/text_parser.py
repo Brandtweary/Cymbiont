@@ -101,7 +101,11 @@ def combine_references(paragraphs: List[str]) -> List[str]:
     for i, para in enumerate(result):
         cited_refs = extract_reference_numbers(para)
         if cited_refs:
-            matching_refs = [reference_map[num] for num in cited_refs if num in reference_map]
+            # Use a list comprehension that preserves the order of citations as they appear
+            matching_refs = []
+            for num in sorted(cited_refs, key=lambda x: para.find(f'[{x}]')):
+                if num in reference_map:
+                    matching_refs.append(reference_map[num])
             if matching_refs:
                 result[i] = '\n'.join([para] + matching_refs)
     

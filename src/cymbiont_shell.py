@@ -9,6 +9,7 @@ from tests.test_logger import run_logger_test
 from tests.test_parsing import test_text_parsing
 from chat_agent import get_chat_response
 from custom_dataclasses import ChatHistory
+from tests.test_document_processing import run_tests
 
 
 # ANSI color codes
@@ -24,7 +25,8 @@ class CymbiontShell(cmd.Cmd):
         super().__init__()
         self.loop: asyncio.AbstractEventLoop = loop
         self.chat_history = ChatHistory()
-        self.last_test_success: bool = True
+        self.test_successes: int = 0
+        self.test_failures: int = 0
         # Connect chat history to logger
         chat_history_handler.chat_history = self.chat_history
     
@@ -91,12 +93,13 @@ class CymbiontShell(cmd.Cmd):
                 test_api_queue.run_tests(),
                 self.loop
             )
-            future.result()  # Adjust timeout as needed
-            logger.info("API queue tests passed successfully")
-            self.last_test_success = True
+            passed, failed = future.result()  # Unpack the results
+            self.test_successes = passed
+            self.test_failures = failed
         except Exception as e:
             logger.error(f"API queue tests failed: {str(e)}")
-            self.last_test_success = False
+            self.test_successes = 0
+            self.test_failures = 1
 
     def do_test_parsing(self, arg: str) -> None:
         """Run text parsing tests.
@@ -104,52 +107,64 @@ class CymbiontShell(cmd.Cmd):
         try:
             test_text_parsing()
             logger.info("Text parsing tests passed successfully")
-            self.last_test_success = True
+            self.test_successes += 1
         except AssertionError as e:
             logger.error(f"Text parsing tests failed: {str(e)}")
-            self.last_test_success = False
+            self.test_failures += 1
         except Exception as e:
             logger.error(f"Text parsing tests failed with unexpected error: {str(e)}")
-            self.last_test_success = False
+            self.test_failures += 1
 
     def do_run_all_tests(self, arg: str) -> None:
         """Run all tests
         Usage: run_all_tests"""
         test_commands = [cmd for cmd in self.get_commands() if cmd.startswith('test_')]
-        total_tests = len(test_commands)
-        passed_tests = 0
+        total_successes = 0
+        total_failures = 0
         failed_tests: list[tuple[str, str]] = []
 
         for cmd in test_commands:
             try:
-                # Get the method and call it with empty args
+                # Reset test counters before each test
+                self.test_successes = 0
+                self.test_failures = 0
+                
+                # Run the test
                 method = getattr(self, f'do_{cmd}')
                 method('')
-                if self.last_test_success:
-                    passed_tests += 1
-                    logger.info(f"✅ {cmd} passed")
+                
+                # Accumulate results
+                total_successes += self.test_successes
+                total_failures += self.test_failures
+                
+                if self.test_failures > 0:
+                    failed_tests.append((cmd, f"{self.test_failures} tests failed"))
+                    logger.error(f"❌ {cmd} failed\n")
                 else:
-                    failed_tests.append((cmd, "Test failed"))
+                    logger.info(f"✅ {cmd} passed.\n")
+                    
             except Exception as e:
+                total_failures += 1
                 failed_tests.append((cmd, str(e)))
-                logger.error(f"❌ {cmd} failed")
+                logger.error(f"❌ {cmd} failed\n")
 
-        success_rate = (passed_tests / total_tests) * 100
+        total_tests = total_successes + total_failures
+        success_rate = (total_successes / total_tests) * 100 if total_tests > 0 else 0
 
-        # Print results with ASCII art
-        print("\n=== Test Results ===")
-        print(f"Tests Run: {total_tests}")
-        print(f"Passed: {passed_tests}")
-        print(f"Failed: {len(failed_tests)}")
-        print(f"Success Rate: {success_rate:.1f}%\n")
+        # Print results with logger
+        logger.info("\n=== Test Results ===")
+        logger.info(f"Tests Run: {total_tests}")
+        logger.info(f"Passed: {total_successes}")
+        logger.info(f"Failed: {total_failures}")
+        logger.info(f"Success Rate: {success_rate:.1f}%\n")
 
         if failed_tests:
-            print("Failed Tests:")
+            logger.info("Failed Tests:")
             for cmd, error in failed_tests:
-                print(f"❌ {cmd}: {error}")
+                logger.error(f"❌ {cmd}: {error}")
 
         if success_rate == 100:
-            print("""
+            logger.info("""
     🎉 Perfect Score! 🎉
     ┌────────────────┐
     │   100% PASS    │
@@ -157,15 +172,15 @@ class CymbiontShell(cmd.Cmd):
     └────────────────┘
             """)
         elif success_rate >= 80:
-            print("""
+            logger.info("""
     😊 Almost There! 
     ┌────────────────┐
     │   Keep Going!  │
-    │    ⭐ ⭐      │
+    │    ⭐ ⭐       │
     └────────────────┘
             """)
         else:
-            print("""
+            logger.info("""
     😢 Needs Work 
     ┌────────────────┐
     │   Don't Give   │
@@ -217,10 +232,24 @@ class CymbiontShell(cmd.Cmd):
         try:
             run_logger_test()
             logger.info("Logger tests passed successfully")
-            self.last_test_success = True
+            self.test_successes += 1
         except Exception as e:
             logger.error(f"Logger testing failed: {str(e)}")
-            self.last_test_success = False
+            self.test_failures += 1
+    
+    def do_test_document_processing(self, arg: str) -> None:
+        """Test document processing pipeline with mock API calls.
+        Usage: test_document_processing"""
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                run_tests(),
+                self.loop
+            )
+            self.test_successes, self.test_failures = future.result()
+        except Exception as e:
+            logger.error(f"Document processing tests failed with unexpected error: {str(e)}")
+            self.test_successes = 0
+            self.test_failures = 1
     
     def get_commands(self) -> list[str]:
         """Get a list of all available commands"""

@@ -2,7 +2,7 @@ import asyncio
 from typing import List
 from api_queue import enqueue_api_call, BATCH_TIMER, BATCH_LIMIT, TOKENS_PER_MINUTE, TPM_SOFT_LIMIT, is_queue_empty, clear_token_history
 from shared_resources import logger
-from custom_dataclasses import ChatMessage, Chunk
+from custom_dataclasses import ChatMessage
 
 async def test_rpm_rate_limiting() -> None:
     """Test RPM rate limiting processes correct batch size."""
@@ -195,7 +195,7 @@ async def test_retry_mechanism() -> None:
             metadata={},
             tags=None
         )
-        process_log = ProcessLog(name=f"test_{case['name']}")
+        process_log = ProcessLog(name=f"test_{case['name']}", logger=logger)
 
         await clear_token_history()
         
@@ -226,14 +226,17 @@ async def test_retry_mechanism() -> None:
         )
 
 
-async def run_tests() -> None:
-    """Execute all API queue tests sequentially."""
+async def run_tests() -> tuple[int, int]:
+    """Execute all API queue tests sequentially.
+    Returns: Tuple of (passed_tests, failed_tests)"""
     tests = [
         test_rpm_rate_limiting,
         test_tpm_throttle,
         test_tpm_soft_limit,
         test_retry_mechanism
     ]
+    passed = 0
+    failed = 0
 
     for test in tests:
         logger.info(f"Starting {test.__name__}")
@@ -243,13 +246,14 @@ async def run_tests() -> None:
             await clear_token_history() # needs to be called again to clear out tokens from emptying queue
             await test()
             logger.info(f"Completed {test.__name__}")
-            print(f"\033[32m{test.__name__} passed.\033[0m\n")
-        except AssertionError as ae:
-            logger.error(f"{test.__name__} failed: {str(ae)}")
-            print(f"\033[31m{test.__name__} failed: {str(ae)}\033[0m\n")
-        except Exception as e:
-            logger.error(f"{test.__name__} encountered an unexpected error: {str(e)}")
-            print(f"\033[31m{test.__name__} encountered an unexpected error: {str(e)}\033[0m\n")
+            print(f"\033[32m✓ {test.__name__} passed.\033[0m\n")
+            passed += 1
+        except (AssertionError, Exception) as e:
+            logger.error(f"{test.__name__} failed: {str(e)}")
+            print(f"\033[31m{test.__name__} failed: {str(e)}\033[0m\n")
+            failed += 1
+    
+    return passed, failed
 
 async def empty_api_queue() -> None:
     """Ensure the API queue is empty before running the next test."""

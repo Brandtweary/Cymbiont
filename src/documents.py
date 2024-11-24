@@ -116,12 +116,16 @@ async def get_processed_chunks(paths: Paths, doc_index: Dict, doc_name: str | No
     
     return all_chunks
 
-async def process_chunk_tags(chunks: List[Chunk], doc_index: Dict) -> set:
+async def process_chunk_tags(
+    chunks: List[Chunk], 
+    doc_index: Dict,
+    mock: bool = False,
+    mock_content: str = ""
+) -> set:
     """Process and aggregate tags for all chunks and their documents."""
-    # Create process logs and extract tags
-    chunk_logs = [ProcessLog(f"Chunk {chunk.chunk_id}") for chunk in chunks]
+    chunk_logs = [ProcessLog(f"Chunk {chunk.chunk_id}", logger) for chunk in chunks]
     tag_extraction_coros = [
-        extract_tags(chunk, process_log) 
+        extract_tags(chunk, process_log, mock, mock_content) 
         for chunk, process_log in zip(chunks, chunk_logs)
     ]
     
@@ -145,12 +149,17 @@ async def process_chunk_tags(chunks: List[Chunk], doc_index: Dict) -> set:
 
     # Add all logs to the logger
     for log in chunk_logs:
-        log.add_to_logger(logger)
+        log.add_to_logger()
         
     return all_unique_tags
 
 @log_performance
-async def process_documents(base_dir: Path, doc_name: str | None = None) -> List[Chunk]:
+async def process_documents(
+    base_dir: Path, 
+    doc_name: str | None = None,
+    mock: bool = False,
+    mock_content: str = ""
+) -> List[Chunk]:
     """Main document processing pipeline."""
     try:
         paths = get_paths(base_dir)
@@ -165,8 +174,8 @@ async def process_documents(base_dir: Path, doc_name: str | None = None) -> List
         if not all_chunks:
             return []
 
-        # Process tags
-        all_unique_tags = await process_chunk_tags(all_chunks, doc_index)
+        # Get tags
+        all_unique_tags = await process_chunk_tags(all_chunks, doc_index, mock, mock_content)
 
         # Save final state
         save_index(doc_index, paths.index_dir / "documents.json")
@@ -196,7 +205,12 @@ def get_chunk(chunk_id: str, paths: Paths, chunk_index: Dict) -> Optional[Chunk]
             )
     return None
 
-async def create_data_snapshot(name: str, doc_name: str | None = None) -> Path:
+async def create_data_snapshot(
+    name: str, 
+    doc_name: str | None = None,
+    mock: bool = False,
+    mock_content: str = ""
+) -> Path:
     """Create a snapshot of the current data directory structure and process selected documents."""
     try:
         paths = get_paths(DATA_DIR)
@@ -236,7 +250,7 @@ async def create_data_snapshot(name: str, doc_name: str | None = None) -> Path:
                 elif src_path.suffix.lower() in ['.txt', '.md']:
                     shutil.copy2(src_path, snapshot_paths.docs_dir)
             
-        await process_documents(snapshot_base)
+        await process_documents(snapshot_base, doc_name, mock, mock_content)
         return snapshot_base
         
     except Exception as e:

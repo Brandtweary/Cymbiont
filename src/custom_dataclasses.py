@@ -57,11 +57,12 @@ class Paths(NamedTuple):
     inert_docs_dir: Path
     snapshots_dir: Path
 
-@dataclass
 class ProcessLog:
     """Collects logs for a specific process/task"""
-    name: str
-    messages: List[Tuple[int, str]] = field(default_factory=list)
+    def __init__(self, name: str, logger: logging.Logger):
+        self.name = name
+        self.logger = logger
+        self.messages: List[Tuple[int, str]] = []
     
     def debug(self, message: str) -> None:
         self.messages.append((logging.DEBUG, message))
@@ -83,6 +84,18 @@ class ProcessLog:
         
     def response(self, message: str) -> None:
         self.messages.append((RESPONSE, message))
+    
+    def add_to_logger(self) -> None:
+        """Add all collected messages to the main logger"""
+        # Print header
+        self.logger.info(f"{'='*10} Process: {self.name} {'='*10}")
+        
+        # Print messages in sequence
+        for level, message in self.messages:
+            self.logger.log(level, f"  {message}")
+        
+        # Print footer
+        self.logger.info(f"{'='*10} END {'='*10}")
 
 @dataclass
 class APICall:
