@@ -8,7 +8,7 @@ from shared_resources import logger, FILE_RESET, DATA_DIR
 from tag_extraction import extract_tags
 from utils import log_performance, generate_id, load_index, save_index, get_paths
 from custom_dataclasses import Document, Chunk, Paths
-from logging_config import ProcessLog
+from custom_dataclasses import ProcessLog
 from text_parser import split_into_chunks
 
 

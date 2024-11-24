@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, List, Dict, Literal, Optional, NamedTuple, Tuple
 from pathlib import Path
 import logging
-from constants import BENCHMARK, PROMPT, RESPONSE
+from constants import LogLevel
 
 
 MessageRole = Literal["user", "assistant", "system"]
@@ -77,13 +77,13 @@ class ProcessLog:
         self.messages.append((logging.ERROR, message))
         
     def benchmark(self, message: str) -> None:
-        self.messages.append((BENCHMARK, message))
+        self.messages.append((LogLevel.BENCHMARK, message))
         
     def prompt(self, message: str) -> None:
-        self.messages.append((PROMPT, message))
+        self.messages.append((LogLevel.PROMPT, message))
         
     def response(self, message: str) -> None:
-        self.messages.append((RESPONSE, message))
+        self.messages.append((LogLevel.RESPONSE, message))
     
     def add_to_logger(self) -> None:
         """Add all collected messages to the main logger"""

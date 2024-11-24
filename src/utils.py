@@ -10,7 +10,7 @@ from collections import defaultdict
 from shared_resources import logger, FILE_RESET, DELETE_LOGS
 from pathlib import Path
 import json
-from logging_config import BENCHMARK
+from constants import LogLevel
 from custom_dataclasses import Paths
 import shutil
 
@@ -64,10 +64,10 @@ def log_performance(func: Callable) -> Callable:
             return result
         finally:
             total_duration = time.perf_counter() - start
-            logger.log(BENCHMARK, f"{func.__name__} completed in {total_duration:.3f}s")
+            logger.log(LogLevel.BENCHMARK, f"{func.__name__} completed in {total_duration:.3f}s")
             
             for section, duration in context.sections.items():
-                logger.log(BENCHMARK, f"  └─ {section}: {duration:.3f}s")
+                logger.log(LogLevel.BENCHMARK, f"  └─ {section}: {duration:.3f}s")
             _current_context.reset(token)
     
     @functools.wraps(func)
@@ -81,10 +81,10 @@ def log_performance(func: Callable) -> Callable:
             return result
         finally:
             total_duration = time.perf_counter() - start
-            logger.log(BENCHMARK, f"{func.__name__} completed in {total_duration:.3f}s")
+            logger.log(LogLevel.BENCHMARK, f"{func.__name__} completed in {total_duration:.3f}s")
             
             for section, duration in context.sections.items():
-                logger.log(BENCHMARK, f"  └─ {section}: {duration:.3f}s")
+                logger.log(LogLevel.BENCHMARK, f"  └─ {section}: {duration:.3f}s")
             _current_context.reset(token)
     
     return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper

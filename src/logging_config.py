@@ -5,12 +5,13 @@ from typing import Optional, List, Tuple
 from datetime import datetime
 from dataclasses import dataclass, field
 from custom_dataclasses import ChatHistory, ProcessLog
-from constants import BENCHMARK, PROMPT, RESPONSE
+from constants import LogLevel
+import re
 
 
-logging.addLevelName(BENCHMARK, 'BENCHMARK')
-logging.addLevelName(PROMPT, 'PROMPT')
-logging.addLevelName(RESPONSE, 'RESPONSE')
+# Register all custom log levels
+for level in LogLevel:
+    logging.addLevelName(level, level.name)
 
 class ConsoleFilter(logging.Filter):
     """Filter messages based on config flags"""
@@ -27,13 +28,15 @@ class ConsoleFilter(logging.Filter):
         self.response = response
         
     def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno == LogLevel.SHELL:
+            return False  # Never show SHELL messages in console
         if record.levelno == logging.DEBUG:
             return self.debug
-        if record.levelno == BENCHMARK:
+        if record.levelno == LogLevel.BENCHMARK:
             return self.benchmark
-        if record.levelno == PROMPT:
+        if record.levelno == LogLevel.PROMPT:
             return self.prompt
-        if record.levelno == RESPONSE:
+        if record.levelno == LogLevel.RESPONSE:
             return self.response
         return True
 
@@ -60,9 +63,9 @@ class ColoredFormatter(logging.Formatter):
         elif record.levelno == logging.CRITICAL:
             color = BRIGHT_RED
             prefix = "CRITICAL: "
-        elif record.levelno == BENCHMARK:
+        elif record.levelno == LogLevel.BENCHMARK:
             color = WHITE
-        elif record.levelno in (PROMPT, RESPONSE):
+        elif record.levelno in (LogLevel.PROMPT, LogLevel.RESPONSE):
             color = MAGENTA
             
         # Format the message with color
@@ -71,13 +74,25 @@ class ColoredFormatter(logging.Formatter):
 
 class ChatHistoryHandler(logging.Handler):
     """Handler that adds log messages to chat history"""
-    def __init__(self, chat_history: Optional[ChatHistory] = None):
+    def __init__(
+        self, 
+        chat_history: Optional[ChatHistory] = None,
+        console_filter: Optional[logging.Filter] = None
+    ):
         super().__init__()
         self.chat_history = chat_history
+        self.console_filter = console_filter
+        self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
     def emit(self, record: logging.LogRecord) -> None:
-        if self.chat_history is not None and record.levelno not in (PROMPT, RESPONSE):
-            self.chat_history.add_message("system", self.format(record))
+        if (self.chat_history is not None 
+            and record.levelno not in (LogLevel.PROMPT, LogLevel.RESPONSE)
+            and (record.levelno == LogLevel.SHELL  # Always include SHELL messages
+                or (self.console_filter is None or self.console_filter.filter(record)))
+        ):
+            clean_message = self.ansi_escape.sub('', self.format(record))
+            prefixed_message = f"{record.levelname} - {clean_message}"
+            self.chat_history.add_message("system", prefixed_message)
 
 def setup_logging(
     log_dir: Path,
@@ -124,14 +139,17 @@ def setup_logging(
     )
     cymbiont_file_handler.setFormatter(file_formatter)
     
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(console_formatter)
-    console_handler.addFilter(ConsoleFilter(
+    # Create console filter
+    console_filter = ConsoleFilter(
         debug=debug,
         benchmark=benchmark,
         prompt=prompt,
         response=response
-    ))
+    )
+    
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(console_formatter)
+    console_handler.addFilter(console_filter)
     
     # Configure cymbiont logger
     cymbiont_logger = logging.getLogger('cymbiont')
@@ -146,7 +164,7 @@ def setup_logging(
     cymbiont_logger.debug(f"Full log created at: {complete_log_file}") # includes logs from all modules, not just Cymbiont
     
     # Create chat history handler (initially without chat history)
-    chat_history_handler = ChatHistoryHandler()
+    chat_history_handler = ChatHistoryHandler(console_filter=console_filter)
     chat_history_handler.setFormatter(logging.Formatter('%(message)s'))
     cymbiont_logger.addHandler(chat_history_handler)
     

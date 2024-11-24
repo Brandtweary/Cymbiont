@@ -13,8 +13,8 @@ Text: {text}
 ---'''
 
 CHAT_AGENT_SYSTEM_PROMPT = '''You are an autonomous agent in a shell environment.
-When the user performs a command, you can see the output as a system message.
-All system log levels are visible to you. The user may optionally hide certain log levels, but they will always see INFO logs.
+When the user executes a command, you can see the output as a system message.
+The user may optionally enable or disable log levels by modifying their config.toml file.
 '''
 
 

@@ -1,8 +1,8 @@
 import asyncio
 import cmd
 from shared_resources import DATA_DIR, logger, token_logger, USER_NAME, AGENT_NAME, chat_history_handler
-from logging_config import RESPONSE
 from documents import create_data_snapshot, process_documents
+from constants import LogLevel
 from tests import test_api_queue
 from text_parser import test_parse
 from tests.test_logger import run_logger_test
@@ -37,7 +37,11 @@ class CymbiontShell(cmd.Cmd):
         if header:
             if header == "Documented commands (type help <topic>):":
                 header = f"{GREEN}Available commands (type help <command>):{RESET}"
+                # Log all help overview info in a single message
+                logger.log(LogLevel.SHELL, f"Available commands: {', '.join(cmds)}")
             self.stdout.write(f"{GREEN}{header}{RESET}\n")
+        
+        # Write colored version to console
         self.columnize([f"{GREEN}{cmd}{RESET}" for cmd in cmds], maxcol-1)
         self.stdout.write("\n")
 
@@ -56,10 +60,13 @@ class CymbiontShell(cmd.Cmd):
                     doc = getattr(self, 'do_' + arg).__doc__
                     if doc:
                         self.print_help_text(str(doc))
+                        # Log the help text
+                        logger.log(LogLevel.SHELL, f"Help for {arg}: {doc}")
                         return
                 except AttributeError:
                     pass
                 self.print_help_text(f"*** No help on {arg}")
+                logger.log(LogLevel.SHELL, f"No help available for command: {arg}")
         else:
             # Show the list of commands
             super().do_help(arg)
@@ -269,7 +276,7 @@ class CymbiontShell(cmd.Cmd):
             
             # Record and log assistant response
             self.chat_history.add_message("assistant", response)
-            logger.log(RESPONSE, f"Agent response: {response}")
+            logger.log(LogLevel.RESPONSE, f"Agent response: {response}")
             token_logger.print_tokens()
             token_logger.reset_tokens()
             print(f"{BLUE}{AGENT_NAME}>{RESET} {response}")
@@ -279,3 +286,20 @@ class CymbiontShell(cmd.Cmd):
     def completenames(self, text: str, *ignored) -> list[str]:
         """Override completenames to only show actual commands"""
         return [name for name in self.get_commands() if name.startswith(text)]
+
+    def onecmd(self, line: str) -> bool:
+        if not line:
+            return False
+        
+        cmd, arg, line = self.parseline(line)
+        if not cmd:
+            return False
+        
+        if hasattr(self, f'do_{cmd}'):
+            # Log the command exactly as typed
+            logger.log(
+                LogLevel.SHELL, 
+                f"{USER_NAME} executed: {cmd}{' ' + arg if arg else ''}"
+            )
+        
+        return super().onecmd(line)

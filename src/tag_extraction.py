@@ -8,7 +8,7 @@ from prompts import TAG_PROMPT, safe_format_prompt
 from custom_dataclasses import Chunk, ChatMessage
 from utils import log_performance
 from api_queue import enqueue_api_call
-from logging_config import ProcessLog
+from custom_dataclasses import ProcessLog
 
 
 @log_performance

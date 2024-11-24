@@ -2,12 +2,11 @@ import asyncio
 from typing import Any, List
 from api_queue import enqueue_api_call
 from shared_resources import logger
-from constants import CHAT_AGENT_MODEL
+from constants import CHAT_AGENT_MODEL, LogLevel
 from prompts import CHAT_AGENT_SYSTEM_PROMPT
 from utils import log_performance
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam, ChatCompletionAssistantMessageParam
 from custom_dataclasses import ChatMessage
-from logging_config import PROMPT
 
 
 def convert_to_openai_message(message: ChatMessage) -> ChatCompletionMessageParam:
@@ -43,7 +42,7 @@ async def get_chat_response(message: str, chat_history: List[ChatMessage]) -> st
         prompt_text = "\n".join(
             f"{msg.role.upper()}: {msg.content}" for msg in messages
         ).replace("\n\n", "\n")
-        logger.log(PROMPT, f"{prompt_text}")
+        logger.log(LogLevel.PROMPT, f"{prompt_text}")
         
         response = await enqueue_api_call(
             model=CHAT_AGENT_MODEL,
