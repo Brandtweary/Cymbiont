@@ -265,17 +265,17 @@ class CymbiontShell(cmd.Cmd):
     def default(self, line: str) -> None:
         """Handle chat messages"""
         try:
-            # Record user message
-            self.chat_history.add_message("user", line)
+            # Record user message with explicit name
+            self.chat_history.add_message("user", line, name=USER_NAME)
             
             future = asyncio.run_coroutine_threadsafe(
-                get_chat_response(line, self.chat_history.get_recent_messages()),
+                get_chat_response(self.chat_history.get_recent_messages()),
                 self.loop
             )
             response = future.result()
             
-            # Record and log assistant response
-            self.chat_history.add_message("assistant", response)
+            # Record and log assistant response with explicit name
+            self.chat_history.add_message("assistant", response, name=AGENT_NAME)
             logger.log(LogLevel.RESPONSE, f"Agent response: {response}")
             token_logger.print_tokens()
             token_logger.reset_tokens()

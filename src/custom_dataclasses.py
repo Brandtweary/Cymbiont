@@ -13,14 +13,16 @@ MessageRole = Literal["user", "assistant", "system"]
 class ChatMessage:
     role: MessageRole
     content: str
+    name: Optional[str] = None
     timestamp: datetime = field(default_factory=datetime.now)
 
 @dataclass
 class ChatHistory:
     messages: List[ChatMessage] = field(default_factory=list)
     
-    def add_message(self, role: MessageRole, content: str) -> None:
-        self.messages.append(ChatMessage(role=role, content=content))
+    def add_message(self, role: MessageRole, content: str, name: str = '') -> None:
+        """Add a message to the history with an explicit name"""
+        self.messages.append(ChatMessage(role=role, content=content, name=name))
     
     def get_recent_messages(self, limit: int = 10) -> List[ChatMessage]:
         """Get the most recent messages"""

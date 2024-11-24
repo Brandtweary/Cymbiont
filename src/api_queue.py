@@ -32,7 +32,7 @@ def _convert_response_format(format_dict: Dict[str, str]) -> ResponseFormat:
         return ResponseFormatJSONObject(type="json_object")
     return ResponseFormatText(type="text")
 
-async def _process_pending_calls() -> None:
+async def process_pending_calls() -> None:
     """Process pending API calls within rate limits.
     Processes up to BATCH_LIMIT calls every BATCH_TIMER seconds."""
     while True:
@@ -66,7 +66,7 @@ async def _process_pending_calls() -> None:
                     logger.debug(f"Creating {len(calls_to_process)} API call tasks " +
                                f"(TPM: {tokens_per_minute:.0f}, factor: {interpolation_factor:.2f})")
                     for call in calls_to_process:
-                        asyncio.create_task(_execute_call(call))
+                        asyncio.create_task(execute_call(call))
             
             # Wait for next batch window
             await asyncio.sleep(BATCH_TIMER)
@@ -75,7 +75,7 @@ async def _process_pending_calls() -> None:
             if asyncio.get_event_loop().get_debug():
                 raise
 
-async def _execute_call(call: APICall) -> None:
+async def execute_call(call: APICall) -> None:
     """Execute a single API call with retry logic."""
     try:
         if call.mock:
@@ -101,7 +101,9 @@ async def _execute_call(call: APICall) -> None:
             # Real API call logic
             openai_messages = [
                 ChatCompletionSystemMessageParam(role="system", content=msg.content) if msg.role == "system"
+                else ChatCompletionUserMessageParam(role="user", content=msg.content, name=msg.name) if msg.role == "user" and msg.name
                 else ChatCompletionUserMessageParam(role="user", content=msg.content) if msg.role == "user"
+                else ChatCompletionAssistantMessageParam(role="assistant", content=msg.content, name=msg.name) if msg.role == "assistant" and msg.name
                 else ChatCompletionAssistantMessageParam(role="assistant", content=msg.content)
                 for msg in call.messages
             ]
@@ -210,7 +212,7 @@ async def start_api_queue() -> None:
     """Start the API queue processor."""
     global _processor_task
     if _processor_task is None:
-        _processor_task = asyncio.create_task(_process_pending_calls())
+        _processor_task = asyncio.create_task(process_pending_calls())
 
 async def stop_api_queue() -> None:
     """Stop the API queue processor."""

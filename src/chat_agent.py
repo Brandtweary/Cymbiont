@@ -20,7 +20,7 @@ def convert_to_openai_message(message: ChatMessage) -> ChatCompletionMessagePara
 
 
 @log_performance
-async def get_chat_response(message: str, chat_history: List[ChatMessage]) -> str:
+async def get_chat_response(recent_messages: List[ChatMessage]) -> str:
     """
     Sends a message to the OpenAI chat agent with conversation history.
 
@@ -35,12 +35,13 @@ async def get_chat_response(message: str, chat_history: List[ChatMessage]) -> st
         # Initialize all messages in our format first
         messages: List[ChatMessage] = [
             ChatMessage(role="system", content=CHAT_AGENT_SYSTEM_PROMPT),
-            *chat_history
+            *recent_messages
         ]
         
         # Log the complete prompt
         prompt_text = "\n".join(
-            f"{msg.role.upper()}: {msg.content}" for msg in messages
+            f"{'SYSTEM' if msg.role == 'system' else msg.name}: {msg.content}" 
+            for msg in messages
         ).replace("\n\n", "\n")
         logger.log(LogLevel.PROMPT, f"{prompt_text}")
         

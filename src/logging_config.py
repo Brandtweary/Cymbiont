@@ -1,10 +1,9 @@
 import logging
 import logging.handlers
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, Tuple
 from datetime import datetime
-from dataclasses import dataclass, field
-from custom_dataclasses import ChatHistory, ProcessLog
+from custom_dataclasses import ChatHistory
 from constants import LogLevel
 import re
 
