@@ -49,6 +49,7 @@ FILE_RESET = config["app"]["file_reset"]
 PROMPT_ENABLED = config["app"]["prompt"]
 RESPONSE_ENABLED = config["app"]["response"]
 DELETE_LOGS = config["app"]["delete_logs"]
+TOKEN_LOGGING = config["app"]["token_logging"]
 
 # Shell config
 USER_NAME = config["shell"]["user_name"]
@@ -73,11 +74,11 @@ class TokenLogger:
     
     def print_tokens(self) -> None:
         """Print the current token count"""
-        logger.info(f"Tokens used: {self.token_count}")
+        if TOKEN_LOGGING:
+            logger.info(f"Tokens used: {self.token_count}")
     
     def reset_tokens(self) -> None:
         """Reset token count to zero"""
-        old_count = self.token_count
         self.token_count = 0
 
 # Initialize token logger

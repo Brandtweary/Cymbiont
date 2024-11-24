@@ -1,4 +1,5 @@
 [app]
+token_logging = false  # show token usage
 benchmark = false  # show performance metrics
 debug = false  # show debug logs
 prompt = false  # show prompts

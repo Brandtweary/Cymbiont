@@ -270,8 +270,9 @@ class CymbiontShell(cmd.Cmd):
             # Record and log assistant response
             self.chat_history.add_message("assistant", response)
             logger.log(RESPONSE, f"Agent response: {response}")
-            # Print response directly to user
-            print(f"{BLUE}{AGENT_NAME}>{RESET} {response}\n")
+            token_logger.print_tokens()
+            token_logger.reset_tokens()
+            print(f"{BLUE}{AGENT_NAME}>{RESET} {response}")
         except Exception as e:
             logger.error(f"Chat response failed: {str(e)}")
 
