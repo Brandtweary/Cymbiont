@@ -19,10 +19,6 @@ if not DATA_DIR.exists():
 
 LOG_DIR = DATA_DIR / "logs"
 
-# Models
-TAG_EXTRACTION_OPENAI_MODEL = "gpt-4o-mini"
-CHAT_AGENT_MODEL = "gpt-4o-mini"
-
 # Initialize OpenAI client
 openai_client = AsyncOpenAI()
 

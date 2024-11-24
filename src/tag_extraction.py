@@ -2,7 +2,8 @@ import json
 from json.decoder import JSONDecodeError
 from typing import List, Optional
 
-from shared_resources import logger, DEBUG_ENABLED, TAG_EXTRACTION_OPENAI_MODEL
+from shared_resources import logger, DEBUG_ENABLED
+from constants import TAG_EXTRACTION_OPENAI_MODEL
 from prompts import TAG_PROMPT, safe_format_prompt
 from custom_dataclasses import Chunk, ChatMessage
 from utils import log_performance

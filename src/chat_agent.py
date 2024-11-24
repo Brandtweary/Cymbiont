@@ -1,7 +1,8 @@
 import asyncio
 from typing import Any, List
 from api_queue import enqueue_api_call
-from shared_resources import openai_client, CHAT_AGENT_MODEL, logger
+from shared_resources import logger
+from constants import CHAT_AGENT_MODEL
 from prompts import CHAT_AGENT_SYSTEM_PROMPT
 from utils import log_performance
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam, ChatCompletionAssistantMessageParam

@@ -47,7 +47,6 @@ async def test_rpm_rate_limiting() -> None:
         f"Expected {num_requests - len(completed)} pending requests, "
         f"got {len(pending)}"
     )
-    logger.info("test_rpm_rate_limiting passed.")
 
 async def test_tpm_throttle() -> None:
     """Test that high token usage properly throttles the queue."""
@@ -97,7 +96,6 @@ async def test_tpm_throttle() -> None:
     assert len(pending) >= 2, (
         f"Expected at least 2 pending requests due to token throttling, got {len(pending)}"
     )
-    logger.info("test_tpm_throttle passed.")
 
 async def test_tpm_soft_limit() -> None:
     """Test that token usage near the soft limit properly throttles the queue."""
@@ -147,7 +145,6 @@ async def test_tpm_soft_limit() -> None:
     assert len(pending) == len(new_futures), (
         f"Expected all requests to be pending due to token throttling, got {len(pending)} pending."
     )
-    logger.info("test_tpm_soft_limit passed.")
 
 async def test_retry_mechanism() -> None:
     """Test that API calls retry properly through various failure cases."""
@@ -228,7 +225,6 @@ async def test_retry_mechanism() -> None:
             f"{case['name']}: Expected {case['expected_retries']} attempts, got {final_count}"
         )
 
-    logger.info("test_retry_mechanism passed.")
 
 async def run_tests() -> None:
     """Execute all API queue tests sequentially."""

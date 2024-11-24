@@ -6,6 +6,7 @@ from documents import create_data_snapshot, process_documents
 from tests import test_api_queue
 from text_parser import test_parse
 from tests.test_logger import run_logger_test
+from tests.test_parsing import test_text_parsing
 from chat_agent import get_chat_response
 from custom_dataclasses import ChatHistory
 
@@ -23,6 +24,7 @@ class CymbiontShell(cmd.Cmd):
         super().__init__()
         self.loop: asyncio.AbstractEventLoop = loop
         self.chat_history = ChatHistory()
+        self.last_test_success: bool = True
         # Connect chat history to logger
         chat_history_handler.chat_history = self.chat_history
     
@@ -90,8 +92,86 @@ class CymbiontShell(cmd.Cmd):
                 self.loop
             )
             future.result()  # Adjust timeout as needed
+            logger.info("API queue tests passed successfully")
+            self.last_test_success = True
         except Exception as e:
             logger.error(f"API queue tests failed: {str(e)}")
+            self.last_test_success = False
+
+    def do_test_parsing(self, arg: str) -> None:
+        """Run text parsing tests.
+        Usage: test_parsing"""
+        try:
+            test_text_parsing()
+            logger.info("Text parsing tests passed successfully")
+            self.last_test_success = True
+        except AssertionError as e:
+            logger.error(f"Text parsing tests failed: {str(e)}")
+            self.last_test_success = False
+        except Exception as e:
+            logger.error(f"Text parsing tests failed with unexpected error: {str(e)}")
+            self.last_test_success = False
+
+    def do_run_all_tests(self, arg: str) -> None:
+        """Run all tests
+        Usage: run_all_tests"""
+        test_commands = [cmd for cmd in self.get_commands() if cmd.startswith('test_')]
+        total_tests = len(test_commands)
+        passed_tests = 0
+        failed_tests: list[tuple[str, str]] = []
+
+        for cmd in test_commands:
+            try:
+                # Get the method and call it with empty args
+                method = getattr(self, f'do_{cmd}')
+                method('')
+                if self.last_test_success:
+                    passed_tests += 1
+                    logger.info(f"✅ {cmd} passed")
+                else:
+                    failed_tests.append((cmd, "Test failed"))
+            except Exception as e:
+                failed_tests.append((cmd, str(e)))
+                logger.error(f"❌ {cmd} failed")
+
+        success_rate = (passed_tests / total_tests) * 100
+
+        # Print results with ASCII art
+        print("\n=== Test Results ===")
+        print(f"Tests Run: {total_tests}")
+        print(f"Passed: {passed_tests}")
+        print(f"Failed: {len(failed_tests)}")
+        print(f"Success Rate: {success_rate:.1f}%\n")
+
+        if failed_tests:
+            print("Failed Tests:")
+            for cmd, error in failed_tests:
+                print(f"❌ {cmd}: {error}")
+
+        if success_rate == 100:
+            print("""
+    🎉 Perfect Score! 🎉
+    ┌────────────────┐
+    │   100% PASS    │
+    │    ⭐ ⭐ ⭐    │
+    └────────────────┘
+            """)
+        elif success_rate >= 80:
+            print("""
+    😊 Almost There! 
+    ┌────────────────┐
+    │   Keep Going!  │
+    │    ⭐ ⭐      │
+    └────────────────┘
+            """)
+        else:
+            print("""
+    😢 Needs Work 
+    ┌────────────────┐
+    │   Don't Give   │
+    │     Up! 💪     │
+    └────────────────┘
+            """)
     
     def do_create_data_snapshot(self, arg: str) -> None:
         """Creates an isolated snapshot by processing documents in the data/input_documents directory.
@@ -119,11 +199,11 @@ class CymbiontShell(cmd.Cmd):
         except Exception as e:
             logger.error(f"Snapshot creation failed: {str(e)}")
     
-    def do_test_parse(self, arg: str) -> None:
+    def do_parse_documents(self, arg: str) -> None:
         """Test document parsing without running LLM tag extraction.
         This command parses documents in data/input_documents into chunks and records the results to logs/parse_test_results.log.
 
-        Usage: test_parse [document_name]
+        Usage: parse_documents [document_name]
         - document_name: Optional. If provided, only this file or folder will be tested.
                         Otherwise, tests all .txt and .md files."""
         try:
@@ -136,8 +216,11 @@ class CymbiontShell(cmd.Cmd):
         Usage: test_logger"""
         try:
             run_logger_test()
+            logger.info("Logger tests passed successfully")
+            self.last_test_success = True
         except Exception as e:
             logger.error(f"Logger testing failed: {str(e)}")
+            self.last_test_success = False
     
     def get_commands(self) -> list[str]:
         """Get a list of all available commands"""
