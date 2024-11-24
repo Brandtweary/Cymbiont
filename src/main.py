@@ -1,7 +1,7 @@
 # System imports
-import asyncio
-import sys
 from pathlib import Path
+import sys
+import asyncio
 
 def setup_python_path() -> None:
     """Add project directories to Python path."""
@@ -16,44 +16,34 @@ def setup_python_path() -> None:
 setup_python_path()
 
 # Project imports
-from api_queue import start_api_queue, stop_api_queue
 from shared_resources import logger, DATA_DIR
-import threading
 from cymbiont_shell import CymbiontShell
 from utils import setup_directories, delete_logs
+from api_queue import start_api_queue, stop_api_queue
 
-
-
-def main():
+async def async_main() -> None:
     # Setup directories
     setup_directories(DATA_DIR)
     
-    # Create a new event loop
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    # Start API queue
+    await start_api_queue()
     
     try:
-        # Start API queue
-        loop.run_until_complete(start_api_queue())
-        
-        # Create shell with access to the loop by passing it to the constructor
-        shell = CymbiontShell(loop=loop)
-        
-        # Run the shell with the loop in a separate thread
-        shell_thread = threading.Thread(target=shell.cmdloop, daemon=True)
-        shell_thread.start()
-        
-        # Keep the event loop running
-        loop.run_forever()
+        # Create and run shell
+        shell = CymbiontShell()
+        await shell.run()
         
     except KeyboardInterrupt:
         logger.debug("Keyboard interrupt received")
     finally:
         # Cleanup
-        loop.run_until_complete(stop_api_queue())
-        loop.close()
+        await stop_api_queue()
         delete_logs(DATA_DIR)
         logger.debug("Cymbiont shutdown complete")
+
+def main() -> None:
+    """Entry point that runs the async main function"""
+    asyncio.run(async_main())
 
 if __name__ == "__main__":
     main()

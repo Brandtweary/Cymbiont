@@ -124,13 +124,15 @@ async def process_chunk_tags(
 ) -> set:
     """Process and aggregate tags for all chunks and their documents."""
     chunk_logs = [ProcessLog(f"Chunk {chunk.chunk_id}", logger) for chunk in chunks]
-    tag_extraction_coros = [
-        extract_tags(chunk, process_log, mock, mock_content) 
+    tasks = [
+        asyncio.create_task(
+            extract_tags(chunk, process_log, mock, mock_content),
+            name=f"extract_tags_{chunk.chunk_id}"
+        )
         for chunk, process_log in zip(chunks, chunk_logs)
     ]
     
-    # Extract tags from all chunks concurrently
-    await asyncio.gather(*tag_extraction_coros, return_exceptions=True)
+    await asyncio.gather(*tasks, return_exceptions=True)
     
     # Aggregate tags by document using sets temporarily for deduplication
     doc_tags = {}

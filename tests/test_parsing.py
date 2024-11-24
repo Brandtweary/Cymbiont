@@ -1,7 +1,7 @@
 from text_parser import split_into_chunks
 
 
-def test_text_parsing() -> None:
+def run_text_parsing_test() -> None:
     """Test the text parsing functionality with a sample document."""
     # Test input
     test_text = '''I. The Principles of Magic\u0000\u001F
@@ -60,7 +60,7 @@ of Magical Practices," 1901.
     
     # Expected output for each chunk
     expected_chunks = [
-        '''I. The Principles of MagicC
+        '''I. The Principles of Magic
 1. The Laws of Magic
 The fundamental principles of magic have been well studied. Here we shall
 examine them in detail, starting with sympathetic magic, which relies on

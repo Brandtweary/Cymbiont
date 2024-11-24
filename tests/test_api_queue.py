@@ -225,7 +225,7 @@ async def test_retry_mechanism() -> None:
         )
 
 
-async def run_tests() -> tuple[int, int]:
+async def run_api_queue_tests() -> tuple[int, int]:
     """Execute all API queue tests sequentially.
     Returns: Tuple of (passed_tests, failed_tests)"""
     tests = [

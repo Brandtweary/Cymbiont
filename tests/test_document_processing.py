@@ -135,7 +135,7 @@ async def test_create_data_snapshot() -> None:
             shutil.rmtree(expected_snapshot_dir)
         raise e
 
-async def run_tests() -> tuple[int, int]:
+async def run_document_processing_tests() -> tuple[int, int]:
     """Run all document processing tests.
     Returns: Tuple of (passed_tests, failed_tests)"""
     logger.info("Starting document processing test suite...")
