@@ -84,8 +84,9 @@ class CymbiontShell:
         
         # Create prompt session with styling
         style = Style.from_dict({
-            'prompt': '#00FFFF',  # Cyan
+            'user': '#0080FE',    # Deep blue
             'command': 'ansigreen',
+            'agent': '#00FFFF',   # Bright cyan
         })
         
         self.session = PromptSession(
@@ -101,7 +102,8 @@ class CymbiontShell:
     def get_prompt(self) -> FormattedText:
         """Generate the prompt text"""
         return FormattedText([
-            ('class:prompt', f'{USER_NAME}> ')
+            ('class:user', f'{USER_NAME}'),
+            ('', '> ')
         ])
     
     def format_commands_columns(self, commands: list[str], num_columns: int = 3) -> str:
@@ -182,8 +184,8 @@ class CymbiontShell:
             token_logger.print_tokens()
             token_logger.reset_tokens()
             
-            # Print response directly (already logged in chat_agent)
-            print(f"{AGENT_NAME}> {response}")
+            # Print response with bright cyan agent name
+            print(f"\x1b[38;2;0;255;255m{AGENT_NAME}\x1b[0m> {response}")
             
         except Exception as e:
             logger.error(f"Chat response failed: {str(e)}")
