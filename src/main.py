@@ -16,7 +16,7 @@ def setup_python_path() -> None:
 setup_python_path()
 
 # Project imports
-from shared_resources import logger, DATA_DIR
+from shared_resources import logger, token_logger, DATA_DIR
 from cymbiont_shell import CymbiontShell
 from utils import setup_directories, delete_logs
 from api_queue import start_api_queue, stop_api_queue
@@ -38,6 +38,7 @@ async def async_main() -> None:
     finally:
         # Cleanup
         await stop_api_queue()
+        token_logger.print_total_tokens()
         delete_logs(DATA_DIR)
         logger.debug("Cymbiont shutdown complete")
 

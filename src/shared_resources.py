@@ -66,20 +66,26 @@ logger = setup_logging(
 
 @dataclass
 class TokenLogger:
-    token_count: int = 0
+    running_token_count: int = 0
+    total_token_count: int = 0
     
     def add_tokens(self, tokens: int) -> None:
         """Add tokens to the running total"""
-        self.token_count += tokens
-    
+        self.running_token_count += tokens
+        self.total_token_count += tokens
+
     def print_tokens(self) -> None:
         """Print the current token count"""
         if TOKEN_LOGGING:
-            logger.info(f"Tokens used: {self.token_count}")
+            logger.info(f"Tokens used: {self.running_token_count}")
     
     def reset_tokens(self) -> None:
         """Reset token count to zero"""
-        self.token_count = 0
+        self.running_token_count = 0
+    
+    def print_total_tokens(self) -> None:
+        """Print the total token count"""
+        logger.info(f"Total tokens used: {self.total_token_count}")
 
 # Initialize token logger
 token_logger = TokenLogger()

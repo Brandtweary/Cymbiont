@@ -76,6 +76,7 @@ class CymbiontShell:
             'test_parsing': self.do_test_parsing,
             'test_progressive_summarization': self.do_test_progressive_summarization,
             'run_all_tests': self.do_run_all_tests,
+            'print_total_tokens': self.do_print_total_tokens,
         }
         
         # Create command completer
@@ -413,3 +414,7 @@ class CymbiontShell:
         except Exception as e:
             logger.error(f"Progressive summarization tests failed with unexpected error: {str(e)}")
             self.test_failures += 1
+    
+    async def do_print_total_tokens(self, args: str) -> None:
+        """Print the total token count"""
+        token_logger.print_total_tokens()
