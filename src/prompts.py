@@ -23,7 +23,7 @@ PROGRESSIVE_SUMMARY_PROMPT = '''You are a highly skilled AI trained in conversat
 3. Any action items or next steps
 4. Technical details that might be relevant for future reference
 
-Please maintain technical accuracy while being concise. The summary should help someone quickly understand the conversation's essence without reading the full transcript.
+Please include key information from the previous summary if it exists.
 
 Conversation:
 {conversation}

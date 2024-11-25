@@ -1,7 +1,7 @@
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
-from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.completion import WordCompleter, Completer, Completion
 from typing import Callable, Dict
 import asyncio
 import math
@@ -16,6 +16,34 @@ from tests.test_document_processing import run_document_processing_tests
 from tests.test_logger import run_logger_test
 from tests.test_parsing import run_text_parsing_test
 from tests.test_chat_history import test_progressive_summarization
+
+
+class CommandCompleter(Completer):
+    def __init__(self, commands: Dict[str, Callable]) -> None:
+        self.commands = commands
+
+    def get_completions(self, document, complete_event):
+        text_before_cursor: str = document.text_before_cursor
+        words: list[str] = text_before_cursor.split()
+        
+        # If no words yet, show all commands
+        if not words:
+            for command in self.commands:
+                yield Completion(command, start_position=0)
+            return
+            
+        # If we're still typing the first word (no space after it)
+        if len(words) == 1 and not text_before_cursor.endswith(' '):
+            word_before_cursor: str = words[0]
+            for command in self.commands:
+                if command.startswith(word_before_cursor.lower()):
+                    yield Completion(command, start_position=-len(word_before_cursor))
+            return
+            
+        # If there's a completed first word (has space after it)
+        first_word: str = words[0].lower()
+        if first_word not in self.commands:
+            return  # Stop completions if the completed first word isn't a command
 
 
 class CymbiontShell:
@@ -43,11 +71,7 @@ class CymbiontShell:
         }
         
         # Create command completer
-        command_completer = WordCompleter(
-            list(self.commands.keys()),
-            ignore_case=True,
-            match_middle=False  # Only match from start of word
-        )
+        command_completer = CommandCompleter(self.commands)
         
         # Create prompt session with styling
         style = Style.from_dict({
