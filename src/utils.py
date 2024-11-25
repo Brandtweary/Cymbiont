@@ -206,29 +206,40 @@ def convert_messages_to_string(
     word_limit: Optional[int] = 300,
     truncate_last: bool = False
 ) -> str:
-    """Convert chat messages to a readable string format, with optional word limiting.
-    
-    Args:
-        messages: List of chat messages to convert
-        word_limit: Max words per message (None for no limit)
-        truncate_last: Whether to truncate the last message
-    """
     def truncate_message(text: str, limit: Optional[int]) -> str:
         if not limit:
             return text
-        words = text.split()
-        return ' '.join(words[:limit]) + ('...' if len(words) > limit else '')
+        # Split into lines first to preserve structure
+        lines = text.split('\n')
+        truncated_lines = []
+        words_remaining = limit
+        
+        for line in lines:
+            words = line.split()
+            if words_remaining <= 0:
+                break
+            if len(words) <= words_remaining:
+                truncated_lines.append(line)
+                words_remaining -= len(words)
+            else:
+                truncated_lines.append(' '.join(words[:words_remaining]) + '...')
+                break
+                
+        return '\n'.join(truncated_lines)
     
     formatted_messages = []
     for i, msg in enumerate(messages):
-        # Determine if this message should be truncated
         should_truncate = word_limit and (
-            (not truncate_last and i < len(messages) - 1) or  # Truncate all except last if truncate_last=False
-            (truncate_last)  # Truncate all if truncate_last=True
+            (not truncate_last and i < len(messages) - 1) or
+            (truncate_last)
         )
         content = truncate_message(msg.content, word_limit if should_truncate else None)
+        
+        # Strip any trailing newlines from the content
+        content = content.rstrip('\n')
         
         prefix = 'SYSTEM' if msg.role == 'system' else msg.name or msg.role.upper()
         formatted_messages.append(f"{prefix}: {content}")
     
-    return "\n".join(formatted_messages).replace("\n\n", "\n")
+    # Join messages with single newlines and clean up any resulting double newlines
+    return '\n'.join(formatted_messages).replace('\n\n\n', '\n\n')

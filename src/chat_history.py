@@ -30,8 +30,23 @@ class ChatHistory:
     def truncate_message(self, text: str, limit: Optional[int]) -> str:
         if not limit:
             return text
-        words = text.split()
-        return ' '.join(words[:limit]) + ('...' if len(words) > limit else '')
+        # Split into lines first to preserve structure
+        lines = text.split('\n')
+        truncated_lines = []
+        words_remaining = limit
+        
+        for line in lines:
+            words = line.split()
+            if words_remaining <= 0:
+                break
+            if len(words) <= words_remaining:
+                truncated_lines.append(line)
+                words_remaining -= len(words)
+            else:
+                truncated_lines.append(' '.join(words[:words_remaining]) + '...')
+                break
+                
+        return '\n'.join(truncated_lines)
 
     def calculate_word_count(self, messages: List[ChatMessage], truncate: bool = True) -> int:
         """Calculate total word count of messages, optionally applying truncation"""
@@ -61,6 +76,38 @@ class ChatHistory:
 
     def add_message(self, role: MessageRole, content: str, name: str = '') -> None:
         """Add a message to the history with an explicit name"""
+        # Check if we can combine with previous message
+        can_combine = (
+            self.all_messages 
+            and self.buffer_messages
+            and role == "system" 
+            and self.all_messages[-1].role == "system"
+        )
+        
+        if can_combine:
+            # Extract log level from both messages
+            prev_level = self.all_messages[-1].content.split(" - ", 1)[0]
+            new_level = content.split(" - ", 1)[0]
+            
+            if prev_level == new_level:
+                # Calculate combined word count
+                prev_words = len(self.all_messages[-1].content.split())
+                new_words = len(content.split())
+                
+                if prev_words + new_words <= self.message_word_limit:
+                    # Get the previous message content
+                    prev_content = self.all_messages[-1].content
+                    # Add just the message part (after "LEVEL - ") on a new line
+                    new_content = f"{prev_content}\n{content.split(' - ', 1)[1]}"
+                    
+                    # Remove the last message from both lists
+                    self.all_messages.pop(-1)
+                    self.buffer_messages.pop(-1)
+                    
+                    # Update content to include both messages
+                    content = new_content
+
+        # Create and add the new message
         new_message = ChatMessage(role=role, content=content, name=name)
         self.all_messages.append(new_message)
         

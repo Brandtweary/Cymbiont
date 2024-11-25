@@ -87,7 +87,7 @@ class CymbiontShell:
         
         # Log shell startup
         logger.log(LogLevel.SHELL, "Cymbiont shell started")
-        logger.info("Welcome to Cymbiont. Type help or ? to list commands.\n")
+        logger.info("Welcome to Cymbiont. Type help or ? to list commands.")
     
     def get_prompt(self) -> FormattedText:
         """Generate the prompt text"""
@@ -150,9 +150,6 @@ class CymbiontShell:
                 logger.info(f"{args}: {cmd.__doc__ or 'No help available'}\n")
             else:
                 logger.info(f"No help available for '{args}'\n")
-        
-        # Log help request to shell history
-        logger.log(LogLevel.SHELL, f"Help requested for: {args if args else 'all commands'}")
     
     async def handle_chat(self, text: str) -> None:
         """Handle chat messages"""
