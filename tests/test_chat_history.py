@@ -21,8 +21,9 @@ async def test_progressive_summarization() -> None:
     # Get recent messages and verify results
     messages, summary = chat_history.get_recent_messages()
     
-    # Verify we got a summary
-    assert summary is not None, "Expected a summary to be generated"
+    # Verify we got the correct summary (should be the last message from messages_to_summarize)
+    assert summary == "Previous conversation context: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10", \
+        f"Expected summary to be 'Previous conversation context: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10', but got '{summary}'"
     
     # Verify buffer messages length
     assert len(messages) == 1, \

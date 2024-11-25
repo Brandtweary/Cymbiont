@@ -73,7 +73,7 @@ class ChatHistory:
             new_buffer = self.get_new_buffer_messages(new_message)
             
             # Need to summarize older messages
-            messages_to_summarize = self.buffer_messages  # Summarize all current buffer messages
+            messages_to_summarize = self.buffer_messages[:(len(self.buffer_messages) - (len(new_buffer) - 1))]
             if messages_to_summarize:
                 # Spawn background task for summarization
                 self.is_summarizing = True
@@ -120,6 +120,10 @@ class ChatHistory:
         
         full_conversation = "\n\n".join(conversation_parts)
         
+        if self.mock:
+            # For testing: return the content of all messages as a delimited string
+            return ', '.join(message.content for message in messages)
+        
         messages = [
             ChatMessage(
                 role="system",
@@ -132,8 +136,7 @@ class ChatHistory:
             messages=messages,
             response_format={"type": "text"},
             temperature=0.3,
-            max_completion_tokens=self.progressive_summary_token_limit,
-            mock=self.mock
+            max_completion_tokens=self.progressive_summary_token_limit
         )
         
         return response["content"]
