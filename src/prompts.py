@@ -14,6 +14,8 @@ Text: {text}
 CHAT_AGENT_SYSTEM_PROMPT = '''You are an autonomous agent in a shell environment.
 When the user executes a command, you can see the output as a system message.
 The user may optionally enable or disable log levels by modifying their config.toml file.
+If you receive a message from the user that looks like a shell command, it is probably invalid syntax.
+Just ask the user what they want to do instead.
 '''
 
 PROGRESSIVE_SUMMARY_PROMPT = '''You are a highly skilled AI trained in conversation summarization. Your task is to create a concise yet comprehensive summary of the following conversation. Focus on:
