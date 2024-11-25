@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import time
 import functools
-from typing import Callable, Any, Dict, Optional, Generator, AsyncGenerator
+from typing import Callable, Any, Dict, Optional, Generator, AsyncGenerator, List
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -11,8 +11,9 @@ from shared_resources import logger, FILE_RESET, DELETE_LOGS
 from pathlib import Path
 import json
 from constants import LogLevel
-from custom_dataclasses import Paths
+from custom_dataclasses import Paths, ChatMessage
 import shutil
+
 
 @dataclass
 class TimingContext:
@@ -199,3 +200,35 @@ def delete_logs(base_dir: Path) -> None:
             log_file.unlink()
         except Exception as e:
             logger.error(f"Failed to delete log file {log_file}: {str(e)}")
+
+def convert_messages_to_string(
+    messages: List[ChatMessage], 
+    word_limit: Optional[int] = 300,
+    truncate_last: bool = False
+) -> str:
+    """Convert chat messages to a readable string format, with optional word limiting.
+    
+    Args:
+        messages: List of chat messages to convert
+        word_limit: Max words per message (None for no limit)
+        truncate_last: Whether to truncate the last message
+    """
+    def truncate_message(text: str, limit: Optional[int]) -> str:
+        if not limit:
+            return text
+        words = text.split()
+        return ' '.join(words[:limit]) + ('...' if len(words) > limit else '')
+    
+    formatted_messages = []
+    for i, msg in enumerate(messages):
+        # Determine if this message should be truncated
+        should_truncate = word_limit and (
+            (not truncate_last and i < len(messages) - 1) or  # Truncate all except last if truncate_last=False
+            (truncate_last)  # Truncate all if truncate_last=True
+        )
+        content = truncate_message(msg.content, word_limit if should_truncate else None)
+        
+        prefix = 'SYSTEM' if msg.role == 'system' else msg.name or msg.role.upper()
+        formatted_messages.append(f"{prefix}: {content}")
+    
+    return "\n".join(formatted_messages).replace("\n\n", "\n")

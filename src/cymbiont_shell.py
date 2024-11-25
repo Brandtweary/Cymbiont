@@ -5,23 +5,18 @@ from prompt_toolkit.completion import WordCompleter
 from typing import Callable, Dict
 import asyncio
 import math
-
-from shared_resources import (
-    USER_NAME, 
-    AGENT_NAME, 
-    logger, 
-    chat_history_handler,
-)
-from custom_dataclasses import ChatHistory
+from shared_resources import USER_NAME, AGENT_NAME, logger, token_logger, DATA_DIR
+from chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel
 from chat_agent import get_chat_response
-from shared_resources import token_logger, DATA_DIR
 from documents import process_documents, create_data_snapshot
 from text_parser import test_parse
 from tests.test_api_queue import run_api_queue_tests
 from tests.test_document_processing import run_document_processing_tests
 from tests.test_logger import run_logger_test
 from tests.test_parsing import run_text_parsing_test
+from tests.test_chat_history import test_progressive_summarization
+
 
 class CymbiontShell:
     def __init__(self) -> None:
@@ -30,7 +25,7 @@ class CymbiontShell:
         self.test_failures: int = 0
         
         # Connect chat history to logger
-        chat_history_handler.chat_history = self.chat_history
+        setup_chat_history_handler(logger, self.chat_history)
         
         # Define command handlers
         self.commands: Dict[str, Callable] = {
@@ -43,6 +38,7 @@ class CymbiontShell:
             'test_document_processing': self.do_test_document_processing,
             'test_logger': self.do_test_logger,
             'test_parsing': self.do_test_parsing,
+            'test_progressive_summarization': self.do_test_progressive_summarization,
             'run_all_tests': self.do_run_all_tests,
         }
         
@@ -141,7 +137,13 @@ class CymbiontShell:
             # Record user message
             self.chat_history.add_message("user", text, name=USER_NAME)
             
-            response = await get_chat_response(self.chat_history.get_recent_messages())
+            # Wait for any ongoing summarization
+            await self.chat_history.wait_for_summary()
+            
+            # Get messages and summary separately
+            messages, summary = self.chat_history.get_recent_messages()
+            
+            response = await get_chat_response(messages, summary)
             
             # Record assistant response
             self.chat_history.add_message("assistant", response, name=AGENT_NAME)
@@ -369,5 +371,16 @@ class CymbiontShell:
     └────────────────┘
             """)
 
-if __name__ == "__main__":
-    asyncio.run(CymbiontShell().run())
+    async def do_test_progressive_summarization(self, args: str) -> None:
+        """Test progressive summarization functionality.
+        Usage: test_progressive_summarization"""
+        try:
+            await test_progressive_summarization()
+            logger.info("Progressive summarization tests passed successfully")
+            self.test_successes += 1
+        except AssertionError as e:
+            logger.error(f"Progressive summarization tests failed: {str(e)}")
+            self.test_failures += 1
+        except Exception as e:
+            logger.error(f"Progressive summarization tests failed with unexpected error: {str(e)}")
+            self.test_failures += 1

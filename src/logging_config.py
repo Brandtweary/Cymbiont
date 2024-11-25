@@ -1,11 +1,9 @@
 import logging
 import logging.handlers
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 from datetime import datetime
-from custom_dataclasses import ChatHistory
 from constants import LogLevel
-import re
 
 
 # Register all custom log levels
@@ -71,28 +69,6 @@ class ColoredFormatter(logging.Formatter):
         record.msg = f"{color}{prefix}{record.msg}{RESET}"
         return super().format(record)
 
-class ChatHistoryHandler(logging.Handler):
-    """Handler that adds log messages to chat history"""
-    def __init__(
-        self, 
-        chat_history: Optional[ChatHistory] = None,
-        console_filter: Optional[logging.Filter] = None
-    ):
-        super().__init__()
-        self.chat_history = chat_history
-        self.console_filter = console_filter
-        self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-
-    def emit(self, record: logging.LogRecord) -> None:
-        if (self.chat_history is not None 
-            and record.levelno not in (LogLevel.PROMPT, LogLevel.RESPONSE)
-            and (record.levelno == LogLevel.SHELL  # Always include SHELL messages
-                or (self.console_filter is None or self.console_filter.filter(record)))
-        ):
-            clean_message = self.ansi_escape.sub('', self.format(record))
-            prefixed_message = f"{record.levelname} - {clean_message}"
-            self.chat_history.add_message("system", prefixed_message)
-
 def setup_logging(
     log_dir: Path,
     debug: bool = False,
@@ -100,7 +76,7 @@ def setup_logging(
     prompt: bool = False,
     response: bool = False,
     log_prefix: Optional[str] = None
-) -> Tuple[logging.Logger, ChatHistoryHandler]:  # Return both logger and handler
+) -> logging.Logger:
     """Configure logging with separate handlers for cymbiont and all logs"""
     # Create logs directory
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -162,9 +138,4 @@ def setup_logging(
     cymbiont_logger.debug(f"App log created at: {cymbiont_log_file}") # only Cymbiont logs
     cymbiont_logger.debug(f"Full log created at: {complete_log_file}") # includes logs from all modules, not just Cymbiont
     
-    # Create chat history handler (initially without chat history)
-    chat_history_handler = ChatHistoryHandler(console_filter=console_filter)
-    chat_history_handler.setFormatter(logging.Formatter('%(message)s'))
-    cymbiont_logger.addHandler(chat_history_handler)
-    
-    return cymbiont_logger, chat_history_handler
+    return cymbiont_logger

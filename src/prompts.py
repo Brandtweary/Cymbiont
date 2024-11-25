@@ -1,4 +1,3 @@
-import string
 from typing import Any
 from shared_resources import logger
 
@@ -16,6 +15,21 @@ CHAT_AGENT_SYSTEM_PROMPT = '''You are an autonomous agent in a shell environment
 When the user executes a command, you can see the output as a system message.
 The user may optionally enable or disable log levels by modifying their config.toml file.
 '''
+
+PROGRESSIVE_SUMMARY_PROMPT = '''You are a highly skilled AI trained in conversation summarization. Your task is to create a concise yet comprehensive summary of the following conversation. Focus on:
+
+1. Key discussion points and decisions
+2. Important context and background information
+3. Any action items or next steps
+4. Technical details that might be relevant for future reference
+
+Please maintain technical accuracy while being concise. The summary should help someone quickly understand the conversation's essence without reading the full transcript.
+
+Conversation:
+{conversation}
+---
+
+Provide your summary in a clear, structured format.'''
 
 
 def safe_format_prompt(prompt_template: str, **kwargs: Any) -> str:

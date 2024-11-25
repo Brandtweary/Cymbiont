@@ -56,7 +56,7 @@ USER_NAME = config["shell"]["user_name"]
 AGENT_NAME = config["shell"]["agent_name"]
 
 # Initialize logging first
-logger, chat_history_handler = setup_logging(
+logger = setup_logging(
     LOG_DIR, 
     debug=DEBUG_ENABLED,
     benchmark=BENCHMARK_ENABLED,

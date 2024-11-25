@@ -8,8 +8,8 @@ from openai.types.chat import ChatCompletionMessageParam, ChatCompletionUserMess
 from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from openai.types.shared_params.response_format_text import ResponseFormatText
-from custom_dataclasses import APICall, TokenUsage, ChatMessage, ProcessLog
-
+from custom_dataclasses import APICall, TokenUsage, ChatMessage
+from process_log import ProcessLog
 
 # Constants
 REQUESTS_PER_MINUTE: int = 5000
@@ -108,12 +108,19 @@ async def execute_call(call: APICall) -> None:
                 for msg in call.messages
             ]
             
-            response = await openai_client.chat.completions.create(
-                model=call.model,
-                messages=openai_messages,
-                response_format=_convert_response_format(call.response_format),
-                temperature=call.temperature
-            )
+            # Build API parameters
+            api_params = {
+                "model": call.model,
+                "messages": openai_messages,
+                "response_format": _convert_response_format(call.response_format),
+                "temperature": call.temperature
+            }
+            
+            # Add max_completion_tokens if specified (using OpenAI's parameter name)
+            if call.max_completion_tokens is not None:
+                api_params["max_completion_tokens"] = call.max_completion_tokens
+            
+            response = await openai_client.chat.completions.create(**api_params)
             assert response.usage is not None, "API response missing 'usage'"
 
             result = {
@@ -151,7 +158,8 @@ async def execute_call(call: APICall) -> None:
                 mock_tokens=call.mock_tokens,
                 expiration_counter=call.expiration_counter + 1,
                 temperature=call.temperature,
-                process_log=call.process_log
+                process_log=call.process_log,
+                max_completion_tokens=call.max_completion_tokens
             )
             # Link the futures
             new_future.add_done_callback(
@@ -180,7 +188,8 @@ def enqueue_api_call(
     mock_tokens: Optional[int] = None,
     expiration_counter: int = 0,
     temperature: float = 0.7,
-    process_log: Optional[ProcessLog] = None
+    process_log: Optional[ProcessLog] = None,
+    max_completion_tokens: Optional[int] = None
 ) -> asyncio.Future[Dict[str, Any]]:
     """Enqueue an API call with retry counter."""
     call = APICall(
@@ -193,7 +202,8 @@ def enqueue_api_call(
         expiration_counter=expiration_counter,
         future=asyncio.Future(),
         temperature=temperature,
-        process_log=process_log
+        process_log=process_log,
+        max_completion_tokens=max_completion_tokens
     )
     _pending_calls.append(call)
     return call.future
