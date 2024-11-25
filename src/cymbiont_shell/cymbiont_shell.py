@@ -1,57 +1,27 @@
+import math
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
-from prompt_toolkit.completion import WordCompleter, Completer, Completion
 from typing import Callable, Dict
-import asyncio
-import math
 from shared_resources import USER_NAME, AGENT_NAME, logger, token_logger, DATA_DIR
 from chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel
 from chat_agent import get_chat_response
-from documents import process_documents, create_data_snapshot
-from text_parser import test_parse
-from tests.test_api_queue import run_api_queue_tests
-from tests.test_document_processing import run_document_processing_tests
-from tests.test_logger import run_logger_test
-from tests.test_parsing import run_text_parsing_test
-from tests.test_chat_history import test_progressive_summarization
 
-
-class CommandCompleter(Completer):
-    def __init__(self, commands: Dict[str, Callable]) -> None:
-        self.commands = commands
-        # Create a word completer for command arguments
-        self.arg_completions: Dict[str, WordCompleter] = {
-            'help': WordCompleter(list(commands.keys()), ignore_case=True),
-            # Add more command-specific completers as needed
-        }
-
-    def get_completions(self, document, complete_event):
-        text_before_cursor: str = document.text_before_cursor
-        words: list[str] = text_before_cursor.split()
-        
-        # If no words yet, show all commands
-        if not words:
-            for command in self.commands:
-                yield Completion(command, start_position=0)
-            return
-            
-        # If we're still typing the first word (no space after it)
-        if len(words) == 1 and not text_before_cursor.endswith(' '):
-            word_before_cursor: str = words[0]
-            for command in self.commands:
-                if command.startswith(word_before_cursor.lower()):
-                    yield Completion(command, start_position=-len(word_before_cursor))
-            return
-            
-        # Handle argument completion using WordCompleter
-        first_word: str = words[0].lower()
-        if first_word in self.commands and first_word in self.arg_completions:
-            # Get the word completer for this command
-            word_completer = self.arg_completions[first_word]
-            # Delegate to the word completer
-            yield from word_completer.get_completions(document, complete_event)
+from .command_completer import CommandCompleter
+from .doc_processing_commands import (
+    do_process_documents,
+    do_create_data_snapshot,
+    do_parse_documents,
+)
+from .test_commands import (
+    do_test_api_queue,
+    do_test_document_processing,
+    do_test_logger,
+    do_test_parsing,
+    do_test_progressive_summarization,
+    do_run_all_tests,
+)
 
 
 class CymbiontShell:
@@ -231,45 +201,25 @@ class CymbiontShell:
                 continue
             except EOFError:
                 break
-    
+
+    # Document processing commands
     async def do_process_documents(self, args: str) -> None:
-        """Process documents in the data/input_documents directory.
+        """Process documents in the data/input_documents directory for LLM tag extraction.
         Usage: process_documents [document_name]
         - document_name: Optional. If provided, only this file or folder will be processed.
                         Otherwise, processes all .txt and .md files."""
-        try:
-            token_logger.reset_tokens()
-            await process_documents(DATA_DIR, args if args else None)
-            token_logger.print_tokens()
-            token_logger.reset_tokens()
-        except Exception as e:
-            logger.error(f"Document processing failed: {str(e)}")
+        await do_process_documents(args)
 
     async def do_create_data_snapshot(self, args: str) -> None:
-        """Creates an isolated snapshot by processing documents in the data/input_documents directory.
+        """Creates an isolated snapshot folder by processing documents in the data/input_documents directory.
         The snapshot contains all processing artifacts (chunks, indexes, etc.) as if you had
         only processed the specified documents.
 
         Usage: create_data_snapshot <snapshot_name> [document_name]
-        - snapshot_name: Name for the new snapshot directory
+        - snapshot_name: Name for the new snapshot folder
         - document_name: Optional. If provided, only this file or folder will be processed.
                         Otherwise, processes all .txt and .md files."""
-        arg_parts = args.split()
-        if not arg_parts:
-            logger.error("Error: Please provide a name for the snapshot")
-            return
-        
-        try:
-            token_logger.reset_tokens()
-            snapshot_path = await create_data_snapshot(
-                arg_parts[0], 
-                arg_parts[1] if len(arg_parts) > 1 else None
-            )
-            logger.info(f"Created snapshot at {snapshot_path}")
-            token_logger.print_tokens()
-            token_logger.reset_tokens()
-        except Exception as e:
-            logger.error(f"Snapshot creation failed: {str(e)}")
+        await do_create_data_snapshot(args)
 
     async def do_parse_documents(self, args: str) -> None:
         """Test document parsing without running LLM tag extraction.
@@ -278,145 +228,39 @@ class CymbiontShell:
         Usage: parse_documents [document_name]
         - document_name: Optional. If provided, only this file or folder will be tested.
                         Otherwise, tests all .txt and .md files."""
-        try:
-            test_parse(args if args else None)
-        except Exception as e:
-            logger.error(f"Parse testing failed: {str(e)}")
+        await do_parse_documents(args)
 
+    # Test commands
     async def do_test_api_queue(self, args: str) -> None:
         """Run API queue tests.
         Usage: test_api_queue"""
-        try:
-            passed, failed = await run_api_queue_tests()
-            self.test_successes = passed
-            self.test_failures = failed
-        except Exception as e:
-            logger.error(f"API queue tests failed: {str(e)}")
-            self.test_successes = 0
-            self.test_failures = 1
+        await do_test_api_queue(self, args)
 
     async def do_test_document_processing(self, args: str) -> None:
         """Test document processing pipeline with mock API calls.
         Usage: test_document_processing"""
-        try:
-            self.test_successes, self.test_failures = await run_document_processing_tests()
-        except Exception as e:
-            logger.error(f"Document processing tests failed with unexpected error: {str(e)}")
-            self.test_successes = 0
-            self.test_failures = 1
+        await do_test_document_processing(self, args)
 
     async def do_test_logger(self, args: str) -> None:
         """Test all logging levels with colored output.
         Usage: test_logger"""
-        try:
-            run_logger_test()
-            logger.info("Logger tests passed successfully")
-            self.test_successes += 1
-        except Exception as e:
-            logger.error(f"Logger testing failed: {str(e)}")
-            self.test_failures += 1
+        await do_test_logger(self, args)
 
     async def do_test_parsing(self, args: str) -> None:
         """Run text parsing tests.
         Usage: test_parsing"""
-        try:
-            run_text_parsing_test()
-            logger.info("Text parsing tests passed successfully")
-            self.test_successes += 1
-        except AssertionError as e:
-            logger.error(f"Text parsing tests failed: {str(e)}")
-            self.test_failures += 1
-        except Exception as e:
-            logger.error(f"Text parsing tests failed with unexpected error: {str(e)}")
-            self.test_failures += 1
-
-    async def do_run_all_tests(self, args: str) -> None:
-        """Run all tests
-        Usage: run_all_tests"""
-        test_commands = [cmd for cmd in self.commands.keys() if cmd.startswith('test_')]
-        total_successes = 0
-        total_failures = 0
-        failed_tests: list[tuple[str, str]] = []
-
-        for cmd in test_commands:
-            try:
-                # Reset test counters before each test
-                self.test_successes = 0
-                self.test_failures = 0
-                
-                # Run the test
-                method = self.commands[cmd]
-                await method('')
-                
-                # Accumulate results
-                total_successes += self.test_successes
-                total_failures += self.test_failures
-                
-                if self.test_failures > 0:
-                    failed_tests.append((cmd, f"{self.test_failures} tests failed"))
-                    logger.error(f"❌ {cmd} failed\n")
-                else:
-                    logger.info(f"✅ {cmd} passed\n")
-                    
-            except Exception as e:
-                total_failures += 1
-                failed_tests.append((cmd, str(e)))
-                logger.error(f"❌ {cmd} failed\n")
-
-        total_tests = total_successes + total_failures
-        success_rate = (total_successes / total_tests) * 100 if total_tests > 0 else 0
-
-        # Print results with logger
-        logger.info("\n=== Test Results ===")
-        logger.info(f"Tests Run: {total_tests}")
-        logger.info(f"Passed: {total_successes}")
-        logger.info(f"Failed: {total_failures}")
-        logger.info(f"Success Rate: {success_rate:.1f}%\n")
-
-        if failed_tests:
-            logger.info("Failed Tests:")
-            for cmd, error in failed_tests:
-                logger.error(f"❌ {cmd}: {error}")
-
-        if success_rate == 100:
-            logger.info("""
-    🎉 Perfect Score! 🎉
-    ┌────────────────┐
-    │   100% PASS    │
-    │    ⭐ ⭐ ⭐    │
-    └────────────────┘
-            """)
-        elif success_rate >= 80:
-            logger.info("""
-    😊 Almost There! 
-    ┌────────────────┐
-    │   Keep Going!  │
-    │    ⭐ ⭐       │
-    └────────────────┘
-            """)
-        else:
-            logger.info("""
-    😢 Needs Work 
-    ┌────────────────┐
-    │   Don't Give   │
-    │     Up! 💪     │
-    └────────────────┘
-            """)
+        await do_test_parsing(self, args)
 
     async def do_test_progressive_summarization(self, args: str) -> None:
         """Test progressive summarization functionality.
         Usage: test_progressive_summarization"""
-        try:
-            await test_progressive_summarization()
-            logger.info("Progressive summarization tests passed successfully")
-            self.test_successes += 1
-        except AssertionError as e:
-            logger.error(f"Progressive summarization tests failed: {str(e)}")
-            self.test_failures += 1
-        except Exception as e:
-            logger.error(f"Progressive summarization tests failed with unexpected error: {str(e)}")
-            self.test_failures += 1
-    
+        await do_test_progressive_summarization(self, args)
+
+    async def do_run_all_tests(self, args: str) -> None:
+        """Run all tests.
+        Usage: run_all_tests"""
+        await do_run_all_tests(self, args)
+
     async def do_print_total_tokens(self, args: str) -> None:
         """Print the total token count"""
-        token_logger.print_total_tokens()
+        token_logger.print_tokens()

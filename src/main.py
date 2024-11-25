@@ -17,7 +17,7 @@ setup_python_path()
 
 # Project imports
 from shared_resources import logger, token_logger, DATA_DIR
-from cymbiont_shell import CymbiontShell
+from cymbiont_shell.cymbiont_shell import CymbiontShell
 from utils import setup_directories, delete_logs
 from api_queue import start_api_queue, stop_api_queue
 

@@ -209,7 +209,7 @@ class ChatHistory:
         # Format summary if available
         formatted_summary = None
         if self.progressive_summary:
-            formatted_summary = f"Previous conversation context: {self.progressive_summary}"
+            formatted_summary = f"Progressive summary: {self.progressive_summary}"
         
         return messages, formatted_summary
 

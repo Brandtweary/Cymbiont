@@ -26,7 +26,8 @@ PROGRESSIVE_SUMMARY_PROMPT = '''You are a highly skilled AI trained in conversat
 3. Any action items or next steps
 4. Technical details that might be relevant for future reference
 
-Please include key information from the previous summary if it exists.
+Please include information from the previous summary if it exists.
+Do not include information from system logs unless they are highly relevant to the conversation.
 
 Conversation:
 {conversation}
