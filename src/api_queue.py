@@ -4,7 +4,7 @@ from typing import Any, Callable, Optional, NamedTuple, List, Dict
 from dataclasses import dataclass
 from collections import deque
 from shared_resources import logger, openai_client, token_logger
-from openai.types.chat import ChatCompletionMessageParam, ChatCompletionUserMessageParam, ChatCompletionSystemMessageParam, ChatCompletionAssistantMessageParam
+from openai.types.chat import ChatCompletionUserMessageParam, ChatCompletionSystemMessageParam, ChatCompletionAssistantMessageParam
 from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from openai.types.shared_params.response_format_text import ResponseFormatText
@@ -96,7 +96,6 @@ async def execute_call(call: APICall) -> None:
                 "expiration_counter": call.expiration_counter + 1
             }
             mock_total_tokens = result["token_usage"]["total_tokens"]
-            token_logger.add_tokens(mock_total_tokens)
         else:
             # Real API call logic
             openai_messages = [
