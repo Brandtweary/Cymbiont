@@ -4,6 +4,7 @@ benchmark = false  # show performance metrics
 debug = false  # show debug logs
 prompt = false  # show prompts
 response = false  # show responses
+tool = false  # show tool calls
 delete_logs = false  # delete logs on shutdown
 file_reset = false  # move processed documents back to input_documents on startup
 

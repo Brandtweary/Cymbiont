@@ -1,7 +1,7 @@
 import asyncio
 import time
-from typing import Any, Callable, Optional, NamedTuple, List, Dict
-from dataclasses import dataclass
+import json
+from typing import Any, Callable, Optional, NamedTuple, List, Dict, Set
 from collections import deque
 from shared_resources import logger, openai_client, token_logger
 from openai.types.chat import ChatCompletionUserMessageParam, ChatCompletionSystemMessageParam, ChatCompletionAssistantMessageParam
@@ -10,6 +10,8 @@ from openai.types.shared_params.response_format_json_object import ResponseForma
 from openai.types.shared_params.response_format_text import ResponseFormatText
 from custom_dataclasses import APICall, TokenUsage, ChatMessage
 from process_log import ProcessLog
+from constants import ToolName
+from prompts import TOOL_SCHEMAS
 
 # Constants
 REQUESTS_PER_MINUTE: int = 5000
@@ -115,6 +117,13 @@ async def execute_call(call: APICall) -> None:
                 "temperature": call.temperature
             }
             
+            # Handle tools if provided
+            if call.tools:
+                # Extract tool schemas from TOOL_SCHEMAS using the provided tool names
+                selected_tool_schemas = [schema for tool, schema in TOOL_SCHEMAS.items() if tool in call.tools]
+                api_params["functions"] = selected_tool_schemas
+                api_params["tool_choice"] = "auto"
+            
             # Add max_completion_tokens if specified (using OpenAI's parameter name)
             if call.max_completion_tokens is not None:
                 api_params["max_completion_tokens"] = call.max_completion_tokens
@@ -133,7 +142,18 @@ async def execute_call(call: APICall) -> None:
                 "expiration_counter": call.expiration_counter + 1
             }
             token_logger.add_tokens(response.usage.total_tokens)
-
+            
+            # Unpack tool call results if present
+            if response.choices[0].finish_reason == 'tool_calls' and response.choices[0].message.tool_calls:
+                tool_call_results = {}
+                for tool_call in response.choices[0].message.tool_calls:
+                    arguments = json.loads(tool_call["function"]["arguments"])
+                    tool_call_results[tool_call["id"]] = {
+                        "tool_name": tool_call["function"]["name"],
+                        "arguments": arguments
+                    }
+                result["tool_call_results"] = tool_call_results
+        
         # Add token usage to history (both real and mock calls)
         _token_history.append(TokenUsage(
             tokens=result["token_usage"]["total_tokens"],
@@ -149,22 +169,21 @@ async def execute_call(call: APICall) -> None:
                 call.process_log.warning(error_msg)
                 
             # Re-queue with incremented counter
-            new_future = enqueue_api_call(
+            new_call = APICall(
                 model=call.model,
                 messages=call.messages,
                 response_format=call.response_format,
+                timestamp=call.timestamp,
                 mock=call.mock,
                 mock_tokens=call.mock_tokens,
                 expiration_counter=call.expiration_counter + 1,
+                future=call.future,
                 temperature=call.temperature,
                 process_log=call.process_log,
-                max_completion_tokens=call.max_completion_tokens
+                max_completion_tokens=call.max_completion_tokens,
+                tools=call.tools  # Ensure tools are carried over
             )
-            # Link the futures
-            new_future.add_done_callback(
-                lambda f: call.future.set_result(f.result()) if not f.exception() 
-                else call.future.set_exception(f.exception() or RuntimeError("Unknown error occurred"))
-            )
+            _pending_calls.append(new_call)
         else:
             # Add standardized attempt count message
             attempt_msg = f"Final attempt count: {call.expiration_counter + 1}"
@@ -188,6 +207,7 @@ def enqueue_api_call(
     expiration_counter: int = 0,
     temperature: float = 0.7,
     process_log: Optional[ProcessLog] = None,
+    tools: Optional[Set[ToolName]] = None,
     max_completion_tokens: Optional[int] = None
 ) -> asyncio.Future[Dict[str, Any]]:
     """Enqueue an API call with retry counter."""
@@ -202,7 +222,8 @@ def enqueue_api_call(
         future=asyncio.Future(),
         temperature=temperature,
         process_log=process_log,
-        max_completion_tokens=max_completion_tokens
+        max_completion_tokens=max_completion_tokens,
+        tools=tools
     )
     _pending_calls.append(call)
     return call.future

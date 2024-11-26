@@ -5,8 +5,9 @@ from prompt_toolkit.formatted_text import FormattedText
 from typing import Callable, Dict
 from shared_resources import USER_NAME, AGENT_NAME, logger, token_logger
 from chat_history import ChatHistory, setup_chat_history_handler
-from constants import LogLevel
-from chat_agent import get_chat_response
+from constants import LogLevel, ToolName
+from chat_agent import get_response
+
 
 from .command_completer import CommandCompleter
 from .doc_processing_commands import (
@@ -142,20 +143,16 @@ class CymbiontShell:
             # Wait for any ongoing summarization
             await self.chat_history.wait_for_summary()
             
-            # Get messages and summary separately
-            messages, summary = self.chat_history.get_recent_messages()
-            
-            response = await get_chat_response(messages, summary)
-            
-            # Record assistant response
-            self.chat_history.add_message("assistant", response, name=AGENT_NAME)
-            
+            response = await get_response(
+                chat_history=self.chat_history,
+                tools={ToolName.CONTEMPLATE}
+            )
             # Print token usage and reset
             token_logger.print_tokens()
             token_logger.reset_tokens()
-            
-            # Print response with bright cyan agent name
-            print(f"\x1b[38;2;0;255;255m{AGENT_NAME}\x1b[0m> {response}")
+
+            if response:
+                print(f"\x1b[38;2;0;255;255m{AGENT_NAME}\x1b[0m> {response}")
             
         except Exception as e:
             logger.error(f"Chat response failed: {str(e)}")

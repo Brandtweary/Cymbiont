@@ -1,8 +1,9 @@
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, List, Dict, Literal, Optional, NamedTuple, Tuple
+from typing import Any, List, Dict, Literal, Optional, NamedTuple, Set
 from pathlib import Path
+from constants import ToolName
 from process_log import ProcessLog
 
 
@@ -59,8 +60,16 @@ class APICall:
     temperature: float = 0.7
     process_log: Optional[ProcessLog] = None
     max_completion_tokens: Optional[int] = None
+    tools: Optional[Set[ToolName]] = None
 
 @dataclass
 class TokenUsage:
     tokens: int
     timestamp: float
+
+@dataclass
+class ToolLoopData:
+    loop_type: str
+    loop_message: str
+    active: bool = True
+    available_tools: Set[ToolName] = field(default_factory=set)

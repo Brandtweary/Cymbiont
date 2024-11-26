@@ -50,6 +50,7 @@ PROMPT_ENABLED = config["app"]["prompt"]
 RESPONSE_ENABLED = config["app"]["response"]
 DELETE_LOGS = config["app"]["delete_logs"]
 TOKEN_LOGGING = config["app"]["token_logging"]
+TOOL_ENABLED = config["app"]["tool"]
 
 # Shell config
 USER_NAME = config["shell"]["user_name"]
@@ -61,7 +62,8 @@ logger = setup_logging(
     debug=DEBUG_ENABLED,
     benchmark=BENCHMARK_ENABLED,
     prompt=PROMPT_ENABLED,
-    response=RESPONSE_ENABLED
+    response=RESPONSE_ENABLED,
+    tool=TOOL_ENABLED
 )
 
 @dataclass

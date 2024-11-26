@@ -17,13 +17,15 @@ class ConsoleFilter(logging.Filter):
         debug: bool, 
         benchmark: bool,
         prompt: bool,
-        response: bool
+        response: bool,
+        tool: bool
     ):
         self.debug = debug
         self.benchmark = benchmark
         self.prompt = prompt
         self.response = response
-        
+        self.tool = tool
+
     def filter(self, record: logging.LogRecord) -> bool:
         if record.levelno == LogLevel.SHELL:
             return False  # Never show SHELL messages in console
@@ -35,6 +37,8 @@ class ConsoleFilter(logging.Filter):
             return self.prompt
         if record.levelno == LogLevel.RESPONSE:
             return self.response
+        if record.levelno == LogLevel.TOOL:
+            return self.tool
         return True
 
 class ColoredFormatter(logging.Formatter):
@@ -75,6 +79,7 @@ def setup_logging(
     benchmark: bool = False,
     prompt: bool = False,
     response: bool = False,
+    tool: bool = False,
     log_prefix: Optional[str] = None
 ) -> logging.Logger:
     """Configure logging with separate handlers for cymbiont and all logs"""
@@ -119,7 +124,8 @@ def setup_logging(
         debug=debug,
         benchmark=benchmark,
         prompt=prompt,
-        response=response
+        response=response,
+        tool=tool
     )
     
     console_handler = logging.StreamHandler()

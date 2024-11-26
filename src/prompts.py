@@ -1,5 +1,6 @@
-from typing import Any
+from typing import Any, Dict
 from shared_resources import logger
+from constants import ToolName
 
 
 TAG_PROMPT = '''Please extract relevant tags from the following text. Tag all named entities, categories, and concepts.
@@ -34,6 +35,44 @@ Conversation:
 ---
 
 Provide your summary in a clear, structured format.'''
+
+
+TOOL_SCHEMAS: Dict[ToolName, Dict[str, Any]] = {
+    ToolName.CONTEMPLATE: {
+        "type": "function",
+        "function": {
+            "name": "contemplate",
+            "description": "Enter a tool loop to ponder a given question.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The question to ponder during the contemplation loop."
+                    }
+                },
+                "required": ["question"],
+            }
+        }
+    },
+    ToolName.EXIT_LOOP: {
+        "type": "function",
+        "function": {
+            "name": "exit_loop",
+            "description": "Exits the current tool loop and returns a response message to the conversation partner.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "response_message": {
+                        "type": "string",
+                        "description": "The message to send to the conversation partner"
+                    }
+                },
+                "required": ["response_message"],
+            }
+        }
+    }
+}
 
 
 def safe_format_prompt(prompt_template: str, **kwargs: Any) -> str:
