@@ -3,6 +3,7 @@ from constants import LogLevel
 
 def run_logger_test() -> None:
     """Test all available log levels in the logging system"""
+    # Test each log level - will raise an exception if any fail
     logger.debug("This is a DEBUG message")
     logger.info("This is an INFO message")
     logger.log(LogLevel.BENCHMARK, "This is a BENCHMARK message")

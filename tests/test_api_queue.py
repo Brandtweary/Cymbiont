@@ -239,18 +239,16 @@ async def run_api_queue_tests() -> tuple[int, int]:
     failed = 0
 
     for test in tests:
-        logger.info(f"Starting {test.__name__}")
+        logger.info(f"Running {test.__name__}...")
         try:
-            await clear_token_history() # needs to be called before in order to reset TPM throttle
+            await clear_token_history()  # Reset TPM throttle
             await empty_api_queue()
-            await clear_token_history() # needs to be called again to clear out tokens from emptying queue
+            await clear_token_history()  # Clear tokens from emptying queue
             await test()
-            logger.info(f"Completed {test.__name__}")
-            print(f"\033[32m✓ {test.__name__} passed.\033[0m\n")
+            logger.info(f"✓ {test.__name__} passed\n")
             passed += 1
-        except (AssertionError, Exception) as e:
-            logger.error(f"{test.__name__} failed: {str(e)}")
-            print(f"\033[31m{test.__name__} failed: {str(e)}\033[0m\n")
+        except Exception as e:
+            logger.error(f"✗ {test.__name__} failed: {str(e)}\n")
             failed += 1
     
     return passed, failed

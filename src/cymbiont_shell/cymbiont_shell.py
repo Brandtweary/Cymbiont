@@ -3,7 +3,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
 from typing import Callable, Dict
-from shared_resources import USER_NAME, AGENT_NAME, logger, token_logger, DATA_DIR
+from shared_resources import USER_NAME, AGENT_NAME, logger, token_logger
 from chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel
 from chat_agent import get_chat_response

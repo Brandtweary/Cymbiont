@@ -1,7 +1,6 @@
 from shared_resources import logger, token_logger, DATA_DIR
 from documents import process_documents, create_data_snapshot
 from text_parser import test_parse
-from constants import LogLevel
 
 async def do_process_documents(args: str) -> None:
     """Process documents in the data/input_documents directory.
