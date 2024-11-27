@@ -1,7 +1,5 @@
 import asyncio
-from json import tool
-from typing import Any, List, Optional, Set, Dict
-from dataclasses import dataclass, field
+from typing import Any, List, Optional, Set, Dict, Tuple
 from api_queue import enqueue_api_call
 from shared_resources import logger, AGENT_NAME
 from constants import CHAT_AGENT_MODEL, LogLevel, ToolName
@@ -16,14 +14,19 @@ from openai.types.chat import (
 from custom_dataclasses import ChatMessage, ToolLoopData
 from chat_history import ChatHistory
 import inspect
+from functools import lru_cache
 
-
-tool_function_map = {
-    ToolName.CONTEMPLATE.value: 'process_contemplate',
-    ToolName.EXIT_LOOP.value: 'process_exit_loop',
-    ToolName.MESSAGE_SELF.value: 'process_message_self',
-    # Add more tool-function mappings here
-}
+@lru_cache(maxsize=1)
+def get_tool_function_map():
+    """Get the mapping of tool names to their processing functions.
+    Lazily imports the functions when first accessed."""
+    from agent_tools import process_contemplate, process_exit_loop, process_message_self
+    return {
+        ToolName.CONTEMPLATE.value: process_contemplate,
+        ToolName.EXIT_LOOP.value: process_exit_loop,
+        ToolName.MESSAGE_SELF.value: process_message_self,
+        # Add more tool-function mappings here
+    }
 
 
 def convert_to_openai_message(message: ChatMessage) -> ChatCompletionMessageParam:
@@ -108,7 +111,8 @@ async def get_response(
             )
             if user_message:
                 if tool_loop_data:
-                    prefixed_message = f"[{tool_loop_data.loop_type}_LOOP] {user_message}"
+                    prefix = f"[{tool_loop_data.loop_type}_LOOP] "
+                    prefixed_message = user_message if user_message.startswith(prefix) else prefix + user_message
                 else:
                     prefixed_message = user_message
                 chat_history.add_message("assistant", prefixed_message, name=AGENT_NAME)
@@ -119,14 +123,16 @@ async def get_response(
             logger.error("Received an empty message from the OpenAI API.")
             return "Sorry, I encountered an error while processing your request."
 
+        content = response["content"]
         if tool_loop_data and tool_loop_data.loop_type:
-            prefixed_content = f"[{tool_loop_data.loop_type}_LOOP] {response['content']}"
+            prefix = f"[{tool_loop_data.loop_type}_LOOP] "
+            prefixed_content = content if content.startswith(prefix) else prefix + content
         else:
-            prefixed_content = response["content"]
+            prefixed_content = content
 
         chat_history.add_message("assistant", prefixed_content, name=AGENT_NAME)
 
-        return response["content"]
+        return content
     except Exception as e:
         logger.error(f"Error communicating with OpenAI API: {e}")
         return "Sorry, I encountered an error while processing your request."
@@ -153,46 +159,19 @@ async def process_tool_calls(
         Optional[str]: A message to be returned to the user, if available.
     """
     messages = []
+    tool_map = get_tool_function_map()
+    
     for call_id, tool_call in tool_call_results.items():
         assert isinstance(call_id, str), f"Tool call ID must be string, got {type(call_id)}: {call_id}"
         tool_name = tool_call['tool_name']
         arguments = tool_call['arguments']
 
-        try:
-            tool_enum = ToolName(tool_name)
-        except ValueError:
-            logger.error(f"Invalid tool name: {tool_name}")
+        args_to_pass, error = validate_tool_args(tool_name, arguments, available_tools)
+        if error:
+            logger.error(error)
             continue
 
-        if available_tools and tool_enum not in available_tools:
-            logger.error(f"Tool '{tool_name}' is not in the available tools list.")
-            continue
-
-        processing_function_name = tool_function_map.get(tool_name)
-        if not processing_function_name:
-            logger.error(f"No processing function found for tool: {tool_name}")
-            continue
-
-        processing_function = globals().get(processing_function_name)
-        if not processing_function:
-            logger.error(f"Processing function '{processing_function_name}' not found.")
-            continue
-
-        tool_schema = TOOL_SCHEMAS[tool_enum]["function"]["parameters"]
-        required_params = tool_schema.get("required", [])
-        properties = tool_schema.get("properties", {})
-
-        missing_params = [param for param in required_params if param not in arguments]
-        if missing_params:
-            logger.error(f"Missing required parameters {missing_params} for tool '{tool_name}'")
-            continue
-
-        unrecognized_args = [arg for arg in arguments if arg not in properties]
-        if unrecognized_args:
-            logger.error(f"Unrecognized arguments {unrecognized_args} for tool '{tool_name}'")
-            continue
-
-        args_to_pass = {param: arguments[param] for param in required_params}
+        processing_function = tool_map[tool_name]
 
         try:
             response = await processing_function(
@@ -203,8 +182,6 @@ async def process_tool_calls(
             )
             if response is not None:
                 messages.append(response)
-                if tool_name == ToolName.EXIT_LOOP.value:
-                    pass
         except Exception as e:
             logger.error(f"Error processing tool '{tool_name}': {e}")
 
@@ -215,110 +192,51 @@ async def process_tool_calls(
         return None
 
 
-async def process_contemplate(
-    question: str,
-    tool_loop_data: Optional[ToolLoopData],
-    chat_history: ChatHistory,
-    token_budget: int = 20000
-) -> Optional[str]:
+def validate_tool_args(
+    tool_name: str,
+    arguments: Dict[str, Any],
+    available_tools: Optional[Set[ToolName]]
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
-    Process the 'contemplate' tool call.
+    Validate tool arguments against their schema and availability.
 
     Args:
-        question: The question to ponder during the contemplation loop.
-        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
-        chat_history: The ChatHistory instance.
-        token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
+        tool_name: The name of the tool being called.
+        arguments: The arguments provided for the tool.
+        available_tools: Optional set of available tools.
 
     Returns:
-        Optional[str]: Message to the user, if any.
+        Tuple containing:
+        - Dict of validated arguments if validation succeeds, None if it fails
+        - Error message if validation fails, None if it succeeds
     """
-    
-    if tool_loop_data:
-        logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: contemplate - no effect, agent already inside tool loop")
-        return None
+    try:
+        tool_enum = ToolName(tool_name)
+    except ValueError:
+        return None, f"Invalid tool name: {tool_name}"
 
-    # Start a new contemplation loop
-    assert not tool_loop_data, f"Starting contemplate but loop already active: {tool_loop_data}"
-    tool_loop_data = ToolLoopData(
-        loop_type="CONTEMPLATION",
-        available_tools={ToolName.MESSAGE_SELF, ToolName.EXIT_LOOP},
-        loop_message=(
-            f"You are inside a tool loop contemplating the following question:\n"
-            f"{question}\n"
-            "To record your thoughts during contemplation, use the message_self tool. "
-            "These messages will be added to your chat history and automatically prefixed with [CONTEMPLATION_LOOP], "
-            "but will not be shown to the user. This allows you to think through the problem step by step.\n"
-            "When you have reached a conclusion, use the exit_loop tool with your final answer "
-            "to end contemplation and respond to the user. Do not prefix your messages yourself.\n"
-        ),
-        active=True
-    )
+    if available_tools and tool_enum not in available_tools:
+        return None, f"Tool '{tool_name}' is not in the available tools list."
 
-    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: contemplate - now entering contemplation loop")
-    max_iterations = 5  # Adjust as needed
-    iterations = 0
+    tool_map = get_tool_function_map()
+    processing_function = tool_map.get(tool_name)
+    if not processing_function:
+        return None, f"No processing function found for tool: {tool_name}"
 
-    while iterations < max_iterations:
-        iterations += 1
-        response = await get_response(
-            chat_history=chat_history,
-            tools=tool_loop_data.available_tools,
-            tool_loop_data=tool_loop_data,
-            token_budget=token_budget
-        )
-        # Check if exit_loop was called
-        if not tool_loop_data.active:
-            if not response:
-                logger.warning("Exit loop called but no response message provided")
-            return response
+    tool_schema = TOOL_SCHEMAS[tool_enum]["function"]["parameters"]
+    required_params = tool_schema.get("required", [])
+    properties = tool_schema.get("properties", {})
 
-        # If no response (i.e., continue looping), pass
+    missing_params = [param for param in required_params if param not in arguments]
+    if missing_params:
+        return None, f"Missing required parameters {missing_params} for tool '{tool_name}'"
 
-    if tool_loop_data.active:
-        logger.warning("Max iterations reached in contemplation loop without exit.")
-        return None
+    unrecognized_args = [arg for arg in arguments if arg not in properties]
+    if unrecognized_args:
+        return None, f"Unrecognized arguments {unrecognized_args} for tool '{tool_name}'"
 
-    return None
-
-
-async def process_exit_loop(
-    exit_message: str,
-    tool_loop_data: Optional[ToolLoopData],
-    chat_history: ChatHistory,
-    token_budget: int = 20000
-) -> Optional[str]:
-    """Process the exit_loop tool call."""
-    if not tool_loop_data or not tool_loop_data.active:
-        logger.warning(f"{AGENT_NAME} used tool: exit_loop - no effect, agent not inside tool loop")
-        return None
-
-    tool_loop_data.active = False
-    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: exit_loop - exiting tool loop")
-    return exit_message
-
-
-async def process_message_self(
-    message: str,
-    tool_loop_data: Optional[ToolLoopData],
-    chat_history: ChatHistory,
-    token_budget: int = 20000
-) -> str:
-    """
-    Process the 'message_self' tool call.
-
-    Args:
-        message: The message to send to self.
-        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
-        chat_history: The ChatHistory instance.
-        token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
-
-    Returns:
-        str: The message that was sent to self.
-    """
-    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: message_self")
-    return message
-
+    args_to_pass = {param: arguments[param] for param in required_params}
+    return args_to_pass, None
 
 def log_token_budget_warnings(loop_tokens: int, token_budget: int, loop_type: str) -> None:
     """
@@ -354,25 +272,23 @@ def register_tools():
     Raises:
         ValueError: If any tool processing function is missing or parameters do not match.
     """
-    for tool_name, function_name in tool_function_map.items():
+    tool_map = get_tool_function_map()
+    
+    for tool_name, function in tool_map.items():
         try:
             tool_enum = ToolName(tool_name)
             schema = TOOL_SCHEMAS[tool_enum]["function"]["parameters"]
         except KeyError:
             raise ValueError(f"Schema for tool '{tool_name}' not found in TOOL_SCHEMAS.")
 
-        func = globals().get(function_name)
-        if not func:
-            raise ValueError(f"Processing function '{function_name}' for tool '{tool_name}' not found.")
-
-        sig = inspect.signature(func)
+        sig = inspect.signature(function)
 
         required_params = schema.get("required", [])
         schema_properties = schema.get("properties", {})
 
         for param in required_params:
             if param not in sig.parameters:
-                raise ValueError(f"Function '{function_name}' missing required parameter '{param}' for tool '{tool_name}'.")
+                raise ValueError(f"Function '{function.__name__}' missing required parameter '{param}' for tool '{tool_name}'.")
 
         func_params = set(sig.parameters.keys())
         schema_params = set(schema_properties.keys())
@@ -380,6 +296,6 @@ def register_tools():
         common_params = {'tool_loop_data', 'chat_history', 'token_budget'}
         extra_params = func_params - schema_params - common_params
         if extra_params:
-            raise ValueError(f"Function '{function_name}' has unrecognized parameters {extra_params} for tool '{tool_name}'.")
+            raise ValueError(f"Function '{function.__name__}' has unrecognized parameters {extra_params} for tool '{tool_name}'.")
 
 register_tools()
