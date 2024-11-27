@@ -15,6 +15,7 @@ class LogLevel(IntEnum):
 class ToolName(Enum):
     CONTEMPLATE = "contemplate"
     EXIT_LOOP = "exit_loop"
+    MESSAGE_SELF = "message_self"
 
 # Models
 TAG_EXTRACTION_OPENAI_MODEL = "gpt-4o-mini"

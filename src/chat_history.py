@@ -228,7 +228,7 @@ class ChatHistoryHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         if (self.chat_history is not None 
             and record.levelno not in (LogLevel.PROMPT, LogLevel.RESPONSE)
-            and (record.levelno == LogLevel.SHELL  # Always include SHELL messages
+            and (record.levelno in (LogLevel.SHELL, LogLevel.TOOL)  # Always include SHELL and TOOL messages
                 or (self.console_filter is None or self.console_filter.filter(record)))
         ):
             clean_message = self.ansi_escape.sub('', self.format(record))

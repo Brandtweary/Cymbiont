@@ -21,6 +21,7 @@ import inspect
 tool_function_map = {
     ToolName.CONTEMPLATE.value: 'process_contemplate',
     ToolName.EXIT_LOOP.value: 'process_exit_loop',
+    ToolName.MESSAGE_SELF.value: 'process_message_self',
     # Add more tool-function mappings here
 }
 
@@ -137,9 +138,6 @@ async def process_tool_calls(
         Optional[str]: A message to be returned to the user, if available.
     """
     messages = []
-    tool_calls = tool_call_results.values()
-    logger.debug(f"Processing tool calls: {tool_calls}")
-
     for call_id, tool_call in tool_call_results.items():
         assert isinstance(call_id, str), f"Tool call ID must be string, got {type(call_id)}: {call_id}"
         tool_name = tool_call['tool_name']
@@ -226,18 +224,20 @@ async def process_contemplate(
     assert not tool_loop_data, f"Starting contemplate but loop already active: {tool_loop_data}"
     tool_loop_data = ToolLoopData(
         loop_type="CONTEMPLATION",
-        available_tools={ToolName.EXIT_LOOP},
+        available_tools={ToolName.MESSAGE_SELF, ToolName.EXIT_LOOP},
         loop_message=(
             f"You are inside a tool loop contemplating the following question:\n"
             f"{question}\n"
-            "Any response you provide will not be seen by the user. These messages are "
-            "prefixed with [CONTEMPLATION_LOOP] for your own reference. When you arrive at "
-            "a conclusion, use the exit_loop tool to return your answer to the user."
-        )
+            "To record your thoughts during contemplation, use the message_self tool. "
+            "These messages will be added to your chat history and automatically prefixed with [CONTEMPLATION_LOOP], "
+            "but will not be shown to the user. This allows you to think through the problem step by step.\n"
+            "When you have reached a conclusion, use the exit_loop tool with your final answer "
+            "to end contemplation and respond to the user. Do not prefix your messages yourself.\n"
+        ),
+        active=True
     )
-    tool_loop_data.active = True
-    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: contemplate - now entering contemplation loop")
 
+    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: contemplate - now entering contemplation loop")
     max_iterations = 5  # Adjust as needed
     iterations = 0
 
@@ -245,7 +245,7 @@ async def process_contemplate(
         iterations += 1
         response = await get_response(
             chat_history=chat_history,
-            tools={ToolName.EXIT_LOOP},
+            tools=tool_loop_data.available_tools,
             tool_loop_data=tool_loop_data
         )
         response = response if isinstance(response, str) else response.get('content', '')
@@ -265,7 +265,7 @@ async def process_contemplate(
 
 
 async def process_exit_loop(
-    response_message: str,
+    exit_message: str,
     tool_loop_data: Optional[ToolLoopData],
     chat_history: ChatHistory
 ) -> Optional[str]:
@@ -276,7 +276,27 @@ async def process_exit_loop(
 
     tool_loop_data.active = False
     logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: exit_loop - exiting tool loop")
-    return response_message
+    return exit_message
+
+
+async def process_message_self(
+    message: str,
+    tool_loop_data: Optional[ToolLoopData],
+    chat_history: ChatHistory
+) -> str:
+    """
+    Process the 'message_self' tool call.
+
+    Args:
+        message: The message to send to self.
+        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
+        chat_history: The ChatHistory instance.
+
+    Returns:
+        str: The message that was sent to self.
+    """
+    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: message_self")
+    return message
 
 
 def register_tools():
