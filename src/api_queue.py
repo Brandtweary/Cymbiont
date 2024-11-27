@@ -97,7 +97,6 @@ async def execute_call(call: APICall) -> None:
                 "timestamp": time.time(),
                 "expiration_counter": call.expiration_counter + 1
             }
-            mock_total_tokens = result["token_usage"]["total_tokens"]
         else:
             # Real API call logic
             openai_messages = [
@@ -121,7 +120,7 @@ async def execute_call(call: APICall) -> None:
             if call.tools:
                 # Extract tool schemas from TOOL_SCHEMAS using the provided tool names
                 selected_tool_schemas = [schema for tool, schema in TOOL_SCHEMAS.items() if tool in call.tools]
-                api_params["functions"] = selected_tool_schemas
+                api_params["tools"] = selected_tool_schemas
                 api_params["tool_choice"] = "auto"
             
             # Add max_completion_tokens if specified (using OpenAI's parameter name)
@@ -147,9 +146,9 @@ async def execute_call(call: APICall) -> None:
             if response.choices[0].finish_reason == 'tool_calls' and response.choices[0].message.tool_calls:
                 tool_call_results = {}
                 for tool_call in response.choices[0].message.tool_calls:
-                    arguments = json.loads(tool_call["function"]["arguments"])
-                    tool_call_results[tool_call["id"]] = {
-                        "tool_name": tool_call["function"]["name"],
+                    arguments = json.loads(tool_call.function.arguments)
+                    tool_call_results[str(tool_call.id)] = {
+                        "tool_name": tool_call.function.name,
                         "arguments": arguments
                     }
                 result["tool_call_results"] = tool_call_results

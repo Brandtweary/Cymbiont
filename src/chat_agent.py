@@ -1,4 +1,5 @@
 import asyncio
+from json import tool
 from typing import Any, List, Optional, Set, Dict
 from dataclasses import dataclass, field
 from api_queue import enqueue_api_call
@@ -12,7 +13,7 @@ from openai.types.chat import (
     ChatCompletionUserMessageParam,
     ChatCompletionAssistantMessageParam
 )
-from custom_dataclasses import ChatMessage, ToolLoopData
+from custom_dataclasses import ChatMessage, ToolLoopData, MessageRole
 from chat_history import ChatHistory
 import inspect
 
@@ -81,6 +82,10 @@ async def get_response(
         )
 
         if 'tool_call_results' in response:
+            if not isinstance(response['tool_call_results'], dict):
+                logger.error(f"Expected dict for tool_call_results, got {type(response['tool_call_results'])}")
+                return "Sorry, I encountered an error while processing your request."
+
             user_message = await process_tool_calls(
                 tool_call_results=response['tool_call_results'],
                 available_tools=tools,
@@ -94,8 +99,7 @@ async def get_response(
                     prefixed_message = user_message
                 chat_history.add_message("assistant", prefixed_message, name=AGENT_NAME)
                 return user_message
-            else:
-                return ''
+            return ''
 
         if not response["content"]:
             logger.error("Received an empty message from the OpenAI API.")
@@ -133,7 +137,11 @@ async def process_tool_calls(
         Optional[str]: A message to be returned to the user, if available.
     """
     messages = []
+    tool_calls = tool_call_results.values()
+    logger.debug(f"Processing tool calls: {tool_calls}")
+
     for call_id, tool_call in tool_call_results.items():
+        assert isinstance(call_id, str), f"Tool call ID must be string, got {type(call_id)}: {call_id}"
         tool_name = tool_call['tool_name']
         arguments = tool_call['arguments']
 
@@ -174,21 +182,21 @@ async def process_tool_calls(
         args_to_pass = {param: arguments[param] for param in required_params}
 
         try:
-            result = await processing_function(
+            response = await processing_function(
                 **args_to_pass,
                 tool_loop_data=tool_loop_data,
                 chat_history=chat_history
             )
-            if result:
-                messages.append(result)
+            if response is not None:
+                messages.append(response)
+                if tool_name == ToolName.EXIT_LOOP.value:
+                    pass
         except Exception as e:
             logger.error(f"Error processing tool '{tool_name}': {e}")
 
-    if len(messages) > 1:
-        logger.warning("Multiple messages received from tool calls. Concatenating messages.")
-
     if messages:
-        return ' '.join(messages)
+        final_message = ' '.join(messages)
+        return final_message
     else:
         return None
 
@@ -209,18 +217,22 @@ async def process_contemplate(
     Returns:
         Optional[str]: Message to the user, if any.
     """
+    
     if tool_loop_data:
         logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: contemplate - no effect, agent already inside tool loop")
         return None
 
+    # Start a new contemplation loop
+    assert not tool_loop_data, f"Starting contemplate but loop already active: {tool_loop_data}"
     tool_loop_data = ToolLoopData(
         loop_type="CONTEMPLATION",
         available_tools={ToolName.EXIT_LOOP},
         loop_message=(
             f"You are inside a tool loop contemplating the following question:\n"
             f"{question}\n"
-            "Any response you provide will not be seen by the user. These messages are prefixed with [CONTEMPLATION_LOOP] for your own reference."
-            "When you arrive at a conclusion, use the exit_loop tool to return your answer to the user."
+            "Any response you provide will not be seen by the user. These messages are "
+            "prefixed with [CONTEMPLATION_LOOP] for your own reference. When you arrive at "
+            "a conclusion, use the exit_loop tool to return your answer to the user."
         )
     )
     tool_loop_data.active = True
@@ -234,10 +246,9 @@ async def process_contemplate(
         response = await get_response(
             chat_history=chat_history,
             tools={ToolName.EXIT_LOOP},
-            loop_message=tool_loop_data.loop_message,
             tool_loop_data=tool_loop_data
         )
-
+        response = response if isinstance(response, str) else response.get('content', '')
         # Check if exit_loop was called
         if not tool_loop_data.active:
             if not response:
@@ -258,24 +269,13 @@ async def process_exit_loop(
     tool_loop_data: Optional[ToolLoopData],
     chat_history: ChatHistory
 ) -> Optional[str]:
-    """
-    Process the 'exit_loop' tool call.
-
-    Args:
-        response_message: The message to send to the conversation partner.
-        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
-        chat_history: The ChatHistory instance.
-
-    Returns:
-        Optional[str]: Message to the user.
-    """
+    """Process the exit_loop tool call."""
     if not tool_loop_data or not tool_loop_data.active:
         logger.warning(f"{AGENT_NAME} used tool: exit_loop - no effect, agent not inside tool loop")
         return None
 
-    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: exit_loop - exiting tool loop")
     tool_loop_data.active = False
-
+    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: exit_loop - exiting tool loop")
     return response_message
 
 
@@ -309,12 +309,10 @@ def register_tools():
 
         func_params = set(sig.parameters.keys())
         schema_params = set(schema_properties.keys())
-        extra_params = func_params - schema_params
+        # Ignore common parameters that are passed to all processing functions
+        common_params = {'tool_loop_data', 'chat_history'}
+        extra_params = func_params - schema_params - common_params
         if extra_params:
             raise ValueError(f"Function '{function_name}' has unrecognized parameters {extra_params} for tool '{tool_name}'.")
 
-    logger.info("All tool functions are properly registered and validated.")
-
-
 register_tools()
-

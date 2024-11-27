@@ -51,7 +51,7 @@ TOOL_SCHEMAS: Dict[ToolName, Dict[str, Any]] = {
                         "description": "The question to ponder during the contemplation loop."
                     }
                 },
-                "required": ["question"],
+                "required": ["question"]
             }
         }
     },
@@ -68,7 +68,7 @@ TOOL_SCHEMAS: Dict[ToolName, Dict[str, Any]] = {
                         "description": "The message to send to the conversation partner"
                     }
                 },
-                "required": ["response_message"],
+                "required": ["response_message"]
             }
         }
     }
