@@ -145,7 +145,8 @@ class CymbiontShell:
             
             response = await get_response(
                 chat_history=self.chat_history,
-                tools={ToolName.CONTEMPLATE}
+                tools={ToolName.CONTEMPLATE},
+                token_budget=20000
             )
             # Print token usage and reset
             token_logger.print_tokens()
@@ -153,7 +154,7 @@ class CymbiontShell:
 
             if response:
                 print(f"\x1b[38;2;0;255;255m{AGENT_NAME}\x1b[0m> {response}")
-            
+        
         except Exception as e:
             logger.error(f"Chat response failed: {str(e)}")
     

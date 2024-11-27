@@ -13,7 +13,7 @@ from openai.types.chat import (
     ChatCompletionUserMessageParam,
     ChatCompletionAssistantMessageParam
 )
-from custom_dataclasses import ChatMessage, ToolLoopData, MessageRole
+from custom_dataclasses import ChatMessage, ToolLoopData
 from chat_history import ChatHistory
 import inspect
 
@@ -39,7 +39,8 @@ def convert_to_openai_message(message: ChatMessage) -> ChatCompletionMessagePara
 async def get_response(
     chat_history: ChatHistory,
     tools: Optional[Set[ToolName]] = None,
-    tool_loop_data: Optional[ToolLoopData] = None
+    tool_loop_data: Optional[ToolLoopData] = None,
+    token_budget: int = 20000
 ) -> str:
     """
     Sends a message to the OpenAI chat agent with conversation history.
@@ -47,8 +48,8 @@ async def get_response(
     Args:
         chat_history: The ChatHistory instance containing the conversation history.
         tools: A set of ToolName enums representing the tools available to the agent.
-        loop_message: A message describing information pertinent to the current loop.
         tool_loop_data: An optional ToolLoopData instance to manage the state within a tool loop.
+        token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
 
     Returns:
         str: The assistant's response.
@@ -82,6 +83,17 @@ async def get_response(
             temperature=0.7
         )
 
+        # Update token usage if in a tool loop
+        if tool_loop_data:
+            tool_loop_data.loop_tokens += response.get('token_usage', {}).get('total_tokens', 0)
+            log_token_budget_warnings(tool_loop_data.loop_tokens, token_budget, tool_loop_data.loop_type)
+            if tool_loop_data.loop_tokens > token_budget:
+                tool_loop_data.active = False
+                if 'tool_call_results' in response:
+                    logger.warning('Token budget reached - tool call aborted')
+                    return ''
+                logger.warning('Token budget reached - ending loop')
+
         if 'tool_call_results' in response:
             if not isinstance(response['tool_call_results'], dict):
                 logger.error(f"Expected dict for tool_call_results, got {type(response['tool_call_results'])}")
@@ -91,7 +103,8 @@ async def get_response(
                 tool_call_results=response['tool_call_results'],
                 available_tools=tools,
                 tool_loop_data=tool_loop_data,
-                chat_history=chat_history
+                chat_history=chat_history,
+                token_budget=token_budget
             )
             if user_message:
                 if tool_loop_data:
@@ -123,7 +136,8 @@ async def process_tool_calls(
     tool_call_results: Dict[str, Dict[str, Any]],
     available_tools: Optional[Set[ToolName]],
     tool_loop_data: Optional[ToolLoopData],
-    chat_history: ChatHistory
+    chat_history: ChatHistory,
+    token_budget: int = 20000
 ) -> Optional[str]:
     """
     Process tool calls by matching them to corresponding functions.
@@ -133,6 +147,7 @@ async def process_tool_calls(
         available_tools: A set of ToolName enums representing the tools available to the agent.
         tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
         chat_history: The ChatHistory instance.
+        token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
 
     Returns:
         Optional[str]: A message to be returned to the user, if available.
@@ -183,7 +198,8 @@ async def process_tool_calls(
             response = await processing_function(
                 **args_to_pass,
                 tool_loop_data=tool_loop_data,
-                chat_history=chat_history
+                chat_history=chat_history,
+                token_budget=token_budget
             )
             if response is not None:
                 messages.append(response)
@@ -202,7 +218,8 @@ async def process_tool_calls(
 async def process_contemplate(
     question: str,
     tool_loop_data: Optional[ToolLoopData],
-    chat_history: ChatHistory
+    chat_history: ChatHistory,
+    token_budget: int = 20000
 ) -> Optional[str]:
     """
     Process the 'contemplate' tool call.
@@ -211,6 +228,7 @@ async def process_contemplate(
         question: The question to ponder during the contemplation loop.
         tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
         chat_history: The ChatHistory instance.
+        token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
 
     Returns:
         Optional[str]: Message to the user, if any.
@@ -246,9 +264,9 @@ async def process_contemplate(
         response = await get_response(
             chat_history=chat_history,
             tools=tool_loop_data.available_tools,
-            tool_loop_data=tool_loop_data
+            tool_loop_data=tool_loop_data,
+            token_budget=token_budget
         )
-        response = response if isinstance(response, str) else response.get('content', '')
         # Check if exit_loop was called
         if not tool_loop_data.active:
             if not response:
@@ -267,7 +285,8 @@ async def process_contemplate(
 async def process_exit_loop(
     exit_message: str,
     tool_loop_data: Optional[ToolLoopData],
-    chat_history: ChatHistory
+    chat_history: ChatHistory,
+    token_budget: int = 20000
 ) -> Optional[str]:
     """Process the exit_loop tool call."""
     if not tool_loop_data or not tool_loop_data.active:
@@ -282,7 +301,8 @@ async def process_exit_loop(
 async def process_message_self(
     message: str,
     tool_loop_data: Optional[ToolLoopData],
-    chat_history: ChatHistory
+    chat_history: ChatHistory,
+    token_budget: int = 20000
 ) -> str:
     """
     Process the 'message_self' tool call.
@@ -291,12 +311,39 @@ async def process_message_self(
         message: The message to send to self.
         tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
         chat_history: The ChatHistory instance.
+        token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
 
     Returns:
         str: The message that was sent to self.
     """
     logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: message_self")
     return message
+
+
+def log_token_budget_warnings(loop_tokens: int, token_budget: int, loop_type: str) -> None:
+    """
+    Log warnings when token usage approaches the budget limit.
+    
+    Args:
+        loop_tokens: Current number of tokens used in the loop
+        token_budget: Maximum token budget for the loop
+        loop_type: Type of the current loop (e.g., "CONTEMPLATION")
+    """
+    thresholds = [
+        (0.95, "95%"),
+        (0.90, "90%"),
+        (0.75, "75%"),
+        (0.50, "50%")
+    ]
+    
+    # Find highest threshold reached
+    for threshold, percent in sorted(thresholds, reverse=True):
+        if loop_tokens > token_budget * threshold:
+            logger.warning(
+                f"{AGENT_NAME} in {loop_type} loop has used {percent} of token budget "
+                f"({loop_tokens}/{token_budget} tokens)"
+            )
+            break
 
 
 def register_tools():
@@ -330,7 +377,7 @@ def register_tools():
         func_params = set(sig.parameters.keys())
         schema_params = set(schema_properties.keys())
         # Ignore common parameters that are passed to all processing functions
-        common_params = {'tool_loop_data', 'chat_history'}
+        common_params = {'tool_loop_data', 'chat_history', 'token_budget'}
         extra_params = func_params - schema_params - common_params
         if extra_params:
             raise ValueError(f"Function '{function_name}' has unrecognized parameters {extra_params} for tool '{tool_name}'.")

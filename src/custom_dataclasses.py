@@ -73,3 +73,4 @@ class ToolLoopData:
     loop_message: str
     active: bool = True
     available_tools: Set[ToolName] = field(default_factory=set)
+    loop_tokens: int = 0
