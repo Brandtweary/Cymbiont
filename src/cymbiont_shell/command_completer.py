@@ -21,9 +21,15 @@ class CommandCompleter(Completer):
                 yield Completion(command, start_position=0)
             return
             
-        # If we're still typing the first word (no space after it)
-        if len(words) == 1 and not text_before_cursor.endswith(' '):
-            word_before_cursor: str = words[0]
+        # Check if all complete words are valid commands
+        word_count = len(words) if text_before_cursor.endswith(' ') else len(words) - 1
+        for i in range(word_count):
+            if words[i].lower() not in self.commands:
+                return  # Stop completion if any invalid command is found
+            
+        # If we're still typing a word (no space after it)
+        if not text_before_cursor.endswith(' '):
+            word_before_cursor: str = words[-1]
             for command in self.commands:
                 if command.startswith(word_before_cursor.lower()):
                     yield Completion(command, start_position=-len(word_before_cursor))
