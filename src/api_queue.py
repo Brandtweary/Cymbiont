@@ -11,7 +11,7 @@ from openai.types.shared_params.response_format_text import ResponseFormatText
 from custom_dataclasses import APICall, TokenUsage, ChatMessage
 from process_log import ProcessLog
 from constants import ToolName
-from prompts import TOOL_SCHEMAS
+from tool_schemas import TOOL_SCHEMAS
 
 # Constants
 REQUESTS_PER_MINUTE: int = 5000
@@ -86,9 +86,12 @@ async def execute_call(call: APICall) -> None:
                 raise RuntimeError("🔥 The system caught fire, as requested")
                 
             # Regular mock logic continues...
-            mock_tokens = call.mock_tokens if call.mock_tokens is not None else sum(len(msg.content) for msg in call.messages)
+            mock_tokens = call.mock_tokens if call.mock_tokens is not None else len(call.messages[-1].content.split())
+            
+            # Pop the last message instead of just accessing it
+            mock_content = call.messages.pop().content
             result = {
-                "content": call.messages[-1].content,
+                "content": mock_content,
                 "token_usage": {
                     "prompt_tokens": mock_tokens,
                     "completion_tokens": mock_tokens,
@@ -97,6 +100,14 @@ async def execute_call(call: APICall) -> None:
                 "timestamp": time.time(),
                 "expiration_counter": call.expiration_counter + 1
             }
+            
+            # If the mock content is a tool call, parse it as such
+            try:
+                tool_call_data = json.loads(mock_content)
+                if "tool_call_results" in tool_call_data:
+                    result["tool_call_results"] = tool_call_data["tool_call_results"]
+            except (json.JSONDecodeError, TypeError):
+                pass
         else:
             # Real API call logic
             openai_messages = [

@@ -4,6 +4,7 @@ from tests.test_document_processing import run_document_processing_tests
 from tests.test_logger import run_logger_test
 from tests.test_parsing import run_text_parsing_test
 from tests.test_progressive_summarization import test_progressive_summarization
+from tests.test_agent_tools import run_agent_tool_tests
 
 
 async def do_test_api_queue(shell, args: str) -> None:
@@ -78,6 +79,23 @@ async def do_test_progressive_summarization(shell, args: str) -> None:
         logger.info("✓ Progressive summarization tests passed")
     except Exception as e:
         logger.error(f"✗ Progressive summarization tests failed: {str(e)}")
+        shell.test_successes = 0
+        shell.test_failures = 1
+
+
+async def do_test_agent_tools(shell, args: str) -> None:
+    """Run agent tools tests.
+    Usage: test_agent_tools"""
+    try:
+        passed, failed = await run_agent_tool_tests()
+        shell.test_successes = passed
+        shell.test_failures = failed
+        if failed == 0:
+            logger.info("✓ All agent tools tests passed")
+        else:
+            logger.error(f"✗ {failed} agent tools test(s) failed")
+    except Exception as e:
+        logger.error(f"✗ Agent tools tests failed: {str(e)}")
         shell.test_successes = 0
         shell.test_failures = 1
 

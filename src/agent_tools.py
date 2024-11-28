@@ -1,16 +1,18 @@
 from shared_resources import logger, AGENT_NAME
 from constants import LogLevel, ToolName
 from chat_agent import get_response
-from custom_dataclasses import ToolLoopData
+from custom_dataclasses import ToolLoopData, ChatMessage
 from chat_history import ChatHistory
-from typing import Optional
+from typing import Optional, List
 
 
 async def process_contemplate(
     question: str,
     tool_loop_data: Optional[ToolLoopData],
     chat_history: ChatHistory,
-    token_budget: int = 20000
+    token_budget: int = 20000,
+    mock: bool = False,
+    mock_messages: Optional[List[ChatMessage]] = None
 ) -> Optional[str]:
     """
     Process the 'contemplate' tool call.
@@ -20,6 +22,8 @@ async def process_contemplate(
         tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
         chat_history: The ChatHistory instance.
         token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
+        mock: If True, uses mock_messages instead of normal message setup.
+        mock_messages: List of mock messages to use when mock=True.
 
     Returns:
         Optional[str]: Message to the user, if any.
@@ -56,7 +60,9 @@ async def process_contemplate(
             chat_history=chat_history,
             tools=tool_loop_data.available_tools,
             tool_loop_data=tool_loop_data,
-            token_budget=token_budget
+            token_budget=token_budget,
+            mock=mock,
+            mock_messages=mock_messages
         )
         # Check if exit_loop was called
         if not tool_loop_data.active:
@@ -75,9 +81,7 @@ async def process_contemplate(
 
 async def process_exit_loop(
     exit_message: str,
-    tool_loop_data: Optional[ToolLoopData],
-    chat_history: ChatHistory,
-    token_budget: int = 20000
+    tool_loop_data: Optional[ToolLoopData]
 ) -> Optional[str]:
     """Process the exit_loop tool call."""
     if not tool_loop_data or not tool_loop_data.active:
@@ -91,21 +95,12 @@ async def process_exit_loop(
 
 async def process_message_self(
     message: str,
-    tool_loop_data: Optional[ToolLoopData],
-    chat_history: ChatHistory,
-    token_budget: int = 20000
-) -> str:
-    """
-    Process the 'message_self' tool call.
+    tool_loop_data: Optional[ToolLoopData]
+) -> Optional[str]:
+    """Process the message_self tool call."""
+    if not tool_loop_data or not tool_loop_data.active:
+        logger.warning(f"{AGENT_NAME} used tool: message_self - no effect, agent not inside tool loop")
+        return None
 
-    Args:
-        message: The message to send to self.
-        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
-        chat_history: The ChatHistory instance.
-        token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
-
-    Returns:
-        str: The message that was sent to self.
-    """
-    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: message_self")
+    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: message_self - recording message")
     return message

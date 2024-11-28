@@ -3,7 +3,8 @@ from typing import Any, List, Optional, Set, Dict, Tuple
 from api_queue import enqueue_api_call
 from shared_resources import logger, AGENT_NAME
 from constants import CHAT_AGENT_MODEL, LogLevel, ToolName
-from prompts import CHAT_AGENT_SYSTEM_PROMPT, TOOL_SCHEMAS
+from prompts import CHAT_AGENT_SYSTEM_PROMPT
+from tool_schemas import TOOL_SCHEMAS
 from utils import log_performance, convert_messages_to_string
 from openai.types.chat import (
     ChatCompletionMessageParam,
@@ -43,7 +44,9 @@ async def get_response(
     chat_history: ChatHistory,
     tools: Optional[Set[ToolName]] = None,
     tool_loop_data: Optional[ToolLoopData] = None,
-    token_budget: int = 20000
+    token_budget: int = 20000,
+    mock: bool = False,
+    mock_messages: Optional[List[ChatMessage]] = None
 ) -> str:
     """
     Sends a message to the OpenAI chat agent with conversation history.
@@ -53,27 +56,32 @@ async def get_response(
         tools: A set of ToolName enums representing the tools available to the agent.
         tool_loop_data: An optional ToolLoopData instance to manage the state within a tool loop.
         token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
+        mock: If True, uses mock_messages instead of normal message setup.
+        mock_messages: List of mock messages to use when mock=True.
 
     Returns:
         str: The assistant's response.
     """
     try:
-        system_content_parts = [CHAT_AGENT_SYSTEM_PROMPT]
+        if mock and mock_messages:
+            messages_to_send = mock_messages
+        else:
+            system_content_parts = [CHAT_AGENT_SYSTEM_PROMPT]
 
-        if tool_loop_data:
-            system_content_parts.append(tool_loop_data.loop_message)
+            if tool_loop_data:
+                system_content_parts.append(tool_loop_data.loop_message)
 
-        messages, summary = chat_history.get_recent_messages()
+            messages, summary = chat_history.get_recent_messages()
 
-        if summary:
-            system_content_parts.append(summary)
+            if summary:
+                system_content_parts.append(summary)
 
-        system_content = '\n'.join(system_content_parts)
+            system_content = '\n'.join(system_content_parts)
 
-        messages_to_send: List[ChatMessage] = [
-            ChatMessage(role="system", content=system_content),
-            *messages
-        ]
+            messages_to_send: List[ChatMessage] = [
+                ChatMessage(role="system", content=system_content),
+                *messages
+            ]
 
         prompt_text = convert_messages_to_string(messages_to_send, truncate_last=False)
         logger.log(LogLevel.PROMPT, f"{prompt_text}")
@@ -83,7 +91,8 @@ async def get_response(
             messages=messages_to_send,
             tools=tools,
             response_format={"type": "text"},
-            temperature=0.7
+            temperature=0.7,
+            mock=mock
         )
 
         # Update token usage if in a tool loop
@@ -93,9 +102,10 @@ async def get_response(
             if tool_loop_data.loop_tokens > token_budget:
                 tool_loop_data.active = False
                 if 'tool_call_results' in response:
-                    logger.warning('Token budget reached - tool call aborted')
-                    return ''
-                logger.warning('Token budget reached - ending loop')
+                    tool_name = next(iter(response['tool_call_results'].values()))['tool_name']
+                    logger.warning(f'Token budget reached - {tool_name} tool call aborted')
+                    return 'Sorry, my token budget has been exceeded during a tool call.'
+                logger.warning(f'Token budget reached - ending {tool_loop_data.loop_type} loop')
 
         if 'tool_call_results' in response:
             if not isinstance(response['tool_call_results'], dict):
@@ -107,7 +117,9 @@ async def get_response(
                 available_tools=tools,
                 tool_loop_data=tool_loop_data,
                 chat_history=chat_history,
-                token_budget=token_budget
+                token_budget=token_budget,
+                mock=mock,
+                mock_messages=mock_messages
             )
             if user_message:
                 if tool_loop_data:
@@ -143,7 +155,9 @@ async def process_tool_calls(
     available_tools: Optional[Set[ToolName]],
     tool_loop_data: Optional[ToolLoopData],
     chat_history: ChatHistory,
-    token_budget: int = 20000
+    token_budget: int = 20000,
+    mock: bool = False,
+    mock_messages: Optional[List[ChatMessage]] = None
 ) -> Optional[str]:
     """
     Process tool calls by matching them to corresponding functions.
@@ -154,6 +168,8 @@ async def process_tool_calls(
         tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
         chat_history: The ChatHistory instance.
         token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
+        mock: If True, uses mock_messages instead of normal message setup.
+        mock_messages: List of mock messages to use when mock=True.
 
     Returns:
         Optional[str]: A message to be returned to the user, if available.
@@ -174,11 +190,24 @@ async def process_tool_calls(
         processing_function = tool_map[tool_name]
 
         try:
+            # Common args that functions can optionally accept
+            common_args = {
+                'tool_loop_data': tool_loop_data,
+                'chat_history': chat_history,
+                'token_budget': token_budget,
+                'mock': mock,
+                'mock_messages': mock_messages
+            }
+            
+            # Only pass common args that the function accepts in its signature
+            accepted_args = {
+                k: v for k, v in common_args.items() 
+                if k in inspect.signature(processing_function).parameters
+            }
+            
             response = await processing_function(
-                **args_to_pass,
-                tool_loop_data=tool_loop_data,
-                chat_history=chat_history,
-                token_budget=token_budget
+                **args_to_pass,  # Schema-required args
+                **accepted_args  # Only the common args this function wants
             )
             if response is not None:
                 messages.append(response)
@@ -266,13 +295,19 @@ def log_token_budget_warnings(loop_tokens: int, token_budget: int, loop_type: st
 
 def register_tools():
     """
-    Validate that each tool in tool_function_map has a corresponding processing function
-    and that the function parameters match the tool schema.
+    Validate that each tool processing function:
+    1. Has all required parameters from its tool schema
+    2. Any additional parameters must be either:
+       - Optional parameters from the tool schema
+       - Parameters from process_tool_calls's signature
     
     Raises:
-        ValueError: If any tool processing function is missing or parameters do not match.
+        ValueError: If any tool processing function has invalid parameters.
     """
     tool_map = get_tool_function_map()
+    
+    # Get the available extra parameters from process_tool_calls
+    process_tool_calls_params = set(inspect.signature(process_tool_calls).parameters.keys())
     
     for tool_name, function in tool_map.items():
         try:
@@ -282,20 +317,23 @@ def register_tools():
             raise ValueError(f"Schema for tool '{tool_name}' not found in TOOL_SCHEMAS.")
 
         sig = inspect.signature(function)
-
-        required_params = schema.get("required", [])
+        func_params = set(sig.parameters.keys())
         schema_properties = schema.get("properties", {})
+        all_schema_params = set(schema_properties.keys())  # Both required and optional params
+        required_params = set(schema.get("required", []))
 
+        # 1. Ensure function has all required parameters from schema
         for param in required_params:
             if param not in sig.parameters:
                 raise ValueError(f"Function '{function.__name__}' missing required parameter '{param}' for tool '{tool_name}'.")
 
-        func_params = set(sig.parameters.keys())
-        schema_params = set(schema_properties.keys())
-        # Ignore common parameters that are passed to all processing functions
-        common_params = {'tool_loop_data', 'chat_history', 'token_budget'}
-        extra_params = func_params - schema_params - common_params
-        if extra_params:
-            raise ValueError(f"Function '{function.__name__}' has unrecognized parameters {extra_params} for tool '{tool_name}'.")
+        # 2. Any parameter not in schema (required or optional) must be from process_tool_calls
+        extra_params = func_params - all_schema_params
+        invalid_params = extra_params - process_tool_calls_params
+        if invalid_params:
+            raise ValueError(
+                f"Function '{function.__name__}' has parameters {invalid_params} that are neither "
+                f"in its tool schema nor available from process_tool_calls."
+            )
 
 register_tools()

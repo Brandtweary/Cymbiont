@@ -21,6 +21,7 @@ from .test_commands import (
     do_test_logger,
     do_test_parsing,
     do_test_progressive_summarization,
+    do_test_agent_tools,
     do_run_all_tests,
 )
 
@@ -46,6 +47,7 @@ class CymbiontShell:
             'test_logger': self.do_test_logger,
             'test_parsing': self.do_test_parsing,
             'test_progressive_summarization': self.do_test_progressive_summarization,
+            'test_agent_tools': self.do_test_agent_tools,
             'run_all_tests': self.do_run_all_tests,
             'print_total_tokens': self.do_print_total_tokens,
         }
@@ -253,6 +255,11 @@ class CymbiontShell:
         """Test progressive summarization functionality.
         Usage: test_progressive_summarization"""
         await do_test_progressive_summarization(self, args)
+
+    async def do_test_agent_tools(self, args: str) -> None:
+        """Test agent tools functionality.
+        Usage: test_agent_tools"""
+        await do_test_agent_tools(self, args)
 
     async def do_run_all_tests(self, args: str) -> None:
         """Run all tests.
