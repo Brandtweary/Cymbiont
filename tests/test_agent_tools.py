@@ -1,5 +1,4 @@
 import json
-import pytest
 from typing import Set
 from chat_agent import get_response, ChatHistory, validate_tool_args
 from constants import ToolName
