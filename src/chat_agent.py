@@ -21,12 +21,17 @@ from functools import lru_cache
 def get_tool_function_map():
     """Get the mapping of tool names to their processing functions.
     Lazily imports the functions when first accessed."""
-    from agent_tools import process_contemplate, process_exit_loop, process_message_self
+    from agent_tools import (
+                            process_contemplate, 
+                            process_exit_loop, 
+                            process_message_self,
+                            process_execute_shell_command
+                            )
     return {
         ToolName.CONTEMPLATE.value: process_contemplate,
         ToolName.EXIT_LOOP.value: process_exit_loop,
         ToolName.MESSAGE_SELF.value: process_message_self,
-        # Add more tool-function mappings here
+        ToolName.EXECUTE_SHELL_COMMAND.value: process_execute_shell_command,
     }
 
 
@@ -44,7 +49,6 @@ async def get_response(
     chat_history: ChatHistory,
     tools: Optional[Set[ToolName]] = None,
     tool_loop_data: Optional[ToolLoopData] = None,
-    cymbiont_shell: Optional[Any] = None,
     token_budget: int = 20000,
     mock: bool = False,
     mock_messages: Optional[List[ChatMessage]] = None
@@ -118,7 +122,6 @@ async def get_response(
                 available_tools=tools,
                 tool_loop_data=tool_loop_data,
                 chat_history=chat_history,
-                cymbiont_shell=cymbiont_shell,
                 token_budget=token_budget,
                 mock=mock,
                 mock_messages=mock_messages
@@ -157,7 +160,6 @@ async def process_tool_calls(
     available_tools: Optional[Set[ToolName]],
     tool_loop_data: Optional[ToolLoopData],
     chat_history: ChatHistory,
-    cymbiont_shell: Optional[Any] = None,
     token_budget: int = 20000,
     mock: bool = False,
     mock_messages: Optional[List[ChatMessage]] = None

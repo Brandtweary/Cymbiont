@@ -149,7 +149,6 @@ class CymbiontShell:
             response = await get_response(
                 chat_history=self.chat_history,
                 tools={ToolName.CONTEMPLATE, ToolName.EXECUTE_SHELL_COMMAND},
-                cymbiont_shell=self,
                 token_budget=20000
             )
             # Print token usage and reset
@@ -175,8 +174,9 @@ class CymbiontShell:
                 f"{executor} executed: {command}{' ' + args if args else ''}"
             )
             
-            # Execute command
-            return await self.commands[command](args)
+            # Execute command - only return False if the command raises an exception
+            await self.commands[command](args)
+            return True
             
         except Exception as e:
             logger.error(f"Command failed: {str(e)}")

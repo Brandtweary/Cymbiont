@@ -198,8 +198,8 @@ async def execute_call(call: APICall) -> None:
             # Add standardized attempt count message
             attempt_msg = f"Final attempt count: {call.expiration_counter + 1}"
             if call.process_log:
-                call.process_log.info(attempt_msg)
-            logger.info(attempt_msg)
+                call.process_log.debug(attempt_msg)
+            logger.debug(attempt_msg)
             
             # Original error message
             error_msg = f"API call failed after 3 attempts: {str(e)}"

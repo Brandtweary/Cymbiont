@@ -26,6 +26,7 @@ class ChatHistory:
         self.is_summarizing: bool = False
         self.mock: bool = False
         self.progressive_summary_token_limit: int = 1000
+        self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     
     def truncate_message(self, text: str, limit: Optional[int]) -> str:
         if not limit:
@@ -76,6 +77,9 @@ class ChatHistory:
 
     def add_message(self, role: MessageRole, content: str, name: str = '') -> None:
         """Add a message to the history with an explicit name"""
+        # Filter out ANSI escape codes
+        content = self.ansi_escape.sub('', content)
+        
         # Check if we can combine with previous message
         can_combine = (
             self.all_messages 
@@ -223,7 +227,6 @@ class ChatHistoryHandler(logging.Handler):
         super().__init__()
         self.chat_history = chat_history
         self.console_filter = console_filter
-        self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
     def emit(self, record: logging.LogRecord) -> None:
         if (self.chat_history is not None 
@@ -231,8 +234,8 @@ class ChatHistoryHandler(logging.Handler):
             and (record.levelno in (LogLevel.SHELL, LogLevel.TOOL)  # Always include SHELL and TOOL messages
                 or (self.console_filter is None or self.console_filter.filter(record)))
         ):
-            clean_message = self.ansi_escape.sub('', self.format(record))
-            prefixed_message = f"{record.levelname} - {clean_message}"
+            # No need to filter ANSI codes here since ChatHistory.add_message will do it
+            prefixed_message = f"{record.levelname} - {self.format(record)}"
             self.chat_history.add_message("system", prefixed_message)
 
 def setup_chat_history_handler(logger: logging.Logger, chat_history: ChatHistory, console_filter: Optional[logging.Filter] = None) -> None:

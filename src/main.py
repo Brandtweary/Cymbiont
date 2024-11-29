@@ -16,7 +16,7 @@ def setup_python_path() -> None:
 setup_python_path()
 
 # Project imports
-from shared_resources import logger, token_logger, DATA_DIR
+from shared_resources import logger, token_logger, DATA_DIR, set_shell
 from cymbiont_shell.cymbiont_shell import CymbiontShell
 from utils import setup_directories, delete_logs
 from api_queue import start_api_queue, stop_api_queue
@@ -31,6 +31,7 @@ async def async_main() -> None:
     try:
         # Create and run shell
         shell = CymbiontShell()
+        set_shell(shell)
         await shell.run()
         
     except KeyboardInterrupt:

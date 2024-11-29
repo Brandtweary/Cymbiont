@@ -1,10 +1,10 @@
-from shared_resources import logger, AGENT_NAME
+from shared_resources import logger, AGENT_NAME, get_shell
 from constants import LogLevel, ToolName
 from chat_agent import get_response
 from custom_dataclasses import ToolLoopData, ChatMessage
 from chat_history import ChatHistory
-from typing import Optional, List, Any
-
+from typing import Optional, List, Any, Dict
+from prompt_toolkit.formatted_text import ANSI
 
 async def process_contemplate(
     question: str,
@@ -108,12 +108,18 @@ async def process_message_self(
 async def process_execute_shell_command(
     command: str,
     args: List[str],
-    cymbiont_shell: Optional[Any] = None
-) -> Optional[str]:
+) -> str:
     """Process the execute_shell_command tool call."""
-    if cymbiont_shell is None:
-        logger.error("CymbiontShell instance is required to execute shell commands.")
-        return None
-
-    await cymbiont_shell.execute_command(command, ' '.join(args), name=AGENT_NAME)
-    return f"I have executed the command: {command}"
+    shell = get_shell()
+    args_str = ' '.join(args) if args else ''
+    success = await shell.execute_command(command, args_str, name=AGENT_NAME)
+    if not success:
+        return f"Failed to execute command: {command}{' ' + args_str if args_str else ''}"
+    
+    # Format command and args in blue
+    formatted_cmd = f"\033[38;2;0;128;254m{command}\033[0m"  # #0080FE in RGB
+    formatted_args = ', '.join(f"\033[38;2;0;128;254m{arg}\033[0m" for arg in args) if args else ""
+    if args:
+        return f"I have executed the command: {formatted_cmd} with args {formatted_args}"
+    else:
+        return f"I have executed the command: {formatted_cmd}"

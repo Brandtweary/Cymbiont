@@ -22,6 +22,20 @@ LOG_DIR = DATA_DIR / "logs"
 # Initialize OpenAI client
 openai_client = AsyncOpenAI()
 
+# Shell singleton instance
+_shell_instance = None
+
+def get_shell():
+    """Get the shell instance. Raises RuntimeError if not initialized."""
+    global _shell_instance
+    if _shell_instance is None:
+        raise RuntimeError("Shell instance not initialized")
+    return _shell_instance
+
+def set_shell(shell):
+    """Set the shell instance."""
+    global _shell_instance
+    _shell_instance = shell
 
 # Load config
 def load_config() -> dict:
