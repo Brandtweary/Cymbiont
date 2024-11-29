@@ -8,10 +8,8 @@ async def do_process_documents(args: str) -> None:
     - document_name: Optional. If provided, only this file or folder will be processed.
                     Otherwise, processes all .txt and .md files."""
     try:
-        token_logger.reset_tokens()
-        await process_documents(DATA_DIR, args if args else None)
-        token_logger.print_tokens()
-        token_logger.reset_tokens()
+        with token_logger.show_tokens():
+            await process_documents(DATA_DIR, args if args else None)
     except Exception as e:
         logger.error(f"Document processing failed: {str(e)}")
 
@@ -31,14 +29,12 @@ async def do_create_data_snapshot(args: str) -> None:
         return
     
     try:
-        token_logger.reset_tokens()
-        snapshot_path = await create_data_snapshot(
-            arg_parts[0], 
-            arg_parts[1] if len(arg_parts) > 1 else None
-        )
-        logger.info(f"Created snapshot at {snapshot_path}")
-        token_logger.print_tokens()
-        token_logger.reset_tokens()
+        with token_logger.show_tokens():
+            snapshot_path = await create_data_snapshot(
+                arg_parts[0], 
+                arg_parts[1] if len(arg_parts) > 1 else None
+            )
+            logger.info(f"Created snapshot at {snapshot_path}")
     except Exception as e:
         logger.error(f"Snapshot creation failed: {str(e)}")
 

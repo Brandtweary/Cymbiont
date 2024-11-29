@@ -139,24 +139,22 @@ class CymbiontShell:
     async def handle_chat(self, text: str) -> None:
         """Handle chat messages"""
         try:
-            token_logger.reset_tokens()
-            # Record user message
-            self.chat_history.add_message("user", text, name=USER_NAME)
+            # Use show_tokens to handle nested token tracking
+            with token_logger.show_tokens():
+                # Record user message
+                self.chat_history.add_message("user", text, name=USER_NAME)
                 
-            # Wait for any ongoing summarization
-            await self.chat_history.wait_for_summary()
+                # Wait for any ongoing summarization
+                await self.chat_history.wait_for_summary()
                 
-            response = await get_response(
-                chat_history=self.chat_history,
-                tools={ToolName.CONTEMPLATE, ToolName.EXECUTE_SHELL_COMMAND},
-                token_budget=20000
-            )
-            # Print token usage and reset
-            token_logger.print_tokens()
-            token_logger.reset_tokens()
+                response = await get_response(
+                    chat_history=self.chat_history,
+                    tools={ToolName.CONTEMPLATE, ToolName.EXECUTE_SHELL_COMMAND},
+                    token_budget=20000
+                )
 
-            if response:
-                print(f"\x1b[38;2;0;255;255m{AGENT_NAME}\x1b[0m> {response}")
+                if response:
+                    print(f"\x1b[38;2;0;255;255m{AGENT_NAME}\x1b[0m> {response}")
         
         except Exception as e:
             logger.error(f"Chat response failed: {str(e)}")
@@ -274,4 +272,4 @@ class CymbiontShell:
 
     async def do_print_total_tokens(self, args: str) -> None:
         """Print the total token count"""
-        token_logger.print_tokens()
+        token_logger.print_total_tokens()
