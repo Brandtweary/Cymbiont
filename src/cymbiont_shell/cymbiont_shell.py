@@ -162,13 +162,17 @@ class CymbiontShell:
         except Exception as e:
             logger.error(f"Chat response failed: {str(e)}")
     
-    async def execute_command(self, command: str, args: str) -> bool:
+    async def execute_command(self, command: str, args: str, name: str = '') -> bool:
         """Execute a shell command"""
         try:
             # Log command execution
+            if name:
+                executor = name
+            else:
+                executor = USER_NAME
             logger.log(
-                LogLevel.SHELL, 
-                f"{USER_NAME} executed: {command}{' ' + args if args else ''}"
+                LogLevel.SHELL,
+                f"{executor} executed: {command}{' ' + args if args else ''}"
             )
             
             # Execute command
