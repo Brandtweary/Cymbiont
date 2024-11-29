@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, List, Optional, Set, Dict, Tuple
+from typing import Any, List, Optional, Set, Dict, Tuple, Union
 from api_queue import enqueue_api_call
 from shared_resources import logger, AGENT_NAME
 from constants import CHAT_AGENT_MODEL, LogLevel, ToolName
@@ -44,6 +44,7 @@ async def get_response(
     chat_history: ChatHistory,
     tools: Optional[Set[ToolName]] = None,
     tool_loop_data: Optional[ToolLoopData] = None,
+    cymbiont_shell: Optional[Any] = None,
     token_budget: int = 20000,
     mock: bool = False,
     mock_messages: Optional[List[ChatMessage]] = None
@@ -117,6 +118,7 @@ async def get_response(
                 available_tools=tools,
                 tool_loop_data=tool_loop_data,
                 chat_history=chat_history,
+                cymbiont_shell=cymbiont_shell,
                 token_budget=token_budget,
                 mock=mock,
                 mock_messages=mock_messages
@@ -155,6 +157,7 @@ async def process_tool_calls(
     available_tools: Optional[Set[ToolName]],
     tool_loop_data: Optional[ToolLoopData],
     chat_history: ChatHistory,
+    cymbiont_shell: Optional[Any] = None,
     token_budget: int = 20000,
     mock: bool = False,
     mock_messages: Optional[List[ChatMessage]] = None

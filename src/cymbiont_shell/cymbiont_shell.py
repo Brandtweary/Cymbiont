@@ -2,7 +2,7 @@ import math
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
-from typing import Callable, Dict
+from typing import Callable, Dict, Any
 from shared_resources import USER_NAME, AGENT_NAME, logger, token_logger
 from chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel, ToolName
@@ -10,6 +10,7 @@ from chat_agent import get_response
 
 
 from .command_completer import CommandCompleter
+from constants import ToolName
 from .doc_processing_commands import (
     do_process_documents,
     do_create_data_snapshot,
@@ -141,13 +142,14 @@ class CymbiontShell:
             token_logger.reset_tokens()
             # Record user message
             self.chat_history.add_message("user", text, name=USER_NAME)
-            
+                
             # Wait for any ongoing summarization
             await self.chat_history.wait_for_summary()
-            
+                
             response = await get_response(
                 chat_history=self.chat_history,
-                tools={ToolName.CONTEMPLATE},
+                tools={ToolName.CONTEMPLATE, ToolName.EXECUTE_SHELL_COMMAND},
+                cymbiont_shell=self,
                 token_budget=20000
             )
             # Print token usage and reset

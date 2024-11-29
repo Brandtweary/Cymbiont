@@ -3,7 +3,7 @@ from constants import LogLevel, ToolName
 from chat_agent import get_response
 from custom_dataclasses import ToolLoopData, ChatMessage
 from chat_history import ChatHistory
-from typing import Optional, List
+from typing import Optional, List, Any
 
 
 async def process_contemplate(
@@ -104,3 +104,16 @@ async def process_message_self(
 
     logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: message_self - recording message")
     return message
+
+async def process_execute_shell_command(
+    command: str,
+    args: List[str],
+    cymbiont_shell: Optional[Any] = None
+) -> Optional[str]:
+    """Process the execute_shell_command tool call."""
+    if cymbiont_shell is None:
+        logger.error("CymbiontShell instance is required to execute shell commands.")
+        return None
+
+    await cymbiont_shell.execute_command(command, ' '.join(args), name=AGENT_NAME)
+    return f"I have executed the command: {command}"

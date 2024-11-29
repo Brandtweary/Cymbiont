@@ -53,5 +53,29 @@ TOOL_SCHEMAS: Dict[ToolName, Dict[str, Any]] = {
                 "required": ["exit_message"]
             }
         }
+    },
+    ToolName.EXECUTE_SHELL_COMMAND: {
+        "type": "function",
+        "function": {
+            "name": "execute_shell_command",
+            "description": "Execute a shell command with given arguments.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The shell command to execute."
+                    },
+                    "args": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "List of arguments for the command."
+                    }
+                },
+                "required": ["command", "args"]
+            }
+        }
     }
 }

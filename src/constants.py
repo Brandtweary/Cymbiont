@@ -16,6 +16,7 @@ class ToolName(Enum):
     CONTEMPLATE = "contemplate"
     EXIT_LOOP = "exit_loop"
     MESSAGE_SELF = "message_self"
+    EXECUTE_SHELL_COMMAND = "execute_shell_command"
 
 # Models
 TAG_EXTRACTION_OPENAI_MODEL = "gpt-4o-mini"
