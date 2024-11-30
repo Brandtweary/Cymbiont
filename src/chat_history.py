@@ -5,7 +5,8 @@ import asyncio
 import logging
 import re
 from api_queue import enqueue_api_call
-from constants import PROGRESSIVE_SUMMARY_MODEL, LogLevel
+from constants import LogLevel
+from model_configuration import CHAT_AGENT_MODEL, PROGRESSIVE_SUMMARY_MODEL
 from prompts import PROGRESSIVE_SUMMARY_PROMPT
 from utils import convert_messages_to_string
 from custom_dataclasses import ChatMessage, MessageRole

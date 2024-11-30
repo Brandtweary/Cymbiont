@@ -10,7 +10,8 @@ from openai.types.shared_params.response_format_json_object import ResponseForma
 from openai.types.shared_params.response_format_text import ResponseFormatText
 from custom_dataclasses import APICall, TokenUsage, ChatMessage
 from process_log import ProcessLog
-from constants import ToolName, MODEL_PROVIDERS
+from constants import ToolName
+from model_configuration import MODEL_PROVIDERS
 from tool_schemas import TOOL_SCHEMAS
 
 # Constants

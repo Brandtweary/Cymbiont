@@ -49,15 +49,12 @@ def load_config() -> dict:
     
     # If config.toml doesn't exist, copy from example
     if not config_path.exists():
-        if not example_config_path.exists():
-            raise FileNotFoundError("Neither config.toml nor config.example.toml found")
-        
-        print("Creating config.toml from example template")
-        with open(example_config_path, "rb") as src, open(config_path, "wb") as dst:
-            dst.write(src.read())
+        with example_config_path.open("rb") as f:
+            example_config = f.read()
+        with config_path.open("wb") as f:
+            f.write(example_config)
     
-    # Load the config
-    with open(config_path, "rb") as f:
+    with config_path.open("rb") as f:
         return tomllib.load(f)
 
 config = load_config()

@@ -9,7 +9,8 @@ from prompt_toolkit.styles import Style
 from shared_resources import logger, DATA_DIR
 from custom_dataclasses import ChatMessage
 from api_queue import enqueue_api_call
-from constants import REVISION_MODEL, LogLevel
+from constants import LogLevel
+from model_configuration import REVISION_MODEL
 
 async def do_process_documents(args: str) -> None:
     """Process documents in the data/input_documents directory.

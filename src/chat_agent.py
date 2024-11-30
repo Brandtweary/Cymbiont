@@ -2,7 +2,8 @@ import asyncio
 from typing import Any, List, Optional, Set, Dict, Tuple, Union
 from api_queue import enqueue_api_call
 from shared_resources import logger, AGENT_NAME
-from constants import CHAT_AGENT_MODEL, LogLevel, ToolName
+from constants import LogLevel, ToolName
+from model_configuration import CHAT_AGENT_MODEL
 from prompts import CHAT_AGENT_SYSTEM_PROMPT
 from tool_schemas import TOOL_SCHEMAS
 from utils import log_performance, convert_messages_to_string
@@ -72,7 +73,7 @@ async def get_response(
             messages_to_send = mock_messages
         else:
             system_content_parts = [CHAT_AGENT_SYSTEM_PROMPT.format(agent_name=AGENT_NAME)]
-            
+
             if tool_loop_data:
                 system_content_parts.append(tool_loop_data.loop_message)
 

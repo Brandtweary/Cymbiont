@@ -33,9 +33,3 @@ MODEL_PROVIDERS = {
     LLM.SONNET_3_5.value: "anthropic",
     LLM.HAIKU_3_5.value: "anthropic",
 }
-
-# Model Types
-TAG_EXTRACTION_MODEL = LLM.HAIKU_3_5.value
-CHAT_AGENT_MODEL = LLM.HAIKU_3_5.value
-PROGRESSIVE_SUMMARY_MODEL = LLM.HAIKU_3_5.value
-REVISION_MODEL = LLM.SONNET_3_5.value

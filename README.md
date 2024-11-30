@@ -36,6 +36,7 @@ The bootstrap script will:
 - Install project dependencies
 - Guide you through PyTorch installation
 - Perform system status checks
+- Optionally create a `.env` file and walk you through API key configuration
 - Optionally launch Cymbiont
 
 The script will attempt to use the nvidia-smi tool to determine your CUDA version. If you don't have nvidia-smi, you can determine your CUDA version using a different method, or you can proceed if you already know which PyTorch compute platform you want (e.g. CPU, CUDA, ROCM). The PyTorch installation step can be skipped and performed later by running the bootstrap script again or [installing PyTorch manually](https://pytorch.org/get-started/locally/). 
@@ -63,12 +64,14 @@ The script will attempt to use the nvidia-smi tool to determine your CUDA versio
 4. Install PyTorch:
    Visit [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/) and follow the installation instructions for your platform and compute preferences.
 
-## Environment Variables
+## API Keys
 
-Create a `.env` file in the project root and set the following variables:
+Create a `.env` file in the project root and set at least one of the following variables:
 ```bash
-OPENAI_API_KEY=your_api_key_here
+OPENAI_API_KEY="your_api_key_here"
+ANTHROPIC_API_KEY="your_api_key_here"
 ```
+The bootstrap script will walk you through this step if this file is not present.
 
 ## Running Cymbiont
 
