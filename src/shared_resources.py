@@ -8,6 +8,7 @@ from typing import Optional
 from contextlib import contextmanager
 from typing import List
 import inspect
+from anthropic import AsyncAnthropic
 
 # Get the project root (one level up from src)
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -22,8 +23,8 @@ if not DATA_DIR.exists():
 
 LOG_DIR = DATA_DIR / "logs"
 
-# Initialize OpenAI client
 openai_client = AsyncOpenAI()
+anthropic_client = AsyncAnthropic()
 
 # Shell singleton instance
 _shell_instance = None

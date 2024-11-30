@@ -51,15 +51,15 @@ class Paths(NamedTuple):
 class APICall:
     model: str
     messages: List[ChatMessage]
-    response_format: Dict[str, str]
     timestamp: float
     mock: bool
     mock_tokens: Optional[int]
     expiration_counter: int
     future: asyncio.Future[Dict[str, Any]]
+    provider: str
+    max_completion_tokens: int
     temperature: float = 0.7
     process_log: Optional[ProcessLog] = None
-    max_completion_tokens: Optional[int] = None
     tools: Optional[Set[ToolName]] = None
 
 @dataclass

@@ -1,5 +1,6 @@
 numpy
 openai
+anthropic
 python-dotenv
 sphinx
 html2text

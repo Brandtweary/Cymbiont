@@ -18,8 +18,24 @@ class ToolName(Enum):
     MESSAGE_SELF = "message_self"
     EXECUTE_SHELL_COMMAND = "execute_shell_command"
 
-# Models
-TAG_EXTRACTION_OPENAI_MODEL = "gpt-4o-mini"
-CHAT_AGENT_MODEL = "gpt-4o-mini"
-PROGRESSIVE_SUMMARY_MODEL = "gpt-4o-mini"
-REVISION_MODEL = "o1-preview"
+class LLM(Enum):
+    GPT_4O = "gpt-4o"
+    GPT_4O_MINI = "gpt-4o-mini"
+    O1_PREVIEW = "o1-preview"
+    SONNET_3_5 = "claude-3-5-sonnet-latest"
+    HAIKU_3_5 = "claude-3-5-haiku-latest"
+
+# Map models to their providers
+MODEL_PROVIDERS = {
+    LLM.GPT_4O.value: "openai",
+    LLM.GPT_4O_MINI.value: "openai",
+    LLM.O1_PREVIEW.value: "openai",
+    LLM.SONNET_3_5.value: "anthropic",
+    LLM.HAIKU_3_5.value: "anthropic",
+}
+
+# Model Types
+TAG_EXTRACTION_MODEL = LLM.HAIKU_3_5.value
+CHAT_AGENT_MODEL = LLM.HAIKU_3_5.value
+PROGRESSIVE_SUMMARY_MODEL = LLM.HAIKU_3_5.value
+REVISION_MODEL = LLM.SONNET_3_5.value

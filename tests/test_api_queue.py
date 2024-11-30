@@ -17,7 +17,6 @@ async def test_rpm_rate_limiting() -> None:
                 role="user",
                 content=f"Test message {i}"
             )],
-            response_format={"type": "text"},
             mock=True,
             mock_tokens=mock_tokens
         )
@@ -58,7 +57,6 @@ async def test_tpm_throttle() -> None:
             role="user",
             content="High token usage test"
         )],
-        response_format={"type": "text"},
         mock=True,
         mock_tokens=tokens_per_call
     )
@@ -76,7 +74,6 @@ async def test_tpm_throttle() -> None:
                 role="user",
                 content=f"Throttled message {i}"
             )],
-            response_format={"type": "text"},
             mock=True,
             mock_tokens=100  # Regular token usage
         )
@@ -107,7 +104,6 @@ async def test_tpm_soft_limit() -> None:
             role="user",
             content="High token usage test"
         )],
-        response_format={"type": "text"},
         mock=True,
         mock_tokens=tokens_per_call
     )
@@ -125,7 +121,6 @@ async def test_tpm_soft_limit() -> None:
                 role="user",
                 content=f"Throttled message {i}"
             )],
-            response_format={"type": "text"},
             mock=True,
             mock_tokens=100  # Regular token usage
         )

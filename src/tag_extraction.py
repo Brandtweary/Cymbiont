@@ -3,7 +3,7 @@ from json.decoder import JSONDecodeError
 from typing import List, Optional
 
 from shared_resources import logger, DEBUG_ENABLED
-from constants import TAG_EXTRACTION_OPENAI_MODEL
+from constants import TAG_EXTRACTION_MODEL
 from prompts import TAG_PROMPT, safe_format_prompt
 from custom_dataclasses import Chunk, ChatMessage
 from utils import log_performance
@@ -27,12 +27,11 @@ async def extract_tags(
         expiration_counter = 0
         while expiration_counter < 3:  # Allow up to 3 total attempts
             future = enqueue_api_call(
-                model=TAG_EXTRACTION_OPENAI_MODEL,
+                model=TAG_EXTRACTION_MODEL,
                 messages=[ChatMessage(
                     role="user",
                     content=mock_content if mock else tag_prompt
                 )],
-                response_format={"type": "json_object"},
                 mock=mock,
                 mock_tokens=100,
                 expiration_counter=expiration_counter,
@@ -63,7 +62,7 @@ async def extract_tags(
 
             # Success case
             chunk.tags = tags
-            chunk.metadata['tag_extraction_model'] = TAG_EXTRACTION_OPENAI_MODEL
+            chunk.metadata['tag_extraction_model'] = TAG_EXTRACTION_MODEL
             process_log.debug(f"Extracted tags: {tags}")
             process_log.info(f"Final attempt count: {expiration_counter}")
             return

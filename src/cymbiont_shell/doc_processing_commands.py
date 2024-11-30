@@ -64,6 +64,7 @@ async def do_parse_documents(args: str) -> None:
 async def do_revise_document(args: str) -> None:
     """
     Revise a document based on user instructions, running for a specified number of iterations.
+    This is mainly for burning API credits. Use at your own risk. 
     
     Usage: revise_document <document_name> [num_iterations]
     - document_name: Name of the document to revise
@@ -140,7 +141,6 @@ async def do_revise_document(args: str) -> None:
                 response = await enqueue_api_call(
                     model=REVISION_MODEL,
                     messages=[ChatMessage(role="system", content=system_message)],
-                    response_format={"type": "text"},
                     temperature=1.0  # Required for o1-preview
                 )
             except Exception as e:

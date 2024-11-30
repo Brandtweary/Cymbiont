@@ -185,7 +185,6 @@ class ChatHistory:
         response = await enqueue_api_call(
             model=PROGRESSIVE_SUMMARY_MODEL,
             messages=messages,
-            response_format={"type": "text"},
             temperature=0.3,
             max_completion_tokens=self.progressive_summary_token_limit
         )

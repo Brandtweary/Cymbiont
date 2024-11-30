@@ -71,8 +71,8 @@ async def get_response(
         if mock and mock_messages:
             messages_to_send = mock_messages
         else:
-            system_content_parts = [CHAT_AGENT_SYSTEM_PROMPT]
-
+            system_content_parts = [CHAT_AGENT_SYSTEM_PROMPT.format(agent_name=AGENT_NAME)]
+            
             if tool_loop_data:
                 system_content_parts.append(tool_loop_data.loop_message)
 
@@ -95,7 +95,6 @@ async def get_response(
             model=CHAT_AGENT_MODEL,
             messages=messages_to_send,
             tools=tools,
-            response_format={"type": "text"},
             temperature=0.7,
             mock=mock
         )
@@ -151,7 +150,7 @@ async def get_response(
 
         return content
     except Exception as e:
-        logger.error(f"Error communicating with OpenAI API: {e}")
+        logger.error(f"Error communicating with API: {e}")
         return "Sorry, I encountered an error while processing your request."
 
 
