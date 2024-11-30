@@ -15,6 +15,7 @@ from .doc_processing_commands import (
     do_process_documents,
     do_create_data_snapshot,
     do_parse_documents,
+    do_revise_document
 )
 from .test_commands import (
     do_test_api_queue,
@@ -43,6 +44,7 @@ class CymbiontShell:
             'process_documents': self.do_process_documents,
             'create_data_snapshot': self.do_create_data_snapshot,
             'parse_documents': self.do_parse_documents,
+            'revise_document': self.do_revise_document,
             'test_api_queue': self.do_test_api_queue,
             'test_document_processing': self.do_test_document_processing,
             'test_logger': self.do_test_logger,
@@ -160,7 +162,11 @@ class CymbiontShell:
             logger.error(f"Chat response failed: {str(e)}")
     
     async def execute_command(self, command: str, args: str, name: str = '') -> bool:
-        """Execute a shell command"""
+        """Execute a shell command
+        
+        Returns:
+            bool: True if the shell should exit, False otherwise
+        """
         try:
             # Log command execution
             if name:
@@ -172,9 +178,10 @@ class CymbiontShell:
                 f"{executor} executed: {command}{' ' + args if args else ''}"
             )
             
-            # Execute command - only return False if the command raises an exception
-            await self.commands[command](args)
-            return True
+            # Execute command and get return value
+            # Only exit commands should return True
+            should_exit = await self.commands[command](args)
+            return should_exit if isinstance(should_exit, bool) else False
             
         except Exception as e:
             logger.error(f"Command failed: {str(e)}")
@@ -233,6 +240,10 @@ class CymbiontShell:
         - document_name: Optional. If provided, only this file or folder will be tested.
                         Otherwise, tests all .txt and .md files."""
         await do_parse_documents(args)
+
+    async def do_revise_document(self, args: str) -> None:
+        """Revise a document"""
+        await do_revise_document(args)
 
     # Test commands
     async def do_test_api_queue(self, args: str) -> None:
