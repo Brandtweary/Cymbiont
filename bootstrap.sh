@@ -197,6 +197,63 @@ else
     fi
 fi
 
+# Environment configuration
+if [ -f .env ]; then
+    echo -e "\033[32m>> Found existing .env file\033[0m"
+    set -o allexport
+    source .env
+    set +o allexport
+else
+    echo -e "\033[34m>> No .env file found. Would you like to create one now? (y/n): \033[0m"
+    read create_env
+
+    if [[ ${create_env:0:1} =~ [yY] ]]; then
+        echo -e "\033[32m>> Creating .env file...\033[0m"
+        touch .env
+
+        echo -e "\033[34m>> Do you have an Anthropic API key? (y/n): \033[0m"
+        read has_anthropic
+        if [[ ${has_anthropic:0:1} =~ [yY] ]]; then
+            echo -e "\033[34m>> Please paste your Anthropic API key (Ctrl+Shift+V in most terminals): \033[0m"
+            read anthropic_key
+            # Check if key already has quotes
+            if [[ $anthropic_key =~ ^\".*\"$ ]]; then
+                echo "ANTHROPIC_API_KEY=$anthropic_key" >> .env
+            else
+                echo "ANTHROPIC_API_KEY=\"$anthropic_key\"" >> .env
+            fi
+            echo -e "\033[32m>> Anthropic API key saved. Please verify it was pasted correctly!\033[0m"
+        fi
+
+        echo -e "\033[34m>> Do you have an OpenAI API key? (y/n): \033[0m"
+        read has_openai
+        if [[ ${has_openai:0:1} =~ [yY] ]]; then
+            echo -e "\033[34m>> Please paste your OpenAI API key (Ctrl+Shift+V in most terminals): \033[0m"
+            read openai_key
+            # Check if key already has quotes
+            if [[ $openai_key =~ ^\".*\"$ ]]; then
+                echo "OPENAI_API_KEY=$openai_key" >> .env
+            else
+                echo "OPENAI_API_KEY=\"$openai_key\"" >> .env
+            fi
+            echo -e "\033[32m>> OpenAI API key saved. Please verify it was pasted correctly!\033[0m"
+        fi
+
+        set -o allexport
+        source .env
+        set +o allexport
+    else
+        echo -e "\033[33m>> Skipping .env creation\033[0m"
+    fi
+fi
+
+# Check API configuration status
+if [ -f .env ] && { [ ! -z "$OPENAI_API_KEY" ] || [ ! -z "$ANTHROPIC_API_KEY" ]; }; then
+    echo -e "\033[32m>> Model API: Configured\033[0m"
+else
+    echo -e "\033[31m>> Warning: No API key set\033[0m"
+fi
+
 # CUDA check (only if PyTorch was installed or was already present)
 if [ "$PYTORCH_INSTALLED" = true ]; then
     if python -c "import torch" &> /dev/null; then
@@ -221,21 +278,6 @@ if ping -c 1 8.8.8.8 >/dev/null 2>&1; then
 else
     echo -e "\033[32m>> Network Status: \033[31mOffline\033[0m"
     echo -e "\033[31m>> Warning: Internet connection required \033[0m"
-fi
-
-# Load environment variables from .env
-if [ -f .env ]; then
-    set -o allexport
-    source .env
-    set +o allexport
-    echo -e "\033[32m>> Environment file: \033[32mLoaded\033[0m"
-fi
-
-# Check for API keys
-if [ -z "$OPENAI_API_KEY" ]; then
-    echo -e "\033[31m>> Warning: OPENAI_API_KEY not set\033[0m"
-else
-    echo -e "\033[32m>> OpenAI API Key: Configured\033[0m"
 fi
 
 # After all setup is successful
