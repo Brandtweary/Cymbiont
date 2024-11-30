@@ -22,4 +22,4 @@ class ToolName(Enum):
 TAG_EXTRACTION_OPENAI_MODEL = "gpt-4o-mini"
 CHAT_AGENT_MODEL = "gpt-4o-mini"
 PROGRESSIVE_SUMMARY_MODEL = "gpt-4o-mini"
-REVISION_MODEL = "gpt-4o-mini"
+REVISION_MODEL = "o1-preview"

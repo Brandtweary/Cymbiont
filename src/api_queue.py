@@ -110,14 +110,24 @@ async def execute_call(call: APICall) -> None:
                 pass
         else:
             # Real API call logic
-            openai_messages = [
-                ChatCompletionSystemMessageParam(role="system", content=msg.content) if msg.role == "system"
-                else ChatCompletionUserMessageParam(role="user", content=msg.content, name=msg.name) if msg.role == "user" and msg.name
-                else ChatCompletionUserMessageParam(role="user", content=msg.content) if msg.role == "user"
-                else ChatCompletionAssistantMessageParam(role="assistant", content=msg.content, name=msg.name) if msg.role == "assistant" and msg.name
-                else ChatCompletionAssistantMessageParam(role="assistant", content=msg.content)
-                for msg in call.messages
-            ]
+            openai_messages = []
+            for msg in call.messages:
+                # For o1-preview models, convert system messages to user messages
+                if call.model.startswith('o1') and msg.role == "system":
+                    openai_messages.append(ChatCompletionUserMessageParam(role="user", content=msg.content))
+                else:
+                    if msg.role == "system":
+                        openai_messages.append(ChatCompletionSystemMessageParam(role="system", content=msg.content))
+                    elif msg.role == "user":
+                        if msg.name:
+                            openai_messages.append(ChatCompletionUserMessageParam(role="user", content=msg.content, name=msg.name))
+                        else:
+                            openai_messages.append(ChatCompletionUserMessageParam(role="user", content=msg.content))
+                    elif msg.role == "assistant":
+                        if msg.name:
+                            openai_messages.append(ChatCompletionAssistantMessageParam(role="assistant", content=msg.content, name=msg.name))
+                        else:
+                            openai_messages.append(ChatCompletionAssistantMessageParam(role="assistant", content=msg.content))
             
             # Build API parameters
             api_params = {

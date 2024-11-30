@@ -185,11 +185,6 @@ def get_paths(base_dir: Path) -> Paths:
         logger.error(f"Failed to get paths for {base_dir}: {str(e)}")
         raise
 
-def get_input_documents(base_dir: Path) -> List[Path]:
-    """Returns all .txt and .md files in the input documents directory"""
-    paths = get_paths(base_dir)
-    return sorted([p for p in paths.docs_dir.glob("*") if p.suffix in [".txt", ".md"]])
-
 def delete_logs(base_dir: Path) -> None:
     """Delete all log files if DELETE_LOGS is True"""
     if not DELETE_LOGS:

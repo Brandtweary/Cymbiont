@@ -121,27 +121,36 @@ async def do_revise_document(args: str) -> None:
             
             # Create system message for this iteration
             system_message = (
-                f"You are revising a document based on the following instructions:\n\n"
+                f"You are revising a document iteratively based on the following instructions:\n\n"
                 f"{instructions_text}\n\n"
                 f"Here is the current document text:\n\n{current_text}\n\n"
-                f"Please output the complete revised document text. Do not include any meta remarks "
-                f"about the revision process. Even if you only edit a small part, output the entire "
-                f"document text. Your response will be saved directly as the new document content."
+                '''
+                Please output the entire revised document text.
+                Each draft should maintain the hierarchical structure and include all details from the previous version - do not remove or omit any sections, but rather expand and enhance them. 
+                When adding new content, integrate it naturally into the existing structure by either expanding current sections or adding appropriate new subsections. 
+                You may reorganize content if it improves clarity, but ensure no information is lost in the process. 
+                Your revision should represent a clear improvement over the previous version, whether through adding implementation details, clarifying existing points, identifying potential challenges, or introducing new considerations. 
+                Remember that this is an iterative process - you don't need to solve everything at once, but each revision should move the document forward while maintaining its comprehensive nature.
+                '''
             )
             logger.log(LogLevel.PROMPT, system_message)
             
             # Get the revised text from the agent
-            response = await enqueue_api_call(
-                model=REVISION_MODEL,
-                messages=[ChatMessage(role="system", content=system_message)],
-                response_format={"type": "text"},
-                temperature=0.7
-            )
+            try:
+                response = await enqueue_api_call(
+                    model=REVISION_MODEL,
+                    messages=[ChatMessage(role="system", content=system_message)],
+                    response_format={"type": "text"},
+                    temperature=1.0  # Required for o1-preview
+                )
+            except Exception as e:
+                logger.error(f"API error during iteration {i+1}: {str(e)}")
+                break
             
             revised_text = response.get("content", "")
             if not revised_text:
                 logger.error(f"Error: Received empty response in iteration {i+1}")
-                return
+                break
                 
             current_text = revised_text
 
