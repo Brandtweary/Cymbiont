@@ -132,7 +132,8 @@ async def get_response(
                     prefixed_message = user_message if user_message.startswith(prefix) else prefix + user_message
                 else:
                     prefixed_message = user_message
-                chat_history.add_message("assistant", prefixed_message, name=AGENT_NAME)
+                if not (tool_loop_data and not tool_loop_data.active):
+                    chat_history.add_message("assistant", prefixed_message, name=AGENT_NAME)
                 return user_message
             return ''
 
@@ -157,7 +158,8 @@ async def get_response(
         else:
             prefixed_content = content
 
-        chat_history.add_message("assistant", prefixed_content, name=AGENT_NAME)
+        if not (tool_loop_data and not tool_loop_data.active):
+            chat_history.add_message("assistant", prefixed_content, name=AGENT_NAME)
 
         return content
     except Exception as e:

@@ -3,7 +3,7 @@ from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from openai.types.shared_params.response_format_text import ResponseFormatText
 from agents.tool_schemas import TOOL_SCHEMAS
-from custom_dataclasses import APICall
+from custom_dataclasses import APICall, ChatMessage
 import time
 import json
 from typing import Dict, Any
@@ -93,25 +93,57 @@ def convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
     processed_messages = []
     pending_system_msgs = []
     
-    for msg in messages:
+    def flush_system_messages():
+        if not pending_system_msgs:
+            return
+        system_content = "\n\n".join(pending_system_msgs)
+        
+        # Case 1: Append to prior user message if it exists
+        if processed_messages and processed_messages[-1].role == "user":
+            processed_messages[-1].content = f"{processed_messages[-1].content}\n\nSYSTEM: {system_content}"
+        # Case 3: Create new user message if no prior user message
+        else:
+            processed_messages.append(ChatMessage(
+                role="user",
+                content=f"SYSTEM: {system_content}",
+                name=None
+            ))
+        pending_system_msgs.clear()
+    
+    for i, msg in enumerate(messages):
+        # Handle system messages
         if msg.role == "system":
             pending_system_msgs.append(msg.content)
+            # Look ahead to next non-system message
+            next_msg = None
+            for future_msg in messages[i+1:]:
+                if future_msg.role != "system":
+                    next_msg = future_msg
+                    break
+            
+            # Case 2: If next message is user, save for prepending
+            # Otherwise, flush system messages now
+            if not next_msg or next_msg.role != "user":
+                flush_system_messages()
             continue
-            
-        content = msg.content
-        if pending_system_msgs and msg.role == "user":
+        
+        # Add name prefix for user messages
+        if msg.role == "user" and msg.name:
+            msg.content = f"{msg.name.upper()}: {msg.content}"
+        
+        # If this is a user message and there are pending system messages,
+        # prepend them (Case 2)
+        if msg.role == "user" and pending_system_msgs:
             system_content = "\n\n".join(pending_system_msgs)
-            if msg.name:
-                content = f"{msg.name.upper()}: {content}"
-            content = f"SYSTEM: {system_content}\n\n{content}"
-            pending_system_msgs = []
-        elif msg.role == "user" and msg.name:
-            content = f"{msg.name.upper()}: {content}"
-            
-        msg.content = content
+            msg.content = f"SYSTEM: {system_content}\n\n{msg.content}"
+            pending_system_msgs.clear()
+        
         processed_messages.append(msg)
     
-    messages = processed_messages  # Replace messages with processed version
+    # Handle any remaining system messages at the end
+    flush_system_messages()
+    
+    messages = processed_messages
     
     # Group messages by name and role
     current_group = []
@@ -133,7 +165,7 @@ def convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
         
         content = "\n\n".join(contents)
         
-        # For assistant messages, add name prefix after combining
+        # For assistant messages, add name prefix only in the Anthropic message
         if role == "assistant" and name:
             content = f"{name.upper()}: {content}"
         
@@ -166,7 +198,7 @@ def convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
         if prev_role and prev_role == msg["role"]:
             final_messages.append({
                 "role": "assistant" if msg["role"] == "user" else "user",
-                "content": " "
+                "content": "..."
             })
         final_messages.append(msg)
         prev_role = msg["role"]
