@@ -64,7 +64,9 @@ class APICall:
 
 @dataclass
 class TokenUsage:
-    tokens: int
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
     timestamp: float
 
 @dataclass

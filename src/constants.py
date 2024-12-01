@@ -25,11 +25,38 @@ class LLM(Enum):
     SONNET_3_5 = "claude-3-5-sonnet-latest"
     HAIKU_3_5 = "claude-3-5-haiku-latest"
 
-# Map models to their providers
-MODEL_PROVIDERS = {
-    LLM.GPT_4O.value: "openai",
-    LLM.GPT_4O_MINI.value: "openai",
-    LLM.O1_PREVIEW.value: "openai",
-    LLM.SONNET_3_5.value: "anthropic",
-    LLM.HAIKU_3_5.value: "anthropic",
+# Rate limits are assuming tier 2 API access for both OpenAI and Anthropic
+model_data = {
+    LLM.SONNET_3_5.value: {
+        "provider": "anthropic",
+        "max_output_tokens": 200000,
+        "requests_per_minute": 1000,
+        "input_tokens_per_minute": 80000,
+        "output_tokens_per_minute": 16000
+    },
+    LLM.HAIKU_3_5.value: {
+        "provider": "anthropic",
+        "max_output_tokens": 200000,
+        "requests_per_minute": 1000,
+        "input_tokens_per_minute": 100000,
+        "output_tokens_per_minute": 20000
+    },
+    LLM.GPT_4O.value: {
+        "provider": "openai",
+        "max_output_tokens": 16384,
+        "requests_per_minute": 5000,
+        "total_tokens_per_minute": 450000
+    },
+    LLM.GPT_4O_MINI.value: {
+        "provider": "openai",
+        "max_output_tokens": 16384,
+        "requests_per_minute": 5000,
+        "total_tokens_per_minute": 2000000
+    },
+    LLM.O1_PREVIEW.value: {
+        "provider": "openai",
+        "max_output_tokens": 16384,
+        "requests_per_minute": 5000,
+        "total_tokens_per_minute": 450000
+    }
 }

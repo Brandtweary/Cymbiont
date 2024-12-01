@@ -2,7 +2,7 @@ from enum import Enum
 import os
 from typing import Optional
 from shared_resources import config, logger
-from constants import LLM, MODEL_PROVIDERS
+from constants import LLM, model_data
 
 
 def get_available_providers():
@@ -42,10 +42,10 @@ def initialize_model_configuration():
 
     # Validate and potentially adjust each model based on available providers
     for model_key, model_value in model_configs.items():
-        if model_value not in MODEL_PROVIDERS:
+        if model_value not in model_data:
             raise ValueError(f"Invalid model {model_value} specified in config")
             
-        provider = MODEL_PROVIDERS[model_value]
+        provider = model_data[model_value]["provider"]
         if provider not in available_providers:
             fallback = get_fallback_model(model_value, available_providers)
             if not fallback:

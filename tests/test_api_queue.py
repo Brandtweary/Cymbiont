@@ -1,18 +1,23 @@
 import asyncio
 from typing import List
-from api_queue import enqueue_api_call, BATCH_TIMER, BATCH_LIMIT, TOKENS_PER_MINUTE, TPM_SOFT_LIMIT, is_queue_empty, clear_token_history
+from api_queue import enqueue_api_call, BATCH_INTERVAL_TIME, TPM_SOFT_LIMIT, is_queue_empty, clear_token_history
 from shared_resources import logger
 from custom_dataclasses import ChatMessage
+from constants import LLM, model_data
 
 async def test_rpm_rate_limiting() -> None:
     """Test RPM rate limiting processes correct batch size."""
-    num_requests: int = 20  # Reduced from 160 to 20
+    model = LLM.GPT_4O.value
+    model_config = model_data[model]
+    rpm_limit = model_config["requests_per_minute"]
+    batch_limit = int(rpm_limit * BATCH_INTERVAL_TIME / 60)  # Calculate how many requests we can make per batch
+    num_requests: int = batch_limit * 4  # Request 4 batches worth
     futures: List[asyncio.Future] = []
     mock_tokens: int = 100
 
     for i in range(num_requests):
         future = enqueue_api_call(
-            model="gpt-4",
+            model=model,
             messages=[ChatMessage(
                 role="user",
                 content=f"Test message {i}"
@@ -23,18 +28,13 @@ async def test_rpm_rate_limiting() -> None:
         futures.append(future)
 
     # Wait for two batch cycles
-    await asyncio.sleep(BATCH_TIMER * 2)
+    await asyncio.sleep(BATCH_INTERVAL_TIME * 2)
 
     # Verify completed requests
     completed = [f for f in futures if f.done() and not f.exception()]
-    expected_min = BATCH_LIMIT * 2
-    expected_max = (BATCH_LIMIT + 1) * 2
-    assert expected_min <= len(completed) <= expected_max, (
-        f"Expected between {expected_min} and {expected_max} completed requests, "
-        f"got {len(completed)}"
-    )
-    assert len(completed) == BATCH_LIMIT * 2, (
-        f"Expected {BATCH_LIMIT * 2} completed requests, got {len(completed)}"
+    expected = batch_limit * 2  # Should complete 2 batches worth
+    assert len(completed) == expected, (
+        f"Expected {expected} completed requests, got {len(completed)}"
     )
     assert all(f.result()["content"] == f"Test message {i}" for i, f in enumerate(completed)), (
         "Responses should match mock response"
@@ -49,10 +49,14 @@ async def test_rpm_rate_limiting() -> None:
 
 async def test_tpm_throttle() -> None:
     """Test that high token usage properly throttles the queue."""
+    model = LLM.GPT_4O.value
+    model_config = model_data[model]
+    tpm_limit = model_config["total_tokens_per_minute"]
+
     # Step 1: Enqueue a call that exceeds the TPM limit
-    tokens_per_call: int = int(TOKENS_PER_MINUTE * 1.1)  # Exceeds TPM limit
+    tokens_per_call: int = int(tpm_limit * 1.1)  # Exceeds TPM limit
     high_token_call = enqueue_api_call(
-        model="gpt-4",
+        model=model,
         messages=[ChatMessage(
             role="user",
             content="High token usage test"
@@ -62,14 +66,14 @@ async def test_tpm_throttle() -> None:
     )
 
     # Step 2: Wait for the high token call to be processed
-    await asyncio.sleep(BATCH_TIMER)
+    await asyncio.sleep(BATCH_INTERVAL_TIME)
     assert high_token_call.done() and not high_token_call.exception(), "High token call did not complete as expected."
 
     # Step 3: Enqueue additional API calls subject to throttling
     new_futures: List[asyncio.Future] = []
     for i in range(3):
         future = enqueue_api_call(
-            model="gpt-4",
+            model=model,
             messages=[ChatMessage(
                 role="user",
                 content=f"Throttled message {i}"
@@ -80,7 +84,7 @@ async def test_tpm_throttle() -> None:
         new_futures.append(future)
 
     # Step 4: Wait for the new batch to be processed
-    await asyncio.sleep(BATCH_TIMER * 1.5)  # Slightly extended sleep for processing
+    await asyncio.sleep(BATCH_INTERVAL_TIME * 1.5)  # Slightly extended sleep for processing
 
     # Step 5: Verify that throttling has been applied
     completed = [f for f in new_futures if f.done() and not f.exception()]
@@ -96,10 +100,14 @@ async def test_tpm_throttle() -> None:
 
 async def test_tpm_soft_limit() -> None:
     """Test that token usage near the soft limit properly throttles the queue."""
+    model = LLM.GPT_4O.value
+    model_config = model_data[model]
+    tpm_limit = model_config["total_tokens_per_minute"]
+
     # Step 1: Enqueue a call that exceeds the TPM soft limit
-    tokens_per_call: int = int(TOKENS_PER_MINUTE * TPM_SOFT_LIMIT * 1.1)  # 10% over soft limit
+    tokens_per_call: int = int(tpm_limit * TPM_SOFT_LIMIT * 1.1)  # 10% over soft limit
     high_token_call = enqueue_api_call(
-        model="gpt-4",
+        model=model,
         messages=[ChatMessage(
             role="user",
             content="High token usage test"
@@ -109,14 +117,14 @@ async def test_tpm_soft_limit() -> None:
     )
 
     # Step 2: Wait for the high token call to be processed
-    await asyncio.sleep(BATCH_TIMER * 2)  # Allow sufficient time for processing
+    await asyncio.sleep(BATCH_INTERVAL_TIME * 2)  # Allow sufficient time for processing
     assert high_token_call.done() and not high_token_call.exception(), "High token call did not complete as expected."
 
     # Step 3: Enqueue additional API calls subject to throttling
     new_futures: List[asyncio.Future] = []
     for i in range(3):
         future = enqueue_api_call(
-            model="gpt-4",
+            model=model,
             messages=[ChatMessage(
                 role="user",
                 content=f"Throttled message {i}"
@@ -127,7 +135,7 @@ async def test_tpm_soft_limit() -> None:
         new_futures.append(future)
 
     # Step 4: Wait for the new batch to be processed
-    await asyncio.sleep(BATCH_TIMER * 2)  # Allow time for throttling to take effect
+    await asyncio.sleep(BATCH_INTERVAL_TIME * 2)  # Allow time for throttling to take effect
 
     # Step 5: Verify that throttling has been applied correctly
     completed = [f for f in new_futures if f.done() and not f.exception()]

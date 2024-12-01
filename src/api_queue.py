@@ -10,24 +10,20 @@ from openai.types.shared_params.response_format_json_object import ResponseForma
 from openai.types.shared_params.response_format_text import ResponseFormatText
 from custom_dataclasses import APICall, TokenUsage, ChatMessage
 from process_log import ProcessLog
-from constants import ToolName
-from model_configuration import MODEL_PROVIDERS
+from constants import LLM, model_data, ToolName
 from tool_schemas import TOOL_SCHEMAS
 
 # Constants
-REQUESTS_PER_MINUTE: int = 5000
-TOKENS_PER_MINUTE: int = 2000000
-BATCH_TIMER: float = 0.1  # seconds
-BATCH_LIMIT: int = int(REQUESTS_PER_MINUTE * BATCH_TIMER / 60)  # requests per batch
+BATCH_INTERVAL_TIME: float = 1/15  # seconds
 TPM_WINDOW: float = 60.0  # seconds to look back for token usage
 TOKEN_HISTORY_SIZE: int = 1000
 TPM_SOFT_LIMIT: float = 0.75  # percentage where interpolation begins
 
 # Global state
-_pending_calls: deque[APICall] = deque()
-_processor_task: Optional[asyncio.Task] = None
-_batch_lock = asyncio.Lock()
-_token_history: deque[TokenUsage] = deque(maxlen=TOKEN_HISTORY_SIZE)
+pending_calls: deque[APICall] = deque()
+processor_task: Optional[asyncio.Task] = None
+batch_lock = asyncio.Lock()
+token_history: Dict[str, List[TokenUsage]] = {}  # per-model token history
 
 def _convert_to_openai_params(call: APICall) -> Dict[str, Any]:
     """Convert APICall to OpenAI API parameters."""
@@ -152,7 +148,7 @@ def _convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
     # Flush the final group
     flush_group()
     
-    # Ensure alternating pattern by adding messages with {no content}
+    # Ensure alternating pattern by adding messages with [NONE]
     final_messages = []
     prev_role = None
     
@@ -160,7 +156,7 @@ def _convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
         if prev_role and prev_role == msg["role"]:
             final_messages.append({
                 "role": "assistant" if msg["role"] == "user" else "user",
-                "content": "{NO CONTENT}"
+                "content": "[NONE]"
             })
         final_messages.append(msg)
         prev_role = msg["role"]
@@ -214,42 +210,115 @@ def _convert_from_anthropic_response(response, call: APICall) -> Dict[str, Any]:
 
 async def process_pending_calls() -> None:
     """Process pending API calls within rate limits.
-    Processes up to BATCH_LIMIT calls every BATCH_TIMER seconds."""
+    Processes calls on a per-model basis within their respective rate limits."""
     while True:
         try:
-            async with _batch_lock:
+            async with batch_lock:
                 current_time = time.time()
                 
-                # Clean up old token usage records and calculate recent usage
-                while _token_history and _token_history[0].timestamp < current_time - TPM_WINDOW:
-                    _token_history.popleft()
+                # Clean up old token usage records
+                for model in list(token_history.keys()):
+                    history = token_history[model]
+                    cutoff_idx = 0
+                    for idx, usage in enumerate(history):
+                        if usage.timestamp >= current_time - TPM_WINDOW:
+                            break
+                        cutoff_idx = idx + 1
+                    if cutoff_idx > 0:
+                        token_history[model] = history[cutoff_idx:]
                 
-                recent_tokens = sum(usage.tokens for usage in _token_history)
-                tokens_per_minute = recent_tokens * (60 / TPM_WINDOW)  # extrapolate to per-minute rate
+                # Group pending calls by model
+                model_calls: Dict[str, List[APICall]] = {}
+                for call in pending_calls:
+                    if call.model not in model_calls:
+                        model_calls[call.model] = []
+                    model_calls[call.model].append(call)
                 
-                # Calculate interpolated batch limit
-                interpolation_factor = 1.0
-                if tokens_per_minute > TOKENS_PER_MINUTE * TPM_SOFT_LIMIT:
-                    # Linear interpolation between soft limit and hard limit
-                    interpolation_factor = max(0.0, 
-                        1.0 - (tokens_per_minute - TOKENS_PER_MINUTE * TPM_SOFT_LIMIT) / 
-                        (TOKENS_PER_MINUTE * (1.0 - TPM_SOFT_LIMIT)))
-                
-                interpolated_batch_limit = int(BATCH_LIMIT * interpolation_factor)
-                
-                # Process up to interpolated_batch_limit calls
+                # Process each model's calls separately
                 calls_to_process = []
-                while _pending_calls and len(calls_to_process) < interpolated_batch_limit:
-                    calls_to_process.append(_pending_calls.popleft())
+                for model, calls in model_calls.items():
+                    model_config = model_data[model]
+                    
+                    # Calculate requests per minute limit
+                    rpm_limit = model_config.get("requests_per_minute", float('inf'))
+                    model_batch_limit = int(rpm_limit / (60 / BATCH_INTERVAL_TIME))
+                    
+                    # Calculate token-based interpolation factor
+                    interpolation_factor = 1.0
+                    if model not in token_history:
+                        token_history[model] = []
+                    
+                    # Get recent token usage for this model
+                    recent_usage = token_history[model]
+                    
+                    if "total_tokens_per_minute" in model_config:
+                        # OpenAI-style total token limiting
+                        total_tokens = sum(usage.total_tokens for usage in recent_usage)
+                        tokens_per_minute = total_tokens * (60 / TPM_WINDOW)
+                        limit = model_config["total_tokens_per_minute"]
+                        
+                        if tokens_per_minute > limit * TPM_SOFT_LIMIT:
+                            interpolation_factor = max(0.0,
+                                1.0 - (tokens_per_minute - limit * TPM_SOFT_LIMIT) /
+                                (limit * (1.0 - TPM_SOFT_LIMIT)))
+                    else:
+                        # Anthropic-style separate input/output token limiting
+                        input_factor = output_factor = 1.0
+                        
+                        if "input_tokens_per_minute" in model_config:
+                            input_tokens = sum(usage.input_tokens for usage in recent_usage)
+                            input_tpm = input_tokens * (60 / TPM_WINDOW)
+                            input_limit = model_config["input_tokens_per_minute"]
+                            
+                            if input_tpm > input_limit * TPM_SOFT_LIMIT:
+                                input_factor = max(0.0,
+                                    1.0 - (input_tpm - input_limit * TPM_SOFT_LIMIT) /
+                                    (input_limit * (1.0 - TPM_SOFT_LIMIT)))
+                        
+                        if "output_tokens_per_minute" in model_config:
+                            output_tokens = sum(usage.output_tokens for usage in recent_usage)
+                            output_tpm = output_tokens * (60 / TPM_WINDOW)
+                            output_limit = model_config["output_tokens_per_minute"]
+                            
+                            if output_tpm > output_limit * TPM_SOFT_LIMIT:
+                                output_factor = max(0.0,
+                                    1.0 - (output_tpm - output_limit * TPM_SOFT_LIMIT) /
+                                    (output_limit * (1.0 - TPM_SOFT_LIMIT)))
+                        
+                        # Use the more restrictive factor
+                        interpolation_factor = min(input_factor, output_factor)
+                    
+                    # Calculate final batch limit for this model
+                    model_interpolated_limit = int(model_batch_limit * interpolation_factor)
+                    
+                    # Select calls to process for this model
+                    model_calls_to_process = []
+                    while calls and len(model_calls_to_process) < model_interpolated_limit:
+                        model_calls_to_process.append(calls.pop(0))
+                    
+                    if model_calls_to_process:
+                        logger.debug(
+                            f"Processing {len(model_calls_to_process)} API calls "
+                            f"(TPM factor: {interpolation_factor:.2f})"
+                        )
+                    
+                    calls_to_process.extend(model_calls_to_process)
                 
+                # Remove processed calls from pending_calls
+                remaining_calls = deque()
+                for call in pending_calls:
+                    if call not in calls_to_process:
+                        remaining_calls.append(call)
+                pending_calls.clear()
+                pending_calls.extend(remaining_calls)
+                
+                # Create tasks for processing
                 if calls_to_process:
-                    logger.debug(f"Creating {len(calls_to_process)} API call tasks " +
-                               f"(TPM: {tokens_per_minute:.0f}, factor: {interpolation_factor:.2f})")
                     for call in calls_to_process:
                         asyncio.create_task(execute_call(call))
             
             # Wait for next batch window
-            await asyncio.sleep(BATCH_TIMER)
+            await asyncio.sleep(BATCH_INTERVAL_TIME)
         except Exception as e:
             logger.error(f"Error in processor: {str(e)}")
             if asyncio.get_event_loop().get_debug():
@@ -261,7 +330,7 @@ async def execute_call(call: APICall) -> None:
         if call.mock:
             # Check for the special error-triggering message
             if any(msg.content == "halt and catch fire" for msg in call.messages):
-                raise RuntimeError(" The system caught fire, as requested")
+                raise RuntimeError("🔥 The system caught fire, as requested")
                 
             # Regular mock logic continues...
             mock_tokens = call.mock_tokens if call.mock_tokens is not None else len(call.messages[-1].content.split())
@@ -302,9 +371,15 @@ async def execute_call(call: APICall) -> None:
             else:
                 raise ValueError(f"Unknown provider: {call.provider}")
         
+        # Initialize token history for model if it doesn't exist
+        if call.model not in token_history:
+            token_history[call.model] = []
+            
         # Add token usage to history (both real and mock calls)
-        _token_history.append(TokenUsage(
-            tokens=result["token_usage"]["total_tokens"],
+        token_history[call.model].append(TokenUsage(
+            input_tokens=result["token_usage"]["prompt_tokens"],
+            output_tokens=result["token_usage"]["completion_tokens"],
+            total_tokens=result["token_usage"]["total_tokens"],
             timestamp=time.time()
         ))
         
@@ -331,7 +406,7 @@ async def execute_call(call: APICall) -> None:
                 max_completion_tokens=call.max_completion_tokens,
                 tools=call.tools 
             )
-            _pending_calls.append(new_call)
+            pending_calls.append(new_call)
         else:
             # Add standardized attempt count message
             attempt_msg = f"Final attempt count: {call.expiration_counter + 1}"
@@ -359,9 +434,20 @@ def enqueue_api_call(
 ) -> asyncio.Future[Dict[str, Any]]:
     """Enqueue an API call with retry counter."""
     try:
-        provider = MODEL_PROVIDERS[model]
+        model_config = model_data[model]
+        provider = model_config["provider"]
+        
+        # Enforce max_output_tokens limit
+        model_max_tokens = model_config["max_output_tokens"]
+        if max_completion_tokens > model_max_tokens:
+            logger.warning(
+                f"Requested max_completion_tokens ({max_completion_tokens}) exceeds model's "
+                f"max_output_tokens ({model_max_tokens}). Reducing to {model_max_tokens}."
+            )
+            max_completion_tokens = model_max_tokens
+            
     except KeyError:
-        raise ValueError(f"Unknown model: {model}. Model must be one of: {list(MODEL_PROVIDERS.keys())}")
+        raise ValueError(f"Unknown model: {model}. Model must be one of: {list(model_data.keys())}")
     
     call = APICall(
         model=model,
@@ -377,32 +463,32 @@ def enqueue_api_call(
         max_completion_tokens=max_completion_tokens,
         tools=tools
     )
-    _pending_calls.append(call)
+    pending_calls.append(call)
     return call.future
 
 def is_queue_empty() -> bool:
     """Check if the API queue is empty."""
-    return len(_pending_calls) == 0
+    return len(pending_calls) == 0
 
 async def clear_token_history() -> None:
     """Clear the token history to prevent test contamination."""
-    global _token_history
-    _token_history.clear()
+    global token_history
+    token_history.clear()
     logger.debug("Token history cleared.")
 
 async def start_api_queue() -> None:
     """Start the API queue processor."""
-    global _processor_task
-    if _processor_task is None:
-        _processor_task = asyncio.create_task(process_pending_calls())
+    global processor_task
+    if processor_task is None:
+        processor_task = asyncio.create_task(process_pending_calls())
 
 async def stop_api_queue() -> None:
     """Stop the API queue processor."""
-    global _processor_task
-    if _processor_task is not None:
-        _processor_task.cancel()
+    global processor_task
+    if processor_task is not None:
+        processor_task.cancel()
         try:
-            await _processor_task
+            await processor_task
         except asyncio.CancelledError:
             pass
-        _processor_task = None
+        processor_task = None
