@@ -89,6 +89,30 @@ def convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
     if system_message:
         api_params["system"] = system_message.content
     
+    # Group remaining system messages with next user message
+    processed_messages = []
+    pending_system_msgs = []
+    
+    for msg in messages:
+        if msg.role == "system":
+            pending_system_msgs.append(msg.content)
+            continue
+            
+        content = msg.content
+        if pending_system_msgs and msg.role == "user":
+            system_content = "\n\n".join(pending_system_msgs)
+            if msg.name:
+                content = f"{msg.name.upper()}: {content}"
+            content = f"SYSTEM: {system_content}\n\n{content}"
+            pending_system_msgs = []
+        elif msg.role == "user" and msg.name:
+            content = f"{msg.name.upper()}: {content}"
+            
+        msg.content = content
+        processed_messages.append(msg)
+    
+    messages = processed_messages  # Replace messages with processed version
+    
     # Group messages by name and role
     current_group = []
     anthropic_messages = []
@@ -99,8 +123,8 @@ def convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
         if not current_group:
             return
         # Get role and name from the first message in group
-        role = "user" if current_group[0].role == "system" else current_group[0].role
-        name = current_group[0].name if current_group[0].name else "System" if current_group[0].role == "system" else None
+        role = current_group[0].role
+        name = current_group[0].name
         
         # Combine contents with double newlines
         contents = [msg.content for msg in current_group if msg.content.strip()]
@@ -108,7 +132,9 @@ def convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
             return
         
         content = "\n\n".join(contents)
-        if name:
+        
+        # For assistant messages, add name prefix after combining
+        if role == "assistant" and name:
             content = f"{name.upper()}: {content}"
         
         anthropic_messages.append({
@@ -117,8 +143,8 @@ def convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
         })
     
     for msg in messages:
-        name = msg.name if msg.name else "System" if msg.role == "system" else None
-        role = "user" if msg.role == "system" else msg.role
+        name = msg.name
+        role = msg.role
         
         # If name or role changes, flush the current group
         if name != prev_name or role != prev_role:
@@ -132,7 +158,7 @@ def convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
     # Flush the final group
     flush_group()
     
-    # Ensure alternating pattern by adding messages with [NONE]
+    # Ensure alternating pattern by adding messages
     final_messages = []
     prev_role = None
     
@@ -140,12 +166,13 @@ def convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
         if prev_role and prev_role == msg["role"]:
             final_messages.append({
                 "role": "assistant" if msg["role"] == "user" else "user",
-                "content": "[NONE]"
+                "content": " "
             })
         final_messages.append(msg)
         prev_role = msg["role"]
     
     api_params["messages"] = final_messages
+    print(final_messages)
     
     # Convert tool schemas if present
     if call.tools:

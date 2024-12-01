@@ -31,6 +31,8 @@ The user may also ask you to execute a shell command with arguments, for example
 
 If you are not sure which command to use, just ask the user for clarification.
 If the user does not know which commands are available, execute the 'help' command for them.
+
+Do not prefix your name in front of your responses. The prefix 'NAME: ' is applied automatically.
 '''
 
 PROGRESSIVE_SUMMARY_PROMPT = '''You are a highly skilled AI trained in conversation summarization. Your task is to create a concise yet comprehensive summary of the following conversation. Focus on:

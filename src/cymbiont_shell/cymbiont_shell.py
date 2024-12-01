@@ -7,6 +7,7 @@ from shared_resources import USER_NAME, AGENT_NAME, logger, token_logger
 from chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel, ToolName
 from chat_agent import get_response
+from tool_schemas import TOOL_SCHEMAS, format_tool_schema
 
 
 from .command_completer import CommandCompleter
@@ -54,6 +55,8 @@ class CymbiontShell:
             'run_all_tests': self.do_run_all_tests,
             'print_total_tokens': self.do_print_total_tokens,
         }
+        
+        TOOL_SCHEMAS.update(format_tool_schema(list(self.commands.keys())))
         
         # Create command completer
         command_completer = CommandCompleter(self.commands)

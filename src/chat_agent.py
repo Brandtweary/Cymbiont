@@ -141,6 +141,16 @@ async def get_response(
             return "Sorry, I encountered an error while processing your request."
 
         content = response["content"]
+        # Remove any agent name prefix if present (both regular and uppercase)
+        prefixes = [
+            f"{AGENT_NAME}: ",
+            f"{AGENT_NAME.upper()}: "
+        ]
+        for prefix in prefixes:
+            if content.startswith(prefix):
+                content = content[len(prefix):]
+                break
+
         if tool_loop_data and tool_loop_data.loop_type:
             prefix = f"[{tool_loop_data.loop_type}_LOOP] "
             prefixed_content = content if content.startswith(prefix) else prefix + content
