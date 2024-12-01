@@ -67,18 +67,41 @@ async def do_revise_document(args: str) -> None:
     Revise a document based on user instructions, running for a specified number of iterations.
     This is mainly for burning API credits. Use at your own risk. 
     
-    Usage: revise_document <document_name> [num_iterations]
+    Usage: revise_document <document_name> [num_iterations] ["instructions"]
     - document_name: Name of the document to revise
     - num_iterations: Optional. Number of iterations to run the revision process. Defaults to 1.
+    - instructions: Optional. Instructions for revision as a quoted string. 
+                   If not provided, will prompt interactively.
     """
     with token_logger.show_tokens():
-        arg_parts = args.split()
+        # Split args while preserving quoted strings
+        import shlex
+        try:
+            arg_parts = shlex.split(args)
+        except ValueError as e:
+            logger.error(f"Error parsing arguments: {str(e)}")
+            return
+            
         if not arg_parts:
             logger.error("Error: Please provide the document name and optionally the number of iterations")
             return
         
         doc_name = arg_parts[0]
-        iterations = int(arg_parts[1]) if len(arg_parts) > 1 else 1
+        
+        # Parse optional arguments
+        iterations = 1
+        instructions_text = None
+        
+        if len(arg_parts) > 1:
+            try:
+                iterations = int(arg_parts[1])
+            except ValueError:
+                # If second argument isn't a number, treat it as instructions
+                instructions_text = ' '.join(arg_parts[1:])
+            else:
+                # If we got a valid number and there are more args, they're instructions
+                if len(arg_parts) > 2:
+                    instructions_text = ' '.join(arg_parts[2:])
         
         paths = get_paths(DATA_DIR)
         input_docs = find_unprocessed_documents(paths)
@@ -94,38 +117,34 @@ async def do_revise_document(args: str) -> None:
             logger.error(f"Document '{doc_name}' not found in input documents directory.")
             return
 
-        # Create prompt session for getting revision instructions
-        style = Style.from_dict({
-            'prompt': '#00FFFF',  # Bright cyan
-        })
-        session = PromptSession(
-            style=style,
-            message=[('class:prompt', 'Enter revision instructions: ')]
-        )
-        
-        # Get user instructions for revision
-        instructions_text = await session.prompt_async()
+        # Only create prompt session if instructions weren't provided
+        if instructions_text is None:
+            style = Style.from_dict({
+                'prompt': '#00FFFF',  # Bright cyan
+            })
+            session = PromptSession(
+                style=style,
+                message=[('class:prompt', 'Enter revision instructions: ')]
+            )
+            
+            # Get user instructions for revision
+            instructions_text = await session.prompt_async()
+            
         if not instructions_text.strip():
             logger.error("No revision instructions provided.")
             return
 
-        # Read the original document
-        doc_text = target_doc.read_text()
-        
         # Create output document path
         output_name = f"{target_doc.stem}_revised{target_doc.suffix}"
         output_path = paths.docs_dir / output_name
         
         # Perform revisions
-        current_text = doc_text
+        current_text = target_doc.read_text()
         for i in range(iterations):
             logger.info(f"Starting revision iteration {i+1}/{iterations}")
             
             # Create system message for this iteration
             system_message = (
-                f"You are revising a document iteratively based on the following instructions:\n\n"
-                f"{instructions_text}\n\n"
-                f"Here is the current document text:\n\n{current_text}\n\n"
                 '''
                 Please output the entire revised document text.
                 Each draft should maintain the hierarchical structure and include all details from the previous version - do not remove or omit any sections, but rather expand and enhance them. 
@@ -133,15 +152,27 @@ async def do_revise_document(args: str) -> None:
                 You may reorganize content if it improves clarity, but ensure no information is lost in the process. 
                 Your revision should represent a clear improvement over the previous version, whether through adding implementation details, clarifying existing points, identifying potential challenges, or introducing new considerations. 
                 Remember that this is an iterative process - you don't need to solve everything at once, but each revision should move the document forward while maintaining its comprehensive nature.
+                Do not include meta remarks about the revision process.
                 '''
             )
+
+            user_message = (
+                f"You are revising a document iteratively based on the following instructions:\n\n"
+                f"{instructions_text}\n\n"
+                f"Here is the current document text:\n\n{current_text}"
+            )
+            
             logger.log(LogLevel.PROMPT, system_message)
+            logger.log(LogLevel.PROMPT, user_message)
             
             # Get the revised text from the agent
             try:
                 response = await enqueue_api_call(
                     model=REVISION_MODEL,
-                    messages=[ChatMessage(role="system", content=system_message)],
+                    messages=[
+                        ChatMessage(role="system", content=system_message),
+                        ChatMessage(role="user", content=user_message)
+                    ],
                     temperature=1.0  # Required for o1-preview
                 )
             except Exception as e:

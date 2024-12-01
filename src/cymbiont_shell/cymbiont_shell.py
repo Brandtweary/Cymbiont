@@ -2,7 +2,7 @@ import math
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
-from typing import Callable, Dict, Any
+from typing import Callable, Dict, Any, Tuple
 from shared_resources import USER_NAME, AGENT_NAME, logger, token_logger
 from chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel, ToolName
@@ -161,11 +161,13 @@ class CymbiontShell:
         except Exception as e:
             logger.error(f"Chat response failed: {str(e)}")
     
-    async def execute_command(self, command: str, args: str, name: str = '') -> bool:
+    async def execute_command(self, command: str, args: str, name: str = '') -> Tuple[bool, bool]:
         """Execute a shell command
         
         Returns:
-            bool: True if the shell should exit, False otherwise
+            tuple[bool, bool]: (success, should_exit)
+            - success: True if command executed successfully, False if it failed
+            - should_exit: True if the shell should exit, False otherwise
         """
         try:
             # Log command execution
@@ -179,14 +181,23 @@ class CymbiontShell:
             )
             
             # Execute command and get return value
-            # Only exit commands should return True
-            should_exit = await self.commands[command](args)
-            return should_exit if isinstance(should_exit, bool) else False
+            result = await self.commands[command](args)
+            
+            # Handle different return types for backward compatibility
+            if isinstance(result, bool):
+                # Old style: bool indicates should_exit
+                return (True, result)
+            elif isinstance(result, tuple) and len(result) == 2:
+                # New style: (success, should_exit)
+                return result
+            else:
+                # Assume success, don't exit
+                return (True, False)
             
         except Exception as e:
             logger.error(f"Command failed: {str(e)}")
-            return False
-    
+            return (False, False)
+
     async def run(self) -> None:
         """Main shell loop"""
         while True:
@@ -202,7 +213,8 @@ class CymbiontShell:
                 
                 # Execute command or treat as chat
                 if command in self.commands:
-                    if await self.execute_command(command, args):
+                    success, should_exit = await self.execute_command(command, args)
+                    if should_exit:
                         break
                 else:
                     # Handle as chat message

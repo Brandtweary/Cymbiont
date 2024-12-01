@@ -110,11 +110,14 @@ async def process_execute_shell_command(
     args: List[str],
 ) -> str:
     """Process the execute_shell_command tool call."""
+    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: execute_shell_command")
     shell = get_shell()
     args_str = ' '.join(args) if args else ''
-    success = await shell.execute_command(command, args_str, name=AGENT_NAME)
+    success, should_exit = await shell.execute_command(command, args_str, name=AGENT_NAME)
     if not success:
         return f"Failed to execute command: {command}{' ' + args_str if args_str else ''}"
+    elif should_exit:
+        return f"Command {command} requested shell exit"
     
     # Format command and args in blue
     formatted_cmd = f"\033[38;2;0;128;254m{command}\033[0m"  # #0080FE in RGB
