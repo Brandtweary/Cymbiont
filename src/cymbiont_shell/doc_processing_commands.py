@@ -1,8 +1,8 @@
-from shared_resources import logger, token_logger, DATA_DIR
-from documents import process_documents, create_data_snapshot, find_unprocessed_documents
-from text_parser import test_parse
+from shared_resources import logger, DATA_DIR
+from token_logger import token_logger
+from knowledge_graph.documents import process_documents, create_data_snapshot, find_unprocessed_documents
+from knowledge_graph.text_parser import test_parse
 from typing import List, Optional, Set
-from chat_agent import get_response
 from utils import get_paths
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style

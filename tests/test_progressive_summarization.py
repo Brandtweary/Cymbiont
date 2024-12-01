@@ -1,4 +1,4 @@
-from chat_history import ChatHistory
+from agents.chat_history import ChatHistory
 from shared_resources import logger
 
 async def test_progressive_summarization() -> None:

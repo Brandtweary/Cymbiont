@@ -151,7 +151,7 @@ async def test_tpm_soft_limit() -> None:
 
 async def test_retry_mechanism() -> None:
     """Test that API calls retry properly through various failure cases."""
-    from tag_extraction import extract_tags
+    from knowledge_graph.tag_extraction import extract_tags
     from custom_dataclasses import Chunk
     from process_log import ProcessLog
 

@@ -1,6 +1,6 @@
 import json
 from typing import Set
-from chat_agent import get_response, ChatHistory, validate_tool_args
+from agents.chat_agent import get_response, ChatHistory, validate_tool_args
 from constants import ToolName
 from custom_dataclasses import ChatMessage
 from shared_resources import logger

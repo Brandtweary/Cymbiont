@@ -3,7 +3,8 @@ import time
 import json
 from typing import Any, Optional, List, Dict, Set
 from collections import deque
-from shared_resources import logger, openai_client, anthropic_client, token_logger
+from shared_resources import logger, openai_client, anthropic_client
+from token_logger import token_logger
 from custom_dataclasses import APICall, TokenUsage, ChatMessage
 from process_log import ProcessLog
 from constants import LLM, model_data, ToolName

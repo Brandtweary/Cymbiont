@@ -1,8 +1,8 @@
 from shared_resources import logger, AGENT_NAME, get_shell
 from constants import LogLevel, ToolName
-from chat_agent import get_response
+from .chat_agent import get_response
 from custom_dataclasses import ToolLoopData, ChatMessage
-from chat_history import ChatHistory
+from .chat_history import ChatHistory
 from typing import Optional, List, Any, Dict
 from prompt_toolkit.formatted_text import ANSI
 

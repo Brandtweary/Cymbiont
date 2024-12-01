@@ -3,11 +3,12 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
 from typing import Callable, Dict, Any, Tuple
-from shared_resources import USER_NAME, AGENT_NAME, logger, token_logger
-from chat_history import ChatHistory, setup_chat_history_handler
+from shared_resources import USER_NAME, AGENT_NAME, logger
+from token_logger import token_logger
+from agents.chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel, ToolName
-from chat_agent import get_response
-from tool_schemas import TOOL_SCHEMAS, format_tool_schema
+from agents.chat_agent import get_response
+from agents.tool_schemas import TOOL_SCHEMAS, format_tool_schema
 
 
 from .command_completer import CommandCompleter

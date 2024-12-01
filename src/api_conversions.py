@@ -2,7 +2,7 @@ from openai.types.chat import ChatCompletionUserMessageParam, ChatCompletionSyst
 from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from openai.types.shared_params.response_format_text import ResponseFormatText
-from tool_schemas import TOOL_SCHEMAS
+from agents.tool_schemas import TOOL_SCHEMAS
 from custom_dataclasses import APICall
 import time
 import json
@@ -172,7 +172,6 @@ def convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
         prev_role = msg["role"]
     
     api_params["messages"] = final_messages
-    print(final_messages)
     
     # Convert tool schemas if present
     if call.tools:

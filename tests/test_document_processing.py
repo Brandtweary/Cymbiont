@@ -1,5 +1,5 @@
 from pathlib import Path
-from documents import process_documents, create_data_snapshot
+from knowledge_graph.documents import process_documents, create_data_snapshot
 from utils import get_paths, load_index, save_index
 import shutil
 from shared_resources import logger

@@ -5,7 +5,7 @@ from shared_resources import logger, AGENT_NAME
 from constants import LogLevel, ToolName
 from model_configuration import CHAT_AGENT_MODEL
 from prompts import CHAT_AGENT_SYSTEM_PROMPT
-from tool_schemas import TOOL_SCHEMAS
+from .tool_schemas import TOOL_SCHEMAS
 from utils import log_performance, convert_messages_to_string
 from openai.types.chat import (
     ChatCompletionMessageParam,
@@ -14,7 +14,7 @@ from openai.types.chat import (
     ChatCompletionAssistantMessageParam
 )
 from custom_dataclasses import ChatMessage, ToolLoopData
-from chat_history import ChatHistory
+from .chat_history import ChatHistory
 import inspect
 from functools import lru_cache
 
@@ -22,7 +22,7 @@ from functools import lru_cache
 def get_tool_function_map():
     """Get the mapping of tool names to their processing functions.
     Lazily imports the functions when first accessed."""
-    from agent_tools import (
+    from .agent_tools import (
                             process_contemplate, 
                             process_exit_loop, 
                             process_message_self,

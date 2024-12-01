@@ -1,4 +1,4 @@
-from text_parser import split_into_chunks
+from knowledge_graph.text_parser import split_into_chunks
 import logging
 
 logger = logging.getLogger(__name__)
