@@ -138,5 +138,17 @@ TOOL_SCHEMAS = {
                 "required": ["part_name"]
             }
         }
+    },
+    ToolName.INTRODUCE_SELF: {
+        "type": "function",
+        "function": {
+            "name": "introduce_self",
+            "description": "Introduce yourself to the user in a natural way, considering the current conversation context.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
     }
 }

@@ -44,6 +44,7 @@ class CymbiontShell:
         self.commands: Dict[str, Callable] = {
             'exit': self.do_exit,
             'help': self.do_help,
+            'hello_world': self.do_hello_world,
             'process_documents': self.do_process_documents,
             'create_data_snapshot': self.do_create_data_snapshot,
             'parse_documents': self.do_parse_documents,
@@ -165,7 +166,8 @@ class CymbiontShell:
                     tools={
                         ToolName.CONTEMPLATE, 
                         ToolName.EXECUTE_SHELL_COMMAND,
-                        ToolName.TOGGLE_PROMPT_PART
+                        ToolName.TOGGLE_PROMPT_PART,
+                        ToolName.INTRODUCE_SELF
                         },
                     token_budget=20000
                 )
@@ -311,3 +313,8 @@ class CymbiontShell:
     async def do_print_total_tokens(self, args: str) -> None:
         """Print the total token count"""
         token_logger.print_total_tokens()
+
+    async def do_hello_world(self, args: str = '') -> bool:
+        """A friendly greeting with emojis! 🤖"""
+        print("Hello World! 🤖 ⚡")
+        return False

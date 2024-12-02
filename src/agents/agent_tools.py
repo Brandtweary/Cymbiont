@@ -128,7 +128,7 @@ async def process_toggle_prompt_part(
     
     # Get current state
     state = "on" if part_info["toggled"] else "off"
-    logger.log(LogLevel.TOOL, f"Toggled prompt part '{part_name}' {state}")
+    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: toggle_prompt_part - Toggled prompt part '{part_name}' {state}")
     return f"I've turned {part_name} {state}."
 
 async def process_execute_shell_command(
@@ -136,7 +136,10 @@ async def process_execute_shell_command(
     args: List[str],
 ) -> str:
     """Process the execute_shell_command tool call."""
-    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: execute_shell_command")
+    logger.log(
+        LogLevel.TOOL,
+        f"{AGENT_NAME} used tool: execute_shell_command - {command}{' with args: ' + ', '.join(args) if args else ''}"
+    )
     shell = get_shell()
     args_str = ' '.join(args) if args else ''
     success, should_exit = await shell.execute_command(command, args_str, name=AGENT_NAME)
@@ -152,6 +155,47 @@ async def process_execute_shell_command(
         return f"I have executed the command: {formatted_cmd} with args {formatted_args}"
     else:
         return f"I have executed the command: {formatted_cmd}"
+
+async def process_introduce_self(
+    tool_loop_data: Optional[ToolLoopData],
+    chat_history: ChatHistory,
+    token_budget: int = 2000,
+    mock: bool = False,
+    mock_messages: Optional[List[ChatMessage]] = None
+) -> Optional[str]:
+    """
+    Process the introduce_self tool call.
+
+    Args:
+        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
+        chat_history: The ChatHistory instance to maintain conversation context.
+        token_budget: Maximum number of tokens allowed. Default is 2000.
+        mock: If True, uses mock_messages instead of normal message setup.
+        mock_messages: List of mock messages to use when mock=True.
+
+    Returns:
+        Optional[str]: Message to the user, if any.
+    """
+    if tool_loop_data:
+        logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: introduce_self - no effect, agent already inside tool loop")
+        return None
+
+    # Create a new system prompt with just the biographical information
+    introduction_prompt_parts = {
+        "biographical": {"toggled": True, "index": 0},
+        "response_guidelines": {"toggled": True, "index": 1}
+    }
+
+    # Get response with biographical prompt
+    response = await get_response(
+        chat_history=chat_history,
+        token_budget=token_budget,
+        mock=mock,
+        mock_messages=mock_messages,
+        system_prompt_parts=introduction_prompt_parts
+    )
+
+    return response
 
 def create_tool_loop_data(
     loop_type: str,

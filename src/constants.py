@@ -18,6 +18,7 @@ class ToolName(Enum):
     MESSAGE_SELF = "message_self"
     EXECUTE_SHELL_COMMAND = "execute_shell_command"
     TOGGLE_PROMPT_PART = "toggle_prompt_part"
+    INTRODUCE_SELF = "introduce_self"
 
 class LLM(Enum):
     GPT_4O = "gpt-4o"

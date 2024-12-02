@@ -43,34 +43,40 @@ class ConsoleFilter(logging.Filter):
 
 class ColoredFormatter(logging.Formatter):
     """Custom formatter that adds color to console output"""
-    def format(self, record: logging.LogRecord) -> str:
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         # ANSI color codes
-        GREEN = "\033[32m"       # Info, Debug
-        YELLOW = "\033[33m"      # Warning
-        RED = "\033[31m"         # Error
-        BRIGHT_RED = "\033[91m"  # Critical
-        WHITE = "\033[97m"       # Benchmark
-        MAGENTA = "\033[35m"     # Prompt/Response
-        RESET = "\033[0m"
-        
+        self.GREEN = "\033[38;2;0;255;0m"  # Neon green for Info, Debug
+        self.YELLOW = "\033[33m"      # Warning
+        self.RED = "\033[31m"         # Error
+        self.BRIGHT_RED = "\033[91m"  # Critical
+        self.WHITE = "\033[97m"       # Benchmark
+        self.MAGENTA = "\033[35m"     # Prompt/Response
+        self.RESET = "\033[0m"
+        # RGB colors
+        self.ORANGE = "\033[38;2;255;165;0m"  # Tool logs (RGB: 255,165,0)
+
+    def format(self, record: logging.LogRecord) -> str:
         # Select color based on log level
-        color = GREEN  # default
+        color = self.GREEN  # default
         prefix = ""
         
         if record.levelno == logging.WARNING:
-            color = YELLOW
+            color = self.YELLOW
         elif record.levelno == logging.ERROR:
-            color = RED
+            color = self.RED
         elif record.levelno == logging.CRITICAL:
-            color = BRIGHT_RED
+            color = self.BRIGHT_RED
             prefix = "CRITICAL: "
         elif record.levelno == LogLevel.BENCHMARK:
-            color = WHITE
+            color = self.WHITE
+        elif record.levelno == LogLevel.TOOL:
+            color = self.ORANGE
         elif record.levelno in (LogLevel.PROMPT, LogLevel.RESPONSE):
-            color = MAGENTA
+            color = self.MAGENTA
             
         # Format the message with color
-        record.msg = f"{color}{prefix}{record.msg}{RESET}"
+        record.msg = f"{color}{prefix}{record.msg}{self.RESET}"
         return super().format(record)
 
 def setup_logging(
