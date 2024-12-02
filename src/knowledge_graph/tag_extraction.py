@@ -25,7 +25,7 @@ async def extract_tags(
             messages_to_send = [
                 ChatMessage(
                     role="user",
-                    content="Please extract tags from the text.",
+                    content="Please extract tags from the text." if not mock else mock_content,
                     name=None
                 )
             ]
@@ -33,7 +33,7 @@ async def extract_tags(
             future = enqueue_api_call(
                 model=TAG_EXTRACTION_MODEL,
                 messages=messages_to_send,
-                system_message=mock_content if mock else system_content,
+                system_message=system_content,
                 mock=mock,
                 mock_tokens=100,
                 expiration_counter=expiration_counter,

@@ -30,7 +30,7 @@ async def test_tool_loop():
     contemplate_tool_call = {
         "tool_call_results": {
             "1": {
-                "tool_name": "contemplate",
+                "tool_name": "contemplate_loop",
                 "arguments": {
                     "question": "What should we consider here?"
                 }
@@ -67,7 +67,7 @@ async def test_arg_validation():
 
     # Test 2: Tool not in available tools
     args, error = validate_tool_args(
-        "contemplate",
+        "contemplate_loop",
         {},
         {ToolName.MESSAGE_SELF}  # Only message_self available
     )
@@ -76,7 +76,7 @@ async def test_arg_validation():
 
     # Test 3: Missing required parameters
     args, error = validate_tool_args(
-        "contemplate",
+        "contemplate_loop",
         {},  # Missing 'question' parameter
         {ToolName.CONTEMPLATE_LOOP}
     )
@@ -85,7 +85,7 @@ async def test_arg_validation():
 
     # Test 4: Unrecognized arguments
     args, error = validate_tool_args(
-        "contemplate",
+        "contemplate_loop",
         {"question": "test", "invalid_arg": "value"},
         {ToolName.CONTEMPLATE_LOOP}
     )
@@ -94,7 +94,7 @@ async def test_arg_validation():
 
     # Test 5: Valid case for comparison
     args, error = validate_tool_args(
-        "contemplate",
+        "contemplate_loop",
         {"question": "test"},
         {ToolName.CONTEMPLATE_LOOP}
     )
@@ -122,11 +122,11 @@ async def test_token_budget():
         }
     }
     
-    # Second message will be for contemplate
+    # Second message will be for late
     contemplate_tool_call = {
         "tool_call_results": {
             "1": {
-                "tool_name": "contemplate",
+                "tool_name": "contemplate_loop",
                 "arguments": {
                     "question": "What should we consider here?"
                 }
