@@ -1,7 +1,7 @@
 from shared_resources import logger, AGENT_NAME, get_shell
-from constants import LogLevel, ToolName
+from constants import LogLevel, ToolName, MAX_LOOP_ITERATIONS
 from .chat_agent import get_response
-from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS
+from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS, create_system_prompt_parts_data
 from custom_dataclasses import ToolLoopData, ChatMessage, SystemPromptPartsData, SystemPromptPartInfo
 from .chat_history import ChatHistory
 from typing import Optional, List, Set
@@ -31,7 +31,7 @@ async def process_contemplate_loop(
         Optional[str]: Message to the user, if any.
     """
     if tool_loop_data:
-        logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: contemplate_loop - no effect, agent already inside tool loop")
+        logger.warning(f"{AGENT_NAME} used tool: contemplate_loop - no effect, agent already inside tool loop")
         return None
 
     # Start a new contemplation loop
@@ -52,7 +52,7 @@ async def process_contemplate_loop(
     )
 
     logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: contemplate - now entering contemplation loop")
-    max_iterations = 5  # Adjust as needed
+    max_iterations = MAX_LOOP_ITERATIONS  # Adjust as needed
     iterations = 0
 
     while iterations < max_iterations:
@@ -179,10 +179,7 @@ async def process_introduce_self(
         return None
 
     # Create a new system prompt with just the biographical information
-    introduction_prompt_parts = {
-        "biographical": {"toggled": True, "index": 0},
-        "response_guidelines": {"toggled": True, "index": 1}
-    }
+    introduction_prompt_parts = create_system_prompt_parts_data(["biographical", "response_guidelines"])
 
     # Get response with biographical prompt
     response = await get_response(
@@ -194,6 +191,95 @@ async def process_introduce_self(
     )
 
     return response
+
+async def process_shell_loop(
+    chat_history: ChatHistory,
+    initial_command: Optional[str] = None,
+    initial_command_args: Optional[List[str]] = None,
+    tool_loop_data: Optional[ToolLoopData] = None,
+    token_budget: int = 20000,
+    mock: bool = False,
+    mock_messages: Optional[List[ChatMessage]] = None,
+    system_prompt_parts: Optional[SystemPromptPartsData] = None
+) -> Optional[str]:
+    """
+    Process the 'shell_loop' tool call.
+
+    Args:
+        initial_command: Optional initial command to run when entering the shell loop.
+        initial_command_args: Optional list of arguments for the initial command.
+        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
+        chat_history: The ChatHistory instance.
+        token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
+        mock: If True, uses mock_messages instead of normal message setup.
+        mock_messages: List of mock messages to use when mock=True.
+        system_prompt_parts: Optional dict of prompt parts with toggle and index info.
+
+    Returns:
+        Optional[str]: Message to the user, if any.
+    """
+    if tool_loop_data:
+        logger.warning(f"{AGENT_NAME} used tool: shell_loop - no effect, agent already inside tool loop")
+        return None
+
+    # Start a new shell loop
+    assert not tool_loop_data, f"Starting shell loop but loop already active: {tool_loop_data}"
+    
+    tool_loop_data = create_tool_loop_data(
+        loop_type="SHELL",
+        loop_message=(
+            "You are inside a shell loop where you can chain together shell commands. "
+            "Use exit_loop when finished.\n"
+        ),
+        system_prompt_parts=system_prompt_parts,
+        new_system_prompt=True  # Create a copy of system prompt parts
+    )
+
+    # Ensure system_prompt_parts is not None (should never happen due to create_tool_loop_data logic)
+    assert tool_loop_data.system_prompt_parts is not None, "System prompt parts unexpectedly None after create_tool_loop_data"
+
+    # Add cymbiont_shell part if it doesn't exist and ensure it's toggled on
+    if 'cymbiont_shell' not in tool_loop_data.system_prompt_parts.parts:
+        tool_loop_data.system_prompt_parts.parts['cymbiont_shell'] = SystemPromptPartInfo(toggled=True, index=len(tool_loop_data.system_prompt_parts.parts))
+    else:
+        tool_loop_data.system_prompt_parts.parts['cymbiont_shell'].toggled = True
+
+    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: shell_loop - now entering shell loop")
+    
+    # Execute initial command if provided
+    if initial_command:
+        await process_execute_shell_command(
+            command=initial_command,
+            args=initial_command_args or []
+        )
+
+    max_iterations = MAX_LOOP_ITERATIONS  # Adjust as needed
+    iterations = 0
+
+    while iterations < max_iterations:
+        iterations += 1
+        response = await get_response(
+            chat_history=chat_history,
+            tools=tool_loop_data.available_tools,
+            tool_loop_data=tool_loop_data,
+            token_budget=token_budget,
+            mock=mock,
+            mock_messages=mock_messages,
+            system_prompt_parts=tool_loop_data.system_prompt_parts
+        )
+        # Check if exit_loop was called
+        if not tool_loop_data.active:
+            if not response:
+                logger.warning("Exit loop called but no response message provided")
+            return response
+
+        # If no response (i.e., continue looping), pass
+
+    if tool_loop_data.active:
+        logger.warning("Max iterations reached in shell loop without exit.")
+        return None
+
+    return None
 
 def create_tool_loop_data(
     loop_type: str,

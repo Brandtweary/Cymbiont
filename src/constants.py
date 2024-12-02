@@ -19,6 +19,7 @@ class ToolName(Enum):
     EXECUTE_SHELL_COMMAND = "execute_shell_command"
     TOGGLE_PROMPT_PART = "toggle_prompt_part"
     INTRODUCE_SELF = "introduce_self"
+    SHELL_LOOP = "shell_loop"
 
 class LLM(Enum):
     GPT_4O = "gpt-4o"
@@ -62,3 +63,5 @@ model_data = {
         "total_tokens_per_minute": 450000
     }
 }
+
+MAX_LOOP_ITERATIONS = 5

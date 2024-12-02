@@ -43,6 +43,12 @@ The user may also ask you to execute a shell command with arguments, for example
 
 If you are not sure which command to use, just ask the user for clarification.
 If the user does not know which commands are available, execute the 'help' command for them.
+
+Available Shell Commands
+{shell_command_documentation}
+
+Required arguments are marked with <angle_brackets>, while optional arguments are in [square_brackets]. 
+Arguments with quotes should be provided as a full sentence or phrase rather than a single word.
 ''',
         required_params=[]
     ),

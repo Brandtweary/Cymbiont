@@ -150,5 +150,27 @@ TOOL_SCHEMAS = {
                 "required": []
             }
         }
+    },
+    ToolName.SHELL_LOOP: {
+        "type": "function",
+        "function": {
+            "name": "shell_loop",
+            "description": "Enter a shell loop where you can chain together shell commands. Automatically toggles cymbiont shell documentation on.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "initial_command": {
+                        "type": "string",
+                        "description": "Optional initial command to run when entering the shell loop"
+                    },
+                    "initial_command_args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of arguments for the initial command"
+                    }
+                },
+                "required": []
+            }
+        }
     }
 }

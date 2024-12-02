@@ -8,8 +8,7 @@ from tests.test_agent_tools import run_agent_tool_tests
 
 
 async def do_test_api_queue(shell, args: str) -> None:
-    """Run API queue tests.
-    Usage: test_api_queue"""
+    """Run API queue tests."""
     try:
         passed, failed = await run_api_queue_tests()  # Already returns (passed, failed)
         shell.test_successes = passed
@@ -25,8 +24,7 @@ async def do_test_api_queue(shell, args: str) -> None:
 
 
 async def do_test_document_processing(shell, args: str) -> None:
-    """Run document processing tests.
-    Usage: test_document_processing"""
+    """Run document processing tests."""
     try:
         passed, failed = await run_document_processing_tests()  # Already returns (passed, failed)
         shell.test_successes = passed
@@ -42,8 +40,7 @@ async def do_test_document_processing(shell, args: str) -> None:
 
 
 async def do_test_logger(shell, args: str) -> None:
-    """Test all logging levels with colored output.
-    Usage: test_logger"""
+    """Test all logging levels with colored output."""
     try:
         run_logger_test()  # Will raise an exception if test fails
         shell.test_successes = 1
@@ -56,8 +53,7 @@ async def do_test_logger(shell, args: str) -> None:
 
 
 async def do_test_parsing(shell, args: str) -> None:
-    """Run text parsing tests.
-    Usage: test_parsing"""
+    """Run text parsing tests."""
     try:
         run_text_parsing_test()  # Will raise an exception if test fails
         shell.test_successes = 1
@@ -70,8 +66,7 @@ async def do_test_parsing(shell, args: str) -> None:
 
 
 async def do_test_progressive_summarization(shell, args: str) -> None:
-    """Test progressive summarization functionality.
-    Usage: test_progressive_summarization"""
+    """Test progressive summarization functionality."""
     try:
         await test_progressive_summarization()  # Will raise an exception if test fails
         shell.test_successes = 1
@@ -84,8 +79,7 @@ async def do_test_progressive_summarization(shell, args: str) -> None:
 
 
 async def do_test_agent_tools(shell, args: str) -> None:
-    """Run agent tools tests.
-    Usage: test_agent_tools"""
+    """Run agent tools tests."""
     try:
         passed, failed = await run_agent_tool_tests()
         shell.test_successes = passed
@@ -101,8 +95,7 @@ async def do_test_agent_tools(shell, args: str) -> None:
 
 
 async def do_run_all_tests(shell, args: str) -> None:
-    """Run all tests
-    Usage: run_all_tests"""
+    """Run all tests"""
     test_commands = [cmd for cmd in shell.commands.keys() if cmd.startswith('test_')]
     total_successes = 0
     total_failures = 0

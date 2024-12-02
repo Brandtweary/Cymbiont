@@ -11,7 +11,8 @@ from constants import LogLevel, ToolName
 from agents.chat_agent import get_response
 from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS
 from agents.tool_schemas import format_all_tool_schemas
-
+from system_message_parts import SYSTEM_MESSAGE_PARTS
+import re
 
 from .command_completer import CommandCompleter
 from .doc_processing_commands import (
@@ -58,6 +59,32 @@ class CymbiontShell:
             'run_all_tests': self.do_run_all_tests,
             'print_total_tokens': self.do_print_total_tokens,
         }
+        
+        # Map commands to their original functions for documentation
+        self.command_mapping: Dict[str, Callable] = {
+            'exit': self.do_exit,  # Built-in commands use their wrapper docstrings
+            'help': self.do_help,
+            'hello_world': self.do_hello_world,
+            'process_documents': do_process_documents,  # Imported commands use their original docstrings
+            'create_data_snapshot': do_create_data_snapshot,
+            'parse_documents': do_parse_documents,
+            'revise_document': do_revise_document,
+            'test_api_queue': do_test_api_queue,
+            'test_document_processing': do_test_document_processing,
+            'test_logger': do_test_logger,
+            'test_parsing': do_test_parsing,
+            'test_progressive_summarization': do_test_progressive_summarization,
+            'test_agent_tools': do_test_agent_tools,
+            'run_all_tests': do_run_all_tests,
+            'print_total_tokens': self.do_print_total_tokens,
+        }
+        
+        # Generate command documentation and format cymbiont_shell part
+        shell_doc = self.generate_command_documentation()
+        SYSTEM_MESSAGE_PARTS['cymbiont_shell'].content = \
+            SYSTEM_MESSAGE_PARTS['cymbiont_shell'].content.format(
+                shell_command_documentation=shell_doc
+            )
         
         format_all_tool_schemas(
             tools={ToolName.EXECUTE_SHELL_COMMAND,
@@ -130,13 +157,30 @@ class CymbiontShell:
             
         return '\n'.join(rows)
     
+    def generate_command_documentation(self) -> str:
+        """Generate formatted documentation for shell commands from their docstrings.
+        
+        Returns:
+            Formatted string containing command documentation
+        """
+        doc_lines = []
+        
+        for cmd_name, handler in self.command_mapping.items():
+            if not handler.__doc__:
+                continue
+                
+            doc_lines.append(f"{cmd_name}: {handler.__doc__.strip()}")
+        
+        return '\n'.join(doc_lines)
+
     async def do_exit(self, args: str) -> bool:
         """Exit the shell"""
         logger.log(LogLevel.SHELL, "Cymbiont shell exited")
         return True
     
     async def do_help(self, args: str) -> None:
-        """Show help information"""
+        """Show help information
+        Usage: help [command]"""
         if not args:
             # Show general help
             logger.info("Available commands (type help <command>):")
@@ -144,7 +188,7 @@ class CymbiontShell:
             logger.info(formatted_commands + "\n")
         else:
             # Show specific command help
-            cmd = self.commands.get(args)
+            cmd = self.command_mapping.get(args)
             if cmd:
                 logger.info(f"{args}: {cmd.__doc__ or 'No help available'}\n")
             else:
@@ -167,7 +211,8 @@ class CymbiontShell:
                         ToolName.CONTEMPLATE_LOOP, 
                         ToolName.EXECUTE_SHELL_COMMAND,
                         ToolName.TOGGLE_PROMPT_PART,
-                        ToolName.INTRODUCE_SELF
+                        ToolName.INTRODUCE_SELF,
+                        ToolName.SHELL_LOOP
                         },
                     token_budget=20000
                 )
@@ -276,38 +321,31 @@ class CymbiontShell:
 
     # Test commands
     async def do_test_api_queue(self, args: str) -> None:
-        """Run API queue tests.
-        Usage: test_api_queue"""
+        """Run API queue tests."""
         await do_test_api_queue(self, args)
 
     async def do_test_document_processing(self, args: str) -> None:
-        """Test document processing pipeline with mock API calls.
-        Usage: test_document_processing"""
+        """Test document processing pipeline with mock API calls."""
         await do_test_document_processing(self, args)
 
     async def do_test_logger(self, args: str) -> None:
-        """Test all logging levels with colored output.
-        Usage: test_logger"""
+        """Test all logging levels with colored output."""
         await do_test_logger(self, args)
 
     async def do_test_parsing(self, args: str) -> None:
-        """Run text parsing tests.
-        Usage: test_parsing"""
+        """Run text parsing tests."""
         await do_test_parsing(self, args)
 
     async def do_test_progressive_summarization(self, args: str) -> None:
-        """Test progressive summarization functionality.
-        Usage: test_progressive_summarization"""
+        """Test progressive summarization functionality."""
         await do_test_progressive_summarization(self, args)
 
     async def do_test_agent_tools(self, args: str) -> None:
-        """Test agent tools functionality.
-        Usage: test_agent_tools"""
+        """Test agent tools functionality."""
         await do_test_agent_tools(self, args)
 
     async def do_run_all_tests(self, args: str) -> None:
-        """Run all tests.
-        Usage: run_all_tests"""
+        """Run all tests."""
         await do_run_all_tests(self, args)
 
     async def do_print_total_tokens(self, args: str) -> None:

@@ -24,10 +24,10 @@ def get_tool_function_map():
                             process_message_self,
                             process_execute_shell_command,
                             process_toggle_prompt_part,
-                            process_introduce_self
+                            process_introduce_self,
+                            process_shell_loop
                             )
     import inspect
-    import sys
     from . import agent_tools
 
     tool_map = {
@@ -37,6 +37,7 @@ def get_tool_function_map():
         ToolName.EXECUTE_SHELL_COMMAND.value: process_execute_shell_command,
         ToolName.TOGGLE_PROMPT_PART.value: process_toggle_prompt_part,
         ToolName.INTRODUCE_SELF.value: process_introduce_self,
+        ToolName.SHELL_LOOP.value: process_shell_loop
     }
 
     # Get all functions from agent_tools module
