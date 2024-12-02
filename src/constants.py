@@ -17,6 +17,7 @@ class ToolName(Enum):
     EXIT_LOOP = "exit_loop"
     MESSAGE_SELF = "message_self"
     EXECUTE_SHELL_COMMAND = "execute_shell_command"
+    TOGGLE_PROMPT_PART = "toggle_prompt_part"
 
 class LLM(Enum):
     GPT_4O = "gpt-4o"

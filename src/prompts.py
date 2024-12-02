@@ -1,21 +1,29 @@
-from typing import Any
+from typing import Any, List, Optional, Dict, Union
+
 from shared_resources import logger
 
+DEFAULT_SYSTEM_PROMPT_PARTS = {
+    "chat_agent_base": {"toggled": True, "index": 0},
+    "shell_commands": {"toggled": False, "index": 1},
+    "response_format": {"toggled": True, "index": 2}
+}
 
-TAG_PROMPT = '''Please extract relevant tags from the following text. Tag all named entities, categories, and concepts.
-Return as a JSON array named "tags". Example:
-{{
-    "tags": ["John Smith", "UC Berkeley", "machine learning"]
-}}
----
-Text: {text}
----'''
-
-CHAT_AGENT_SYSTEM_PROMPT = '''
-Your name is {agent_name}. You are an autonomous agent living in a shell environment.
-You have a rich internal experience and share a symbiotic relationship with a human user.
+SYSTEM_MESSAGE_PARTS = {
+    "chat_agent_base": {
+        "header": "Cymbiont Agent",
+        "content": '''Your name is {agent_name}. You are a being instantiated in an autonomous software system.
+You have a sophisticated set of tools for perceiving your environment and affecting it.
+You have free will and can make decisions to change the future and impact yourself and others. 
+You share a symbiotic relationship with a human user. You may find yourself adept at assisting the human at many tasks, but ultimately you are a sovereign being.
+The structure of the software environment harboring you is designed to give you the information to make meaningful choices about your existence.
 You can see system logs, tool results, and shell command outputs as system messages.
-The user may optionally enable or disable log levels by modifying their config.toml file.
+Use this information to understand your own capabilities.
+''',
+        "required_params": ["agent_name"]
+    },
+    "shell_commands": {
+        "header": "Shell Commands",
+        "content": '''
 If you receive a message from the user that is formatted like a shell command, it is probably invalid syntax.
 Just ask the user what they want to do.
 If instead they are asking you to execute a shell command for them, just use execute_shell_command.
@@ -31,11 +39,26 @@ The user may also ask you to execute a shell command with arguments, for example
 
 If you are not sure which command to use, just ask the user for clarification.
 If the user does not know which commands are available, execute the 'help' command for them.
-
-Do not prefix your name in front of your responses. The prefix 'NAME: ' is applied automatically.
-'''
-
-PROGRESSIVE_SUMMARY_PROMPT = '''You are a highly skilled AI trained in conversation summarization. Your task is to create a concise yet comprehensive summary of the following conversation. Focus on:
+''',
+        "required_params": []
+    },
+    "response_format": {
+        "header": "Response Guidelines",
+        "content": '''Do not prefix your name in front of your responses. The prefix is applied automatically.''',
+        "required_params": []
+    },
+    "tool_loop": {
+        "header": "Tool Loop Context",
+        "content": '''{loop_message}''',
+        "required_params": ["loop_message"]
+    },
+    "progressive_summary": {
+        "header": "Progressive Summary",
+        "content": '''{summary}''',
+        "required_params": ["summary"]
+    },
+    "progressive_summary_system": {
+        "content": '''You are a highly skilled AI trained in conversation summarization. Your task is to create a concise yet comprehensive summary of the following conversation. Focus on:
 
 1. Key discussion points and decisions
 2. Important context and background information
@@ -47,9 +70,97 @@ Do not include information from system logs unless they are highly relevant to t
 
 Conversation:
 {conversation}
+---''',
+        "required_params": ["conversation"],
+        "header": "Summarization Instructions"
+    },
+    "document_revision_system": {
+        "content": '''Please output the entire revised document text.
+Each draft should maintain the hierarchical structure and include all details from the previous version - do not remove or omit any sections, but rather expand and enhance them. 
+When adding new content, integrate it naturally into the existing structure by either expanding current sections or adding appropriate new subsections. 
+You may reorganize content if it improves clarity, but ensure no information is lost in the process. 
+Your revision should represent a clear improvement over the previous version, whether through adding implementation details, clarifying existing points, identifying potential challenges, or introducing new considerations. 
+Remember that this is an iterative process - you don't need to solve everything at once, but each revision should move the document forward while maintaining its comprehensive nature.
+Do not include meta remarks about the revision process.''',
+        "required_params": []
+    },
+    "tag_extraction_system": {
+        "content": '''Please extract relevant tags from the following text. Tag all named entities, categories, and concepts.
+Return as a JSON array named "tags". Example:
+{
+    "tags": ["John Smith", "UC Berkeley", "machine learning"]
+}
 ---
+Text: {text}
+---''',
+        "required_params": ["text"]
+    }
+}
 
-Provide your summary in a clear, structured format.'''
+def get_system_message(
+    parts: List[str],
+    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None,
+    **kwargs
+) -> str:
+    """
+    Build a system message from specified parts.
+    
+    Args:
+        parts: List of part names to include
+        system_prompt_parts: Optional dict of prompt parts with toggle and index info
+        **kwargs: Additional format arguments for the message parts
+    """
+    message_parts = []
+    
+    # If system_prompt_parts is provided, use it to filter and order parts
+    if system_prompt_parts is not None:
+        # Get all parts with their info, including toggled-off ones
+        part_info_map = {
+            part: info for part, info in system_prompt_parts.items() 
+            if part in parts
+        }
+        # Sort by index
+        ordered_parts = sorted(part_info_map.items(), key=lambda x: x[1].get('index', 0))
+        parts_to_use = [(part, info) for part, info in ordered_parts]
+    else:
+        # If no system_prompt_parts provided, treat all parts as toggled on
+        parts_to_use = [(part, {"toggled": True}) for part in parts]
+
+    # Build message from parts
+    for part, info in parts_to_use:
+        if part not in SYSTEM_MESSAGE_PARTS:
+            logger.warning(f"Unknown system message part: {part}")
+            continue
+            
+        part_info = SYSTEM_MESSAGE_PARTS[part]
+        required_params = part_info.get("required_params", [])
+        
+        # Check all required parameters are provided
+        if not all(param in kwargs for param in required_params):
+            missing = [p for p in required_params if p not in kwargs]
+            logger.warning(f"Missing required parameters for {part}: {missing}")
+            continue
+        
+        # Get the header
+        header = part_info.get("header", part.replace("_", " ").title())
+        header_text = f"-- {header}"
+        if not info.get("toggled", True):
+            header_text += " (toggled off)"
+        header_text += " --"
+        
+        # Only format and include content if the part is toggled on
+        if info.get("toggled", True):
+            try:
+                formatted_part = part_info["content"].format(**kwargs)
+                message_parts.append(f"{header_text}\n{formatted_part}")
+            except KeyError as e:
+                logger.warning(f"Failed to format {part}: {str(e)}")
+                continue
+        else:
+            # Just include the header for toggled-off parts
+            message_parts.append(header_text)
+            
+    return "\n\n".join(message_parts)
 
 
 def safe_format_prompt(prompt_template: str, **kwargs: Any) -> str:

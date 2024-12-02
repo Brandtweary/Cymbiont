@@ -1,7 +1,7 @@
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, List, Dict, Literal, Optional, NamedTuple, Set
+from typing import Any, List, Dict, Literal, Optional, NamedTuple, Set, Union
 from pathlib import Path
 from constants import ToolName
 from process_log import ProcessLog
@@ -51,6 +51,7 @@ class Paths(NamedTuple):
 class APICall:
     model: str
     messages: List[ChatMessage]
+    system_message: str
     timestamp: float
     mock: bool
     mock_tokens: Optional[int]
@@ -61,6 +62,7 @@ class APICall:
     temperature: float = 0.7
     process_log: Optional[ProcessLog] = None
     tools: Optional[Set[ToolName]] = None
+    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None
 
 @dataclass
 class TokenUsage:
@@ -71,8 +73,10 @@ class TokenUsage:
 
 @dataclass
 class ToolLoopData:
+    """Data for managing tool loops."""
     loop_type: str
     loop_message: str
     active: bool = True
     available_tools: Set[ToolName] = field(default_factory=set)
     loop_tokens: int = 0
+    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None

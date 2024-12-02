@@ -1,4 +1,5 @@
 import math
+from unittest.mock import DEFAULT
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
@@ -8,11 +9,11 @@ from token_logger import token_logger
 from agents.chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel, ToolName
 from agents.chat_agent import get_response
-from agents.tool_schemas import TOOL_SCHEMAS, format_tool_schema
+from prompts import DEFAULT_SYSTEM_PROMPT_PARTS
+from agents.tool_schemas import format_all_tool_schemas
 
 
 from .command_completer import CommandCompleter
-from constants import ToolName
 from .doc_processing_commands import (
     do_process_documents,
     do_create_data_snapshot,
@@ -57,7 +58,13 @@ class CymbiontShell:
             'print_total_tokens': self.do_print_total_tokens,
         }
         
-        TOOL_SCHEMAS.update(format_tool_schema(list(self.commands.keys())))
+        format_all_tool_schemas(
+            tools={ToolName.EXECUTE_SHELL_COMMAND,
+                   ToolName.TOGGLE_PROMPT_PART
+                   },
+            system_prompt_parts=DEFAULT_SYSTEM_PROMPT_PARTS,
+            commands=list(self.commands.keys())
+        )
         
         # Create command completer
         command_completer = CommandCompleter(self.commands)
@@ -155,7 +162,11 @@ class CymbiontShell:
                 
                 response = await get_response(
                     chat_history=self.chat_history,
-                    tools={ToolName.CONTEMPLATE, ToolName.EXECUTE_SHELL_COMMAND},
+                    tools={
+                        ToolName.CONTEMPLATE, 
+                        ToolName.EXECUTE_SHELL_COMMAND,
+                        ToolName.TOGGLE_PROMPT_PART
+                        },
                     token_budget=20000
                 )
 

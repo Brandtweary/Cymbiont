@@ -3,14 +3,15 @@ from token_logger import token_logger
 from knowledge_graph.documents import process_documents, create_data_snapshot, find_unprocessed_documents
 from knowledge_graph.text_parser import test_parse
 from typing import List, Optional, Set
-from utils import get_paths
+from pathlib import Path
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
-from shared_resources import logger, DATA_DIR
-from custom_dataclasses import ChatMessage
 from api_queue import enqueue_api_call
+from custom_dataclasses import ChatMessage
 from constants import LogLevel
 from model_configuration import REVISION_MODEL
+from prompts import get_system_message
+from utils import get_paths
 
 async def do_process_documents(args: str) -> None:
     """Process documents in the data/input_documents directory.
@@ -143,36 +144,27 @@ async def do_revise_document(args: str) -> None:
         for i in range(iterations):
             logger.info(f"Starting revision iteration {i+1}/{iterations}")
             
-            # Create system message for this iteration
-            system_message = (
-                '''
-                Please output the entire revised document text.
-                Each draft should maintain the hierarchical structure and include all details from the previous version - do not remove or omit any sections, but rather expand and enhance them. 
-                When adding new content, integrate it naturally into the existing structure by either expanding current sections or adding appropriate new subsections. 
-                You may reorganize content if it improves clarity, but ensure no information is lost in the process. 
-                Your revision should represent a clear improvement over the previous version, whether through adding implementation details, clarifying existing points, identifying potential challenges, or introducing new considerations. 
-                Remember that this is an iterative process - you don't need to solve everything at once, but each revision should move the document forward while maintaining its comprehensive nature.
-                Do not include meta remarks about the revision process.
-                '''
-            )
-
-            user_message = (
-                f"You are revising a document iteratively based on the following instructions:\n\n"
-                f"{instructions_text}\n\n"
-                f"Here is the current document text:\n\n{current_text}"
-            )
+            # Get system message using get_system_message
+            system_content = get_system_message(["document_revision_system"])
             
-            logger.log(LogLevel.PROMPT, system_message)
-            logger.log(LogLevel.PROMPT, user_message)
+            # Create the revision request as a system message that will be converted to user message
+            messages_to_send = [
+                ChatMessage(
+                    role="user",
+                    content=f"You are revising a document iteratively based on the following instructions:\n\n{instructions_text}\n\nHere is the current document text:\n\n{current_text}",
+                    name=None
+                )
+            ]
+            
+            logger.log(LogLevel.PROMPT, system_content)
+            logger.log(LogLevel.PROMPT, messages_to_send[0].content)
             
             # Get the revised text from the agent
             try:
                 response = await enqueue_api_call(
                     model=REVISION_MODEL,
-                    messages=[
-                        ChatMessage(role="system", content=system_message),
-                        ChatMessage(role="user", content=user_message)
-                    ],
+                    messages=messages_to_send,
+                    system_message=system_content,
                     temperature=1.0  # Required for o1-preview
                 )
             except Exception as e:

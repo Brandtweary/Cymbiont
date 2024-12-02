@@ -4,7 +4,7 @@ from api_queue import enqueue_api_call
 from shared_resources import logger, AGENT_NAME
 from constants import LogLevel, ToolName
 from model_configuration import CHAT_AGENT_MODEL
-from prompts import CHAT_AGENT_SYSTEM_PROMPT
+from prompts import get_system_message
 from .tool_schemas import TOOL_SCHEMAS
 from utils import log_performance, convert_messages_to_string
 from openai.types.chat import (
@@ -17,6 +17,8 @@ from custom_dataclasses import ChatMessage, ToolLoopData
 from .chat_history import ChatHistory
 import inspect
 from functools import lru_cache
+from prompts import DEFAULT_SYSTEM_PROMPT_PARTS
+
 
 @lru_cache(maxsize=1)
 def get_tool_function_map():
@@ -26,14 +28,35 @@ def get_tool_function_map():
                             process_contemplate, 
                             process_exit_loop, 
                             process_message_self,
-                            process_execute_shell_command
+                            process_execute_shell_command,
+                            process_toggle_prompt_part
                             )
-    return {
+    import inspect
+    import sys
+    from . import agent_tools
+
+    tool_map = {
         ToolName.CONTEMPLATE.value: process_contemplate,
         ToolName.EXIT_LOOP.value: process_exit_loop,
         ToolName.MESSAGE_SELF.value: process_message_self,
         ToolName.EXECUTE_SHELL_COMMAND.value: process_execute_shell_command,
+        ToolName.TOGGLE_PROMPT_PART.value: process_toggle_prompt_part,
     }
+
+    # Get all functions from agent_tools module
+    all_functions = {name: obj for name, obj in inspect.getmembers(agent_tools, inspect.isfunction)}
+    mapped_functions = set(tool_map.values())
+    
+    # Check for unmapped functions (excluding create_tool_loop_data)
+    unmapped = [name for name, func in all_functions.items() 
+                if func not in mapped_functions 
+                and name != 'create_tool_loop_data'
+                and name.startswith('process_')]
+    
+    if unmapped:
+        logger.warning(f"Found unmapped tool functions in agent_tools: {', '.join(unmapped)}")
+
+    return tool_map
 
 
 def convert_to_openai_message(message: ChatMessage) -> ChatCompletionMessageParam:
@@ -52,7 +75,8 @@ async def get_response(
     tool_loop_data: Optional[ToolLoopData] = None,
     token_budget: int = 20000,
     mock: bool = False,
-    mock_messages: Optional[List[ChatMessage]] = None
+    mock_messages: Optional[List[ChatMessage]] = None,
+    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None
 ) -> str:
     """
     Sends a message to the OpenAI chat agent with conversation history.
@@ -71,33 +95,47 @@ async def get_response(
     try:
         if mock and mock_messages:
             messages_to_send = mock_messages
+            system_content = "mock system message"
         else:
-            system_content_parts = [CHAT_AGENT_SYSTEM_PROMPT.format(agent_name=AGENT_NAME)]
-
+            # Build system message from parts
+            kwargs = {"agent_name": AGENT_NAME}
+            
+            # For tool loops, copy the default parts to avoid modifying the original
             if tool_loop_data:
-                system_content_parts.append(tool_loop_data.loop_message)
-
+                current_parts = (system_prompt_parts or DEFAULT_SYSTEM_PROMPT_PARTS).copy()
+                current_parts["tool_loop"] = {"toggled": True, "index": len(current_parts)}
+                tool_loop_data.system_prompt_parts = current_parts
+            else:
+                # In main chat loop, use the parts directly for dynamic updates
+                current_parts = system_prompt_parts or DEFAULT_SYSTEM_PROMPT_PARTS
+            
+            # Add tool loop message if present
+            if tool_loop_data:
+                kwargs["loop_message"] = tool_loop_data.loop_message
+            
             messages, summary = chat_history.get_recent_messages()
-
+            
+            # Only include progressive summary if there's actually a summary
             if summary:
-                system_content_parts.append(summary)
+                kwargs["summary"] = summary
+                current_parts["progressive_summary"] = {"toggled": True, "index": len(current_parts)}
+            elif "progressive_summary" in current_parts:
+                del current_parts["progressive_summary"]
+            
+            system_content = get_system_message(list(current_parts.keys()), current_parts, **kwargs)
+            messages_to_send = messages
 
-            system_content = '\n'.join(system_content_parts)
-
-            messages_to_send: List[ChatMessage] = [
-                ChatMessage(role="system", content=system_content),
-                *messages
-            ]
-
-        prompt_text = convert_messages_to_string(messages_to_send, truncate_last=False)
+        prompt_text = f"SYSTEM: {system_content}\n\n{convert_messages_to_string(messages_to_send, truncate_last=False)}"
         logger.log(LogLevel.PROMPT, f"{prompt_text}")
 
         response = await enqueue_api_call(
             model=CHAT_AGENT_MODEL,
             messages=messages_to_send,
+            system_message=system_content,
             tools=tools,
             temperature=0.7,
-            mock=mock
+            mock=mock,
+            system_prompt_parts=system_prompt_parts
         )
 
         # Update token usage if in a tool loop
@@ -124,7 +162,8 @@ async def get_response(
                 chat_history=chat_history,
                 token_budget=token_budget,
                 mock=mock,
-                mock_messages=mock_messages
+                mock_messages=mock_messages,
+                system_prompt_parts=system_prompt_parts
             )
             if user_message:
                 if tool_loop_data:
@@ -174,7 +213,8 @@ async def process_tool_calls(
     chat_history: ChatHistory,
     token_budget: int = 20000,
     mock: bool = False,
-    mock_messages: Optional[List[ChatMessage]] = None
+    mock_messages: Optional[List[ChatMessage]] = None,
+    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None
 ) -> Optional[str]:
     """
     Process tool calls by matching them to corresponding functions.
@@ -187,6 +227,7 @@ async def process_tool_calls(
         token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
         mock: If True, uses mock_messages instead of normal message setup.
         mock_messages: List of mock messages to use when mock=True.
+        system_prompt_parts: Optional dict of prompt parts with toggle and index info.
 
     Returns:
         Optional[str]: A message to be returned to the user, if available.
@@ -213,7 +254,8 @@ async def process_tool_calls(
                 'chat_history': chat_history,
                 'token_budget': token_budget,
                 'mock': mock,
-                'mock_messages': mock_messages
+                'mock_messages': mock_messages,
+                'system_prompt_parts': system_prompt_parts or DEFAULT_SYSTEM_PROMPT_PARTS
             }
             
             # Only pass common args that the function accepts in its signature

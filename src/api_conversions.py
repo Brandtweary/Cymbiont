@@ -1,17 +1,57 @@
+from unittest.mock import DEFAULT
 from openai.types.chat import ChatCompletionUserMessageParam, ChatCompletionSystemMessageParam, ChatCompletionAssistantMessageParam
 from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from openai.types.shared_params.response_format_text import ResponseFormatText
-from agents.tool_schemas import TOOL_SCHEMAS
+from agents.tool_schemas import TOOL_SCHEMAS, format_tool_schema
+from prompts import DEFAULT_SYSTEM_PROMPT_PARTS
 from custom_dataclasses import APICall, ChatMessage
 import time
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Set, List, Union
+from constants import ToolName
 
+def get_formatted_tool_schemas(tools: Optional[Set[ToolName]], system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None) -> Optional[List[Dict[str, Any]]]:
+    """Get formatted tool schemas without modifying the original schemas.
+    
+    Args:
+        tools: Set of tool names to format, or None
+        system_prompt_parts: Optional dict of system prompt parts to use for formatting.
+                           If None, uses DEFAULT_SYSTEM_PROMPT_PARTS.
+    
+    Returns:
+        List of formatted tool schemas or None if no tools provided or no valid schemas found
+    """
+    if not tools:
+        return None
+        
+    formatted_tools = []
+    for tool in tools:
+        if tool not in TOOL_SCHEMAS:
+            continue
+            
+        schema = TOOL_SCHEMAS[tool].copy()
+        # Only format toggle_prompt_part if system_prompt_parts is provided or using defaults
+        if tool == ToolName.TOGGLE_PROMPT_PART:
+            current_parts = system_prompt_parts or DEFAULT_SYSTEM_PROMPT_PARTS
+            schema = format_tool_schema(schema, system_prompt_parts=current_parts)
+                
+        formatted_tools.append(schema)
+        
+    return formatted_tools if formatted_tools else None
 
 def convert_to_openai_params(call: APICall) -> Dict[str, Any]:
     """Convert APICall to OpenAI API parameters."""
     openai_messages = []
+    
+    # Add system message as first message
+    if call.model.startswith('o1'):
+        # For o1-preview models, convert system message to user message
+        openai_messages.append(ChatCompletionUserMessageParam(role="user", content=call.system_message))
+    else:
+        openai_messages.append(ChatCompletionSystemMessageParam(role="system", content=call.system_message))
+    
+    # Handle remaining messages
     for msg in call.messages:
         # For o1-preview models, convert system messages to user messages
         if call.model.startswith('o1') and msg.role == "system":
@@ -38,10 +78,11 @@ def convert_to_openai_params(call: APICall) -> Dict[str, Any]:
     }
     
     if call.tools:
-        selected_tool_schemas = [schema for tool, schema in TOOL_SCHEMAS.items() if tool in call.tools]
-        api_params["tools"] = selected_tool_schemas
-        api_params["tool_choice"] = "auto"
-        api_params["response_format"] = ResponseFormatJSONObject(type="json_object")
+        formatted_tools = get_formatted_tool_schemas(call.tools, call.system_prompt_parts)
+        if formatted_tools:
+            api_params["tools"] = formatted_tools
+            api_params["tool_choice"] = "auto"
+            api_params["response_format"] = ResponseFormatJSONObject(type="json_object")
     
     return api_params
 
@@ -75,21 +116,14 @@ def convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
     api_params = {
         "model": call.model,
         "temperature": call.temperature,
-        "max_tokens": call.max_completion_tokens
+        "max_tokens": call.max_completion_tokens,
+        "system": call.system_message
     }
     
-    # Extract the first system message for the system parameter
-    messages = list(call.messages)  # Make a copy so we don't modify the original
-    system_message = None
-    for i, msg in enumerate(messages):
-        if msg.role == "system":
-            system_message = messages.pop(i)
-            break
+    # Make a copy of messages to avoid modifying the original
+    messages = list(call.messages)
     
-    if system_message:
-        api_params["system"] = system_message.content
-    
-    # Group remaining system messages with next user message
+    # Group messages by name and role
     processed_messages = []
     pending_system_msgs = []
     
@@ -207,17 +241,18 @@ def convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
     
     # Convert tool schemas if present
     if call.tools:
-        tools = []
-        for tool in call.tools:
-            schema = TOOL_SCHEMAS[tool]
-            anthropic_tool = {
-                "name": schema["function"]["name"],
-                "description": schema["function"]["description"],
-                "input_schema": schema["function"]["parameters"]
-            }
-            tools.append(anthropic_tool)
-        api_params["tools"] = tools
-        api_params["tool_choice"] = {"type": "auto"}
+        formatted_tools = get_formatted_tool_schemas(call.tools, call.system_prompt_parts)
+        if formatted_tools:
+            tools = []
+            for tool in formatted_tools:
+                anthropic_tool = {
+                    "name": tool["function"]["name"],
+                    "description": tool["function"]["description"],
+                    "input_schema": tool["function"]["parameters"]
+                }
+                tools.append(anthropic_tool)
+            api_params["tools"] = tools
+            api_params["tool_choice"] = {"type": "auto"}
     
     return api_params
 

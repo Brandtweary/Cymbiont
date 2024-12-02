@@ -23,7 +23,8 @@ async def test_rpm_rate_limiting() -> None:
                 content=f"Test message {i}"
             )],
             mock=True,
-            mock_tokens=mock_tokens
+            mock_tokens=mock_tokens,
+            system_message="mock system message"
         )
         futures.append(future)
 
@@ -62,7 +63,8 @@ async def test_tpm_throttle() -> None:
             content="High token usage test"
         )],
         mock=True,
-        mock_tokens=tokens_per_call
+        mock_tokens=tokens_per_call,
+        system_message="mock system message"
     )
 
     # Step 2: Wait for the high token call to be processed
@@ -79,7 +81,8 @@ async def test_tpm_throttle() -> None:
                 content=f"Throttled message {i}"
             )],
             mock=True,
-            mock_tokens=100  # Regular token usage
+            mock_tokens=100,  # Regular token usage
+            system_message="mock system message"
         )
         new_futures.append(future)
 
@@ -113,7 +116,8 @@ async def test_tpm_soft_limit() -> None:
             content="High token usage test"
         )],
         mock=True,
-        mock_tokens=tokens_per_call
+        mock_tokens=tokens_per_call,
+        system_message="mock system message"
     )
 
     # Step 2: Wait for the high token call to be processed
@@ -130,7 +134,8 @@ async def test_tpm_soft_limit() -> None:
                 content=f"Throttled message {i}"
             )],
             mock=True,
-            mock_tokens=100  # Regular token usage
+            mock_tokens=100,  # Regular token usage
+            system_message="mock system message"
         )
         new_futures.append(future)
 

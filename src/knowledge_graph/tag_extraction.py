@@ -1,13 +1,11 @@
-import json
-from json.decoder import JSONDecodeError
-from typing import List, Optional
+from typing import Optional, List
 from shared_resources import logger, DEBUG_ENABLED
-from model_configuration import TAG_EXTRACTION_MODEL
-from prompts import TAG_PROMPT, safe_format_prompt
-from custom_dataclasses import Chunk, ChatMessage
-from utils import log_performance
+from custom_dataclasses import Chunk, ProcessLog, ChatMessage
 from api_queue import enqueue_api_call
-from process_log import ProcessLog
+from model_configuration import TAG_EXTRACTION_MODEL
+from prompts import get_system_message
+from utils import log_performance
+import json
 
 
 @log_performance
@@ -19,25 +17,30 @@ async def extract_tags(
 ) -> None:
     """Extract relevant tags from a chunk of text."""
     try:
-        tag_prompt = safe_format_prompt(TAG_PROMPT, text=chunk.text)
-        process_log.prompt(f"Tag Extraction Prompt:\n{tag_prompt}")
+        system_content = get_system_message(["tag_extraction_system"], text=chunk.text)
+        process_log.prompt(f"Tag Extraction Prompt:\n{system_content}")
 
-        # Track expiration counter for retries
         expiration_counter = 0
-        while expiration_counter < 3:  # Allow up to 3 total attempts
+        while expiration_counter < 3:  
+            messages_to_send = [
+                ChatMessage(
+                    role="user",
+                    content="Please extract tags from the text.",
+                    name=None
+                )
+            ]
+            
             future = enqueue_api_call(
                 model=TAG_EXTRACTION_MODEL,
-                messages=[ChatMessage(
-                    role="user",
-                    content=mock_content if mock else tag_prompt
-                )],
+                messages=messages_to_send,
+                system_message=mock_content if mock else system_content,
                 mock=mock,
                 mock_tokens=100,
                 expiration_counter=expiration_counter,
                 process_log=process_log
             )
             response = await future
-            expiration_counter = response.get("expiration_counter", 5)  # Default to max if missing
+            expiration_counter = response.get("expiration_counter", 5)  
             
             process_log.debug(f"Tag extraction API call used {response['token_usage']['total_tokens']} tokens")
             process_log.response(f"Tag Extraction Response:\n{response['content']}")
@@ -51,7 +54,7 @@ async def extract_tags(
                 continue
 
             tags = validate_tag_response(response["content"])
-            if tags is None or not tags:  # Check for empty tag list
+            if tags is None or not tags:  
                 process_log.error(f"Failed to validate tag response or empty tags (attempt {expiration_counter})")
                 if expiration_counter >= 2:
                     process_log.info(f"Final attempt count: {expiration_counter + 1}")
@@ -59,7 +62,6 @@ async def extract_tags(
                     return
                 continue
 
-            # Success case
             chunk.tags = tags
             chunk.metadata['tag_extraction_model'] = TAG_EXTRACTION_MODEL
             process_log.debug(f"Extracted tags: {tags}")
@@ -71,6 +73,7 @@ async def extract_tags(
         chunk.tags = []
         if DEBUG_ENABLED:
             raise
+
 
 def validate_tag_response(content: str) -> Optional[List[str]]:
     """Validate tag response and extract tags list."""
@@ -92,16 +95,15 @@ def validate_tag_response(content: str) -> Optional[List[str]]:
 
         tags = [str(tag) for tag in tags]
         
-        # New check for empty tag list
         if not tags:
             logger.warning("Tag list is empty")
             return None
 
         return tags
 
-    except JSONDecodeError as e:
+    except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON response: {e}")
         return None
     except Exception as e:
-        logger.error(f"Validation failed: {str(e)}")
+        logger.error(f"Error validating tag response: {e}")
         return None

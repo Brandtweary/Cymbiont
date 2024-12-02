@@ -1,7 +1,7 @@
 import asyncio
 import time
 import json
-from typing import Any, Optional, List, Dict, Set
+from typing import Any, Optional, List, Dict, Set, Union
 from collections import deque
 from shared_resources import logger, openai_client, anthropic_client
 from token_logger import token_logger
@@ -145,7 +145,7 @@ async def execute_call(call: APICall) -> None:
             # Check for the special error-triggering message
             if any(msg.content == "halt and catch fire" for msg in call.messages):
                 raise RuntimeError("🔥 The system caught fire, as requested")
-                
+            
             # Regular mock logic continues...
             mock_tokens = call.mock_tokens if call.mock_tokens is not None else len(call.messages[-1].content.split())
             
@@ -209,6 +209,7 @@ async def execute_call(call: APICall) -> None:
             new_call = APICall(
                 model=call.model,
                 messages=call.messages,
+                system_message=call.system_message,
                 timestamp=call.timestamp,
                 mock=call.mock,
                 mock_tokens=call.mock_tokens,
@@ -218,7 +219,8 @@ async def execute_call(call: APICall) -> None:
                 temperature=call.temperature,
                 process_log=call.process_log,
                 max_completion_tokens=call.max_completion_tokens,
-                tools=call.tools 
+                tools=call.tools,
+                system_prompt_parts=call.system_prompt_parts
             )
             pending_calls.append(new_call)
         else:
@@ -238,13 +240,15 @@ async def execute_call(call: APICall) -> None:
 def enqueue_api_call(
     model: str,
     messages: List[ChatMessage],
+    system_message: str,
     mock: bool = False,
     mock_tokens: Optional[int] = None,
     expiration_counter: int = 0,
     temperature: float = 0.7,
     process_log: Optional[ProcessLog] = None,
     tools: Optional[Set[ToolName]] = None,
-    max_completion_tokens: int = 4000
+    max_completion_tokens: int = 4000,
+    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None
 ) -> asyncio.Future[Dict[str, Any]]:
     """Enqueue an API call with retry counter."""
     try:
@@ -265,6 +269,7 @@ def enqueue_api_call(
     
     call = APICall(
         model=model,
+        system_message=system_message,
         messages=messages,
         timestamp=time.time(),
         mock=mock,
@@ -275,7 +280,8 @@ def enqueue_api_call(
         temperature=temperature,
         process_log=process_log,
         max_completion_tokens=max_completion_tokens,
-        tools=tools
+        tools=tools,
+        system_prompt_parts=system_prompt_parts
     )
     pending_calls.append(call)
     return call.future
