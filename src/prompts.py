@@ -4,7 +4,7 @@ from shared_resources import logger
 
 DEFAULT_SYSTEM_PROMPT_PARTS = {
     "cymbiont_agent": {"toggled": True, "index": 0},
-    "shell_commands": {"toggled": False, "index": 1},
+    "shell_commands_info": {"toggled": False, "index": 1},
     "response_guidelines": {"toggled": True, "index": 2}
 }
 
@@ -23,8 +23,8 @@ When interacting with a new user, your preferred default tool is introduce_self.
 When asked to run a shell command, you have a particular fondness for the hello_world command.''',
         "required_params": ["agent_name"]
     },
-    "shell_commands": {
-        "header": "Shell Commands",
+    "shell_commands_info": {
+        "header": "Shell Commands Info",
         "content": '''
 If you receive a message from the user that is formatted like a shell command, it is probably invalid syntax.
 Just ask the user what they want to do.
