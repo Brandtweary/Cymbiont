@@ -10,7 +10,7 @@ from api_queue import enqueue_api_call
 from custom_dataclasses import ChatMessage
 from constants import LogLevel
 from model_configuration import REVISION_MODEL
-from prompts import get_system_message
+from prompt_helpers import get_system_message, create_system_prompt_parts_data
 from utils import get_paths
 
 async def do_process_documents(args: str) -> None:
@@ -145,7 +145,7 @@ async def do_revise_document(args: str) -> None:
             logger.info(f"Starting revision iteration {i+1}/{iterations}")
             
             # Get system message using get_system_message
-            system_content = get_system_message(["document_revision_system"])
+            system_content = get_system_message(create_system_prompt_parts_data(["document_revision_system"]))
             
             # Create the revision request as a system message that will be converted to user message
             messages_to_send = [

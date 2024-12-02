@@ -1,23 +1,17 @@
 import asyncio
-from typing import Any, List, Optional, Set, Dict, Tuple, Union
+from typing import Any, List, Optional, Set, Dict, Tuple, Union, Callable
 from api_queue import enqueue_api_call
 from shared_resources import logger, AGENT_NAME
 from constants import LogLevel, ToolName
 from model_configuration import CHAT_AGENT_MODEL
-from prompts import get_system_message
+from prompt_helpers import get_system_message
+from custom_dataclasses import ChatMessage, ToolLoopData, SystemPromptPartsData, SystemPromptPartInfo
 from .tool_schemas import TOOL_SCHEMAS
 from utils import log_performance, convert_messages_to_string
-from openai.types.chat import (
-    ChatCompletionMessageParam,
-    ChatCompletionSystemMessageParam,
-    ChatCompletionUserMessageParam,
-    ChatCompletionAssistantMessageParam
-)
-from custom_dataclasses import ChatMessage, ToolLoopData
 from .chat_history import ChatHistory
 import inspect
 from functools import lru_cache
-from prompts import DEFAULT_SYSTEM_PROMPT_PARTS
+from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS
 
 
 @lru_cache(maxsize=1)
@@ -61,14 +55,15 @@ def get_tool_function_map():
     return tool_map
 
 
-def convert_to_openai_message(message: ChatMessage) -> ChatCompletionMessageParam:
-    """Convert our message format to OpenAI's format"""
-    if message.role == "system":
-        return ChatCompletionSystemMessageParam(role=message.role, content=message.content)
-    elif message.role == "user":
-        return ChatCompletionUserMessageParam(role=message.role, content=message.content)
-    else:  # assistant
-        return ChatCompletionAssistantMessageParam(role=message.role, content=message.content)
+# Common arguments that can be passed to any tool processing function from process_tool_calls
+COMMON_TOOL_ARGS = {
+    'chat_history',          
+    'tool_loop_data',        
+    'token_budget',          
+    'mock',                  
+    'mock_messages',        
+    'system_prompt_parts'
+}
 
 @log_performance
 async def get_response(
@@ -78,7 +73,7 @@ async def get_response(
     token_budget: int = 20000,
     mock: bool = False,
     mock_messages: Optional[List[ChatMessage]] = None,
-    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None
+    system_prompt_parts: Optional[SystemPromptPartsData] = None
 ) -> str:
     """
     Sends a message to the OpenAI chat agent with conversation history.
@@ -90,14 +85,16 @@ async def get_response(
         token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
         mock: If True, uses mock_messages instead of normal message setup.
         mock_messages: List of mock messages to use when mock=True.
+        system_prompt_parts: Optional SystemPromptPartsData instance with prompt parts.
 
     Returns:
         str: The assistant's response.
     """
     try:
         # Initialize system_prompt_parts with default if none provided
-        system_prompt_parts = system_prompt_parts if system_prompt_parts is not None else DEFAULT_SYSTEM_PROMPT_PARTS
-
+        if not system_prompt_parts:
+            system_prompt_parts = DEFAULT_SYSTEM_PROMPT_PARTS
+        
         if mock and mock_messages:
             messages_to_send = mock_messages
             system_content = "mock system message"
@@ -116,11 +113,11 @@ async def get_response(
             # Only include progressive summary if there's actually a summary
             if summary:
                 kwargs["summary"] = summary
-                system_prompt_parts["progressive_summary"] = {"toggled": True, "index": len(system_prompt_parts)}
-            elif "progressive_summary" in system_prompt_parts:
-                del system_prompt_parts["progressive_summary"]
+                system_prompt_parts.parts["progressive_summary"] = SystemPromptPartInfo(toggled=True, index=len(system_prompt_parts.parts))
+            elif "progressive_summary" in system_prompt_parts.parts:
+                del system_prompt_parts.parts["progressive_summary"]
             
-            system_content = get_system_message(list(system_prompt_parts.keys()), system_prompt_parts, **kwargs)
+            system_content = get_system_message(system_prompt_parts=system_prompt_parts, **kwargs)
             messages_to_send = messages
 
         prompt_text = f"SYSTEM: {system_content}\n\n{convert_messages_to_string(messages_to_send, truncate_last=False)}"
@@ -212,7 +209,7 @@ async def process_tool_calls(
     token_budget: int = 20000,
     mock: bool = False,
     mock_messages: Optional[List[ChatMessage]] = None,
-    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None
+    system_prompt_parts: Optional[SystemPromptPartsData] = None
 ) -> Optional[str]:
     """
     Process tool calls by matching them to corresponding functions.
@@ -225,7 +222,7 @@ async def process_tool_calls(
         token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
         mock: If True, uses mock_messages instead of normal message setup.
         mock_messages: List of mock messages to use when mock=True.
-        system_prompt_parts: Optional dict of prompt parts with toggle and index info.
+        system_prompt_parts: Optional SystemPromptPartsData instance with prompt parts.
 
     Returns:
         Optional[str]: A message to be returned to the user, if available.
@@ -233,6 +230,18 @@ async def process_tool_calls(
     messages = []
     tool_map = get_tool_function_map()
     
+    def get_common_args_for_function(function: Callable, **kwargs) -> Dict[str, Any]:
+        """Get the common args that this function accepts."""
+        # Check for any missing common args
+        missing_args = COMMON_TOOL_ARGS - set(kwargs.keys())
+        if missing_args:
+            logger.warning(f"Missing common tool args in process_tool_calls: {missing_args}")
+
+        return {
+            k: v for k, v in kwargs.items()
+            if k in COMMON_TOOL_ARGS and k in inspect.signature(function).parameters
+        }
+
     for call_id, tool_call in tool_call_results.items():
         assert isinstance(call_id, str), f"Tool call ID must be string, got {type(call_id)}: {call_id}"
         tool_name = tool_call['tool_name']
@@ -246,25 +255,19 @@ async def process_tool_calls(
         processing_function = tool_map[tool_name]
 
         try:
-            # Common args that functions can optionally accept
-            common_args = {
-                'tool_loop_data': tool_loop_data,
-                'chat_history': chat_history,
-                'token_budget': token_budget,
-                'mock': mock,
-                'mock_messages': mock_messages,
-                'system_prompt_parts': system_prompt_parts or DEFAULT_SYSTEM_PROMPT_PARTS
-            }
-            
-            # Only pass common args that the function accepts in its signature
-            accepted_args = {
-                k: v for k, v in common_args.items() 
-                if k in inspect.signature(processing_function).parameters
-            }
+            common_args = get_common_args_for_function(
+                processing_function,
+                tool_loop_data=tool_loop_data,
+                chat_history=chat_history,
+                token_budget=token_budget,
+                mock=mock,
+                mock_messages=mock_messages,
+                system_prompt_parts=system_prompt_parts
+            )
             
             response = await processing_function(
                 **args_to_pass,  # Schema-required args
-                **accepted_args  # Only the common args this function wants
+                **common_args    # Only the common args this function wants
             )
             if response is not None:
                 messages.append(response)
@@ -325,14 +328,14 @@ def validate_tool_args(
     return args_to_pass, None
 
 def handle_tool_loop_parts(system_prompt_parts, tool_loop_data, kwargs):
-    system_prompt_parts["tool_loop"] = {"toggled": True, "index": len(system_prompt_parts)}
+    system_prompt_parts.parts["tool_loop"] = SystemPromptPartInfo(toggled=True, index=len(system_prompt_parts.parts))
     tool_loop_data.system_prompt_parts = system_prompt_parts
     kwargs["loop_message"] = tool_loop_data.loop_message
     return system_prompt_parts
 
 def remove_tool_loop_part(system_prompt_parts):
-    if "tool_loop" in system_prompt_parts:
-        del system_prompt_parts["tool_loop"]
+    if "tool_loop" in system_prompt_parts.parts:
+        del system_prompt_parts.parts["tool_loop"]
     return system_prompt_parts
 
 def log_token_budget_warnings(loop_tokens: int, token_budget: int, loop_type: str) -> None:
@@ -367,15 +370,12 @@ def register_tools():
     1. Has all required parameters from its tool schema
     2. Any additional parameters must be either:
        - Optional parameters from the tool schema
-       - Parameters from process_tool_calls's signature
+       - Parameters from COMMON_TOOL_ARGS
     
     Raises:
         ValueError: If any tool processing function has invalid parameters.
     """
     tool_map = get_tool_function_map()
-    
-    # Get the available extra parameters from process_tool_calls
-    process_tool_calls_params = set(inspect.signature(process_tool_calls).parameters.keys())
     
     for tool_name, function in tool_map.items():
         try:
@@ -395,13 +395,13 @@ def register_tools():
             if param not in sig.parameters:
                 raise ValueError(f"Function '{function.__name__}' missing required parameter '{param}' for tool '{tool_name}'.")
 
-        # 2. Any parameter not in schema (required or optional) must be from process_tool_calls
+        # 2. Any parameter not in schema (required or optional) must be from COMMON_TOOL_ARGS
         extra_params = func_params - all_schema_params
-        invalid_params = extra_params - process_tool_calls_params
+        invalid_params = extra_params - COMMON_TOOL_ARGS
         if invalid_params:
             raise ValueError(
                 f"Function '{function.__name__}' has parameters {invalid_params} that are neither "
-                f"in its tool schema nor available from process_tool_calls."
+                f"in its tool schema nor in COMMON_TOOL_ARGS."
             )
 
 register_tools()

@@ -5,7 +5,7 @@ from typing import Any, Optional, List, Dict, Set, Union
 from collections import deque
 from shared_resources import logger, openai_client, anthropic_client
 from token_logger import token_logger
-from custom_dataclasses import APICall, TokenUsage, ChatMessage
+from custom_dataclasses import APICall, TokenUsage, ChatMessage, SystemPromptPartsData
 from process_log import ProcessLog
 from constants import LLM, model_data, ToolName
 from api_conversions import convert_from_anthropic_response, convert_from_openai_response, convert_to_anthropic_params, convert_to_openai_params
@@ -248,7 +248,7 @@ def enqueue_api_call(
     process_log: Optional[ProcessLog] = None,
     tools: Optional[Set[ToolName]] = None,
     max_completion_tokens: int = 4000,
-    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None
+    system_prompt_parts: Optional[SystemPromptPartsData] = None
 ) -> asyncio.Future[Dict[str, Any]]:
     """Enqueue an API call with retry counter."""
     try:

@@ -7,7 +7,7 @@ import re
 from api_queue import enqueue_api_call
 from constants import LogLevel
 from model_configuration import CHAT_AGENT_MODEL, PROGRESSIVE_SUMMARY_MODEL
-from prompts import get_system_message
+from prompt_helpers import get_system_message, create_system_prompt_parts_data
 from utils import convert_messages_to_string
 from custom_dataclasses import ChatMessage, MessageRole
 
@@ -177,10 +177,7 @@ class ChatHistory:
             return ', '.join(message.content for message in messages)
         
         # Get system message using get_system_message
-        system_content = get_system_message(
-            ["progressive_summary_system"],
-            conversation=full_conversation
-        )
+        system_content = get_system_message(create_system_prompt_parts_data(["progressive_summary_system"]), conversation=full_conversation)
         
         # Create a concise user message requesting the summary
         messages_to_send = [

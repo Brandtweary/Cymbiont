@@ -9,7 +9,7 @@ from token_logger import token_logger
 from agents.chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel, ToolName
 from agents.chat_agent import get_response
-from prompts import DEFAULT_SYSTEM_PROMPT_PARTS
+from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS
 from agents.tool_schemas import format_all_tool_schemas
 
 

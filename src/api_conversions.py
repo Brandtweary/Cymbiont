@@ -4,14 +4,17 @@ from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from openai.types.shared_params.response_format_text import ResponseFormatText
 from agents.tool_schemas import TOOL_SCHEMAS, format_tool_schema
-from prompts import DEFAULT_SYSTEM_PROMPT_PARTS
-from custom_dataclasses import APICall, ChatMessage
+from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS
+from custom_dataclasses import APICall, ChatMessage, SystemPromptPartsData
 import time
 import json
 from typing import Dict, Any, Optional, Set, List, Union
 from constants import ToolName
 
-def get_formatted_tool_schemas(tools: Optional[Set[ToolName]], system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None) -> Optional[List[Dict[str, Any]]]:
+def get_formatted_tool_schemas(
+    tools: Optional[Set[ToolName]],
+    system_prompt_parts: Optional[SystemPromptPartsData] = None
+) -> Optional[List[Dict[str, Any]]]:
     """Get formatted tool schemas without modifying the original schemas.
     
     Args:

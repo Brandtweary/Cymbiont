@@ -1,12 +1,10 @@
-from sympy import true
 from shared_resources import logger, AGENT_NAME, get_shell
 from constants import LogLevel, ToolName
 from .chat_agent import get_response
-from prompts import DEFAULT_SYSTEM_PROMPT_PARTS
-from custom_dataclasses import ToolLoopData, ChatMessage
+from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS
+from custom_dataclasses import ToolLoopData, ChatMessage, SystemPromptPartsData, SystemPromptPartInfo
 from .chat_history import ChatHistory
-from typing import Optional, List, Any, Dict, Union, Set
-from prompt_toolkit.formatted_text import ANSI
+from typing import Optional, List, Set
 
 async def process_contemplate_loop(
     question: str,
@@ -15,7 +13,7 @@ async def process_contemplate_loop(
     token_budget: int = 20000,
     mock: bool = False,
     mock_messages: Optional[List[ChatMessage]] = None,
-    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None
+    system_prompt_parts: Optional[SystemPromptPartsData] = None
 ) -> Optional[str]:
     """
     Process the 'contemplate_loop' tool call.
@@ -111,23 +109,23 @@ async def process_message_self(
 
 async def process_toggle_prompt_part(
     part_name: str,
-    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None
+    system_prompt_parts: Optional[SystemPromptPartsData] = None
 ) -> str:
     """Process the toggle_prompt_part tool call."""
     if not system_prompt_parts:
         logger.error("No system prompt parts available")
         return ""
     
-    if part_name not in system_prompt_parts:
+    if part_name not in system_prompt_parts.parts:
         logger.error(f"Unknown prompt part '{part_name}'")
         return ""
     
     # Toggle the part
-    part_info = system_prompt_parts[part_name]
-    part_info["toggled"] = not part_info.get("toggled", True)
+    part_info = system_prompt_parts.parts[part_name]
+    part_info.toggled = not part_info.toggled
     
     # Get current state
-    state = "on" if part_info["toggled"] else "off"
+    state = "on" if part_info.toggled else "off"
     logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: toggle_prompt_part - Toggled prompt part '{part_name}' {state}")
     return f"I've turned {part_name} {state}."
 
@@ -200,7 +198,7 @@ async def process_introduce_self(
 def create_tool_loop_data(
     loop_type: str,
     loop_message: str,
-    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None,
+    system_prompt_parts: Optional[SystemPromptPartsData] = None,
     tools: Optional[Set[ToolName]] = None,
     new_system_prompt: bool = False
 ) -> ToolLoopData:

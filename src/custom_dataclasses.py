@@ -48,6 +48,50 @@ class Paths(NamedTuple):
     snapshots_dir: Path
 
 @dataclass
+class TokenUsage:
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    timestamp: float
+
+@dataclass
+class SystemMessagePart:
+    header: str
+    content: str
+    required_params: List[str]
+
+@dataclass
+class SystemPromptPartInfo:
+    """Info for a single system prompt part"""
+    toggled: bool
+    index: int
+
+@dataclass
+class SystemPromptPartsData:
+    """Data structure for system prompt parts configuration.
+    Each part has a toggle state and an index for ordering."""
+    parts: Dict[str, SystemPromptPartInfo]
+
+    def __post_init__(self):
+        # Validate that all values are SystemPromptPartInfo
+        for part_name, part_info in self.parts.items():
+            if not isinstance(part_info, SystemPromptPartInfo):
+                if isinstance(part_info, dict):
+                    self.parts[part_name] = SystemPromptPartInfo(**part_info)
+                else:
+                    raise ValueError(f"Invalid part info for {part_name}: {part_info}")
+
+@dataclass
+class ToolLoopData:
+    """Data for managing tool loops."""
+    loop_type: str
+    loop_message: str
+    active: bool = True
+    available_tools: Set[ToolName] = field(default_factory=set)
+    loop_tokens: int = 0
+    system_prompt_parts: Optional[SystemPromptPartsData] = None
+
+@dataclass
 class APICall:
     model: str
     messages: List[ChatMessage]
@@ -62,21 +106,4 @@ class APICall:
     temperature: float = 0.7
     process_log: Optional[ProcessLog] = None
     tools: Optional[Set[ToolName]] = None
-    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None
-
-@dataclass
-class TokenUsage:
-    input_tokens: int
-    output_tokens: int
-    total_tokens: int
-    timestamp: float
-
-@dataclass
-class ToolLoopData:
-    """Data for managing tool loops."""
-    loop_type: str
-    loop_message: str
-    active: bool = True
-    available_tools: Set[ToolName] = field(default_factory=set)
-    loop_tokens: int = 0
-    system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None
+    system_prompt_parts: Optional[SystemPromptPartsData] = None

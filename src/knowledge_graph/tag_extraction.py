@@ -3,7 +3,7 @@ from shared_resources import logger, DEBUG_ENABLED
 from custom_dataclasses import Chunk, ProcessLog, ChatMessage
 from api_queue import enqueue_api_call
 from model_configuration import TAG_EXTRACTION_MODEL
-from prompts import get_system_message
+from prompt_helpers import get_system_message, create_system_prompt_parts_data
 from utils import log_performance
 import json
 
@@ -17,7 +17,7 @@ async def extract_tags(
 ) -> None:
     """Extract relevant tags from a chunk of text."""
     try:
-        system_content = get_system_message(["tag_extraction_system"], text=chunk.text)
+        system_content = get_system_message(create_system_prompt_parts_data(["tag_extraction_system"]), text=chunk.text)
         process_log.prompt(f"Tag Extraction Prompt:\n{system_content}")
 
         expiration_counter = 0

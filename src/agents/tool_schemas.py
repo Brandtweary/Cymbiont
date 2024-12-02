@@ -18,7 +18,7 @@ def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
             logger.warning("system_prompt_parts required for toggle_prompt_part schema formatting")
             return schema
             
-        part_names = list(kwargs["system_prompt_parts"].keys())
+        part_names = list(kwargs["system_prompt_parts"].parts.keys())
         schema["function"]["parameters"]["properties"]["part_name"]["enum"] = part_names
     
     elif schema_name == "execute_shell_command":
