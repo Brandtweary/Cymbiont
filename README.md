@@ -1,6 +1,8 @@
 # Cymbiont
 
-An autonomous LLM agent with long-term memory.
+Cymbiont is an autonomous machine life framework designed to serve as a container for perpetual AI agents. It provides a sophisticated environment where AI agents can exist and operate continuously, whether deployed in the cloud or run locally (local deployment currently in development).
+
+At its core, Cymbiont implements a graph-based RAG (Retrieval-Augmented Generation) system for long-term memory, enabling agents to maintain and utilize their experiences effectively over time. This advanced memory architecture allows for more coherent and context-aware interactions.
 
 ## Setup Instructions
 
