@@ -95,6 +95,9 @@ async def get_response(
         str: The assistant's response.
     """
     try:
+        # Initialize system_prompt_parts with default if none provided
+        system_prompt_parts = system_prompt_parts if system_prompt_parts is not None else DEFAULT_SYSTEM_PROMPT_PARTS
+
         if mock and mock_messages:
             messages_to_send = mock_messages
             system_content = "mock system message"
@@ -102,29 +105,22 @@ async def get_response(
             # Build system message from parts
             kwargs = {"agent_name": AGENT_NAME}
             
-            # For tool loops, copy the default parts to avoid modifying the original
+            # Handle tool loop parts
             if tool_loop_data:
-                current_parts = (system_prompt_parts or DEFAULT_SYSTEM_PROMPT_PARTS).copy()
-                current_parts["tool_loop"] = {"toggled": True, "index": len(current_parts)}
-                tool_loop_data.system_prompt_parts = current_parts
+                system_prompt_parts = handle_tool_loop_parts(system_prompt_parts, tool_loop_data, kwargs)
             else:
-                # In main chat loop, use the parts directly for dynamic updates
-                current_parts = system_prompt_parts or DEFAULT_SYSTEM_PROMPT_PARTS
-            
-            # Add tool loop message if present
-            if tool_loop_data:
-                kwargs["loop_message"] = tool_loop_data.loop_message
+                system_prompt_parts = remove_tool_loop_part(system_prompt_parts)
             
             messages, summary = chat_history.get_recent_messages()
             
             # Only include progressive summary if there's actually a summary
             if summary:
                 kwargs["summary"] = summary
-                current_parts["progressive_summary"] = {"toggled": True, "index": len(current_parts)}
-            elif "progressive_summary" in current_parts:
-                del current_parts["progressive_summary"]
+                system_prompt_parts["progressive_summary"] = {"toggled": True, "index": len(system_prompt_parts)}
+            elif "progressive_summary" in system_prompt_parts:
+                del system_prompt_parts["progressive_summary"]
             
-            system_content = get_system_message(list(current_parts.keys()), current_parts, **kwargs)
+            system_content = get_system_message(list(system_prompt_parts.keys()), system_prompt_parts, **kwargs)
             messages_to_send = messages
 
         prompt_text = f"SYSTEM: {system_content}\n\n{convert_messages_to_string(messages_to_send, truncate_last=False)}"
@@ -327,6 +323,17 @@ def validate_tool_args(
 
     args_to_pass = {param: arguments[param] for param in required_params}
     return args_to_pass, None
+
+def handle_tool_loop_parts(system_prompt_parts, tool_loop_data, kwargs):
+    system_prompt_parts["tool_loop"] = {"toggled": True, "index": len(system_prompt_parts)}
+    tool_loop_data.system_prompt_parts = system_prompt_parts
+    kwargs["loop_message"] = tool_loop_data.loop_message
+    return system_prompt_parts
+
+def remove_tool_loop_part(system_prompt_parts):
+    if "tool_loop" in system_prompt_parts:
+        del system_prompt_parts["tool_loop"]
+    return system_prompt_parts
 
 def log_token_budget_warnings(loop_tokens: int, token_budget: int, loop_type: str) -> None:
     """

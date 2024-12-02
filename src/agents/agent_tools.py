@@ -202,7 +202,7 @@ def create_tool_loop_data(
     loop_message: str,
     system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None,
     tools: Optional[Set[ToolName]] = None,
-    new_system_prompt: bool = True
+    new_system_prompt: bool = False
 ) -> ToolLoopData:
     """Create a ToolLoopData instance with required tools and settings.
     
