@@ -47,7 +47,7 @@ async def test_tool_loop():
     # Call get_response with mock data
     response = await get_response(
         chat_history=chat_history,
-        tools={ToolName.CONTEMPLATE},  # Only need contemplate tool
+        tools={ToolName.CONTEMPLATE_LOOP},  # Only need contemplate tool
         mock=True,
         mock_messages=mock_messages
     )
@@ -60,7 +60,7 @@ async def test_arg_validation():
     args, error = validate_tool_args(
         "not_a_real_tool",
         {},
-        {ToolName.CONTEMPLATE}
+        {ToolName.CONTEMPLATE_LOOP}
     )
     assert args is None
     assert error is not None and "Invalid tool name" in error
@@ -78,7 +78,7 @@ async def test_arg_validation():
     args, error = validate_tool_args(
         "contemplate",
         {},  # Missing 'question' parameter
-        {ToolName.CONTEMPLATE}
+        {ToolName.CONTEMPLATE_LOOP}
     )
     assert args is None
     assert error is not None and "Missing required parameters" in error
@@ -87,7 +87,7 @@ async def test_arg_validation():
     args, error = validate_tool_args(
         "contemplate",
         {"question": "test", "invalid_arg": "value"},
-        {ToolName.CONTEMPLATE}
+        {ToolName.CONTEMPLATE_LOOP}
     )
     assert args is None
     assert error is not None and "Unrecognized arguments" in error
@@ -96,7 +96,7 @@ async def test_arg_validation():
     args, error = validate_tool_args(
         "contemplate",
         {"question": "test"},
-        {ToolName.CONTEMPLATE}
+        {ToolName.CONTEMPLATE_LOOP}
     )
     assert args == {"question": "test"} and error is None
 
@@ -143,7 +143,7 @@ async def test_token_budget():
     # Call get_response with mock data and token budget
     response = await get_response(
         chat_history=chat_history,
-        tools={ToolName.CONTEMPLATE},
+        tools={ToolName.CONTEMPLATE_LOOP},
         token_budget=token_budget,
         mock=True,
         mock_messages=mock_messages

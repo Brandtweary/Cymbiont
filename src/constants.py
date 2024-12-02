@@ -13,7 +13,7 @@ class LogLevel(IntEnum):
         return self._name_
 
 class ToolName(Enum):
-    CONTEMPLATE = "contemplate"
+    CONTEMPLATE_LOOP = "contemplate_loop"
     EXIT_LOOP = "exit_loop"
     MESSAGE_SELF = "message_self"
     EXECUTE_SHELL_COMMAND = "execute_shell_command"

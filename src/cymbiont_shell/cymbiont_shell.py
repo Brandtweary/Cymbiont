@@ -164,7 +164,7 @@ class CymbiontShell:
                 response = await get_response(
                     chat_history=self.chat_history,
                     tools={
-                        ToolName.CONTEMPLATE, 
+                        ToolName.CONTEMPLATE_LOOP, 
                         ToolName.EXECUTE_SHELL_COMMAND,
                         ToolName.TOGGLE_PROMPT_PART,
                         ToolName.INTRODUCE_SELF

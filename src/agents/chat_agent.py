@@ -25,7 +25,7 @@ def get_tool_function_map():
     """Get the mapping of tool names to their processing functions.
     Lazily imports the functions when first accessed."""
     from .agent_tools import (
-                            process_contemplate, 
+                            process_contemplate_loop, 
                             process_exit_loop, 
                             process_message_self,
                             process_execute_shell_command,
@@ -37,7 +37,7 @@ def get_tool_function_map():
     from . import agent_tools
 
     tool_map = {
-        ToolName.CONTEMPLATE.value: process_contemplate,
+        ToolName.CONTEMPLATE_LOOP.value: process_contemplate_loop,
         ToolName.EXIT_LOOP.value: process_exit_loop,
         ToolName.MESSAGE_SELF.value: process_message_self,
         ToolName.EXECUTE_SHELL_COMMAND.value: process_execute_shell_command,

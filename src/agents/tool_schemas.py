@@ -45,10 +45,10 @@ def format_all_tool_schemas(tools: Set[ToolName], **kwargs) -> None:
             TOOL_SCHEMAS[tool] = format_tool_schema(TOOL_SCHEMAS[tool], **kwargs)
 
 TOOL_SCHEMAS = {
-    ToolName.CONTEMPLATE: {
+    ToolName.CONTEMPLATE_LOOP: {
         "type": "function",
         "function": {
-            "name": "contemplate",
+            "name": "contemplate_loop",
             "description": "Enter a tool loop to ponder a given question.",
             "parameters": {
                 "type": "object",

@@ -8,7 +8,7 @@ from .chat_history import ChatHistory
 from typing import Optional, List, Any, Dict, Union, Set
 from prompt_toolkit.formatted_text import ANSI
 
-async def process_contemplate(
+async def process_contemplate_loop(
     question: str,
     tool_loop_data: Optional[ToolLoopData],
     chat_history: ChatHistory,
@@ -18,7 +18,7 @@ async def process_contemplate(
     system_prompt_parts: Optional[Dict[str, Dict[str, Union[bool, int]]]] = None
 ) -> Optional[str]:
     """
-    Process the 'contemplate' tool call.
+    Process the 'contemplate_loop' tool call.
 
     Args:
         question: The question to ponder during the contemplation loop.
@@ -33,7 +33,7 @@ async def process_contemplate(
         Optional[str]: Message to the user, if any.
     """
     if tool_loop_data:
-        logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: contemplate - no effect, agent already inside tool loop")
+        logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: contemplate_loop - no effect, agent already inside tool loop")
         return None
 
     # Start a new contemplation loop
