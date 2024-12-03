@@ -13,6 +13,7 @@ from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS
 from agents.tool_schemas import format_all_tool_schemas
 from system_prompt_parts import SYSTEM_MESSAGE_PARTS
 import re
+import inspect
 
 from .command_completer import CommandCompleter
 from .doc_processing_commands import (
@@ -30,6 +31,25 @@ from .test_commands import (
     do_test_agent_tools,
     do_run_all_tests,
 )
+
+# Define which commands accept arguments
+COMMAND_METADATA = {
+    'exit': {'takes_args': False},
+    'help': {'takes_args': True},  # Optional command name to get help for
+    'hello_world': {'takes_args': False},
+    'process_documents': {'takes_args': True},  # File paths
+    'create_data_snapshot': {'takes_args': True},  # Snapshot name \\ file paths
+    'parse_documents': {'takes_args': True},  # File paths
+    'revise_document': {'takes_args': True},  # File path
+    'test_api_queue': {'takes_args': False},
+    'test_document_processing': {'takes_args': False},
+    'test_logger': {'takes_args': False},
+    'test_parsing': {'takes_args': False},
+    'test_progressive_summarization': {'takes_args': False},
+    'test_agent_tools': {'takes_args': False},
+    'run_all_tests': {'takes_args': False},
+    'print_total_tokens': {'takes_args': False},
+}
 
 
 class CymbiontShell:
@@ -60,6 +80,8 @@ class CymbiontShell:
             'print_total_tokens': self.do_print_total_tokens,
         }
         
+        self.command_metadata = COMMAND_METADATA
+        
         # Map commands to their original functions for documentation
         self.command_mapping: Dict[str, Callable] = {
             'exit': self.do_exit,  # Built-in commands use their wrapper docstrings
@@ -86,16 +108,15 @@ class CymbiontShell:
                 shell_command_documentation=shell_doc
             )
         
+        # Format tool schemas with command metadata
         format_all_tool_schemas(
-            tools={ToolName.EXECUTE_SHELL_COMMAND,
-                   ToolName.TOGGLE_PROMPT_PART
-                   },
-            system_prompt_parts=DEFAULT_SYSTEM_PROMPT_PARTS,
-            commands=list(self.commands.keys())
+            {ToolName.EXECUTE_SHELL_COMMAND},
+            commands=list(self.commands.keys()),
+            command_metadata=self.command_metadata
         )
         
-        # Create command completer
-        command_completer = CommandCompleter(self.commands)
+        # Initialize command completer
+        self.completer = CommandCompleter(self.commands)
         
         # Create prompt session with styling
         style = Style.from_dict({
@@ -107,7 +128,7 @@ class CymbiontShell:
         self.session = PromptSession(
             style=style,
             message=self.get_prompt,
-            completer=command_completer
+            completer=self.completer
         )
         
         # Log shell startup

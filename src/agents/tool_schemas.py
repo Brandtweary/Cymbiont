@@ -3,12 +3,16 @@ from typing import Dict, Any, List, Set, Optional, Union
 from copy import deepcopy
 from shared_resources import logger
 
+
 def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     """Format a single tool schema, handling any dynamic content based on runtime state.
     
     Args:
         schema: The base schema to format
-        **kwargs: Dynamic parameters that may be required by different schemas
+        **kwargs: Dynamic parameters that may be required by different schemas:
+            - system_prompt_parts: Required for toggle_prompt_part schema
+            - commands: Required for execute_shell_command schema
+            - command_metadata: Required for execute_shell_command schema, maps command names to metadata dict
     """
     schema = deepcopy(schema)
     schema_name = schema.get("function", {}).get("name")
@@ -26,7 +30,19 @@ def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
             logger.warning("commands required for execute_shell_command schema formatting")
             return schema
             
-        schema["function"]["parameters"]["properties"]["command"]["enum"] = kwargs["commands"]
+        if "command_metadata" not in kwargs:
+            logger.warning("command_metadata required for execute_shell_command schema formatting")
+            return schema
+            
+        # Mark commands that take args with an asterisk
+        marked_commands = []
+        for cmd in kwargs["commands"]:
+            if kwargs["command_metadata"].get(cmd, {}).get('takes_args', False):
+                marked_commands.append(f"{cmd}*")
+            else:
+                marked_commands.append(cmd)
+                
+        schema["function"]["parameters"]["properties"]["command"]["enum"] = marked_commands
     
     return schema
 
@@ -39,6 +55,7 @@ def format_all_tool_schemas(tools: Set[ToolName], **kwargs) -> None:
         **kwargs: Parameters required by different schema types:
             - system_prompt_parts: Required for toggle_prompt_part schema
             - commands: Required for execute_shell_command schema
+            - command_metadata: Required for execute_shell_command schema, maps command names to metadata dict
     """
     for tool in tools:
         if tool in TOOL_SCHEMAS:
@@ -100,21 +117,21 @@ TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "execute_shell_command",
-            "description": "Execute a shell command with given arguments.",
+            "description": "Execute a shell command.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "The shell command to execute.",
-                        "enum": []  # Placeholder for available commands
+                        "description": "The command to execute. Commands marked with * accept arguments.",
+                        "enum": []  # Will be populated at runtime
                     },
                     "args": {
                         "type": "array",
+                        "description": "Arguments to pass to the command.",
                         "items": {
                             "type": "string"
-                        },
-                        "description": "List of arguments for the command."
+                        }
                     }
                 },
                 "required": ["command", "args"]

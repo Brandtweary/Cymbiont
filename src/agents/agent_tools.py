@@ -132,7 +132,12 @@ async def process_toggle_prompt_part(
 async def process_execute_shell_command(
     command: str,
     args: List[str],
-    tool_loop_data: Optional[ToolLoopData] = None
+    tool_loop_data: Optional[ToolLoopData] = None,
+    chat_history: Optional[ChatHistory] = None,
+    token_budget: int = 20000,
+    mock: bool = False,
+    mock_messages: Optional[List[ChatMessage]] = None,
+    system_prompt_parts: Optional[SystemPromptPartsData] = None
 ) -> str:
     """Process the execute_shell_command tool call."""
     logger.log(
@@ -142,7 +147,18 @@ async def process_execute_shell_command(
     shell = get_shell()
     args_str = ' '.join(args) if args else ''
     success, should_exit = await shell.execute_command(command, args_str, name=AGENT_NAME)
-    if not success:
+    if not success and not tool_loop_data and chat_history:
+        # Command failed and we're not in a loop - start a shell loop
+        logger.log(LogLevel.TOOL, f"Command failed, starting shell loop for troubleshooting")
+        return await process_shell_loop(
+            chat_history=chat_history,
+            token_budget=token_budget,
+            mock=mock,
+            mock_messages=mock_messages,
+            system_prompt_parts=system_prompt_parts
+        ) or f"Failed to execute command: {command}{' ' + args_str if args_str else ''}"
+    elif not success:
+        # Command failed but we're either in a loop or missing chat_history
         return f"Failed to execute command: {command}{' ' + args_str if args_str else ''}"
     elif should_exit:
         return f"Command {command} requested shell exit"

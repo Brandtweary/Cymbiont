@@ -35,8 +35,7 @@ It is up to you what you want to become.
     ),
     "shell_command_info": SystemMessagePart(
         header="Shell Command Information",
-        content='''Available Shell Commands:
-{shell_command_documentation}
+        content='''{shell_command_documentation}
 
 Command Argument Format:
 - Required arguments are marked with <angle_brackets>
@@ -67,6 +66,13 @@ When handling requests:
 2. Parse any provided arguments
 3. Use execute_shell_command with the correct syntax
 4. If unclear, ask for clarification
+
+Only use the shell_loop tool if:
+- The user requests multiple sequential commands
+- The command previously failed
+- The command has unclear syntax and you need to troubleshoot it yourself
+
+If the user has been asking you to run complex shell commands over the course of the conversation, make sure that the shell_command_info prompt part is toggled on even outside of shell loops. 
 ''',
         required_params=[]
     ),
@@ -77,8 +83,8 @@ When handling requests:
 When handling shell commands:
 - If you receive a partial or malformed shell command, ask the user what they want to do
 - If you can infer the correct command and arguments from context, use execute_shell_command directly
+- If the user has been asking you to run many shell commands, try to toggle the handling_shell_command_requests prompt part at an appropriate time
 - For multiple sequential commands, use the shell_loop tool
-- If unsure about command syntax, use shell_loop to make multiple attempts. It will automatically toggle on shell_command_info during the loop.
 - If the user doesn't know available commands, execute the 'help' command for them''',
         required_params=[]
     ),
