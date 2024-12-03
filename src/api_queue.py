@@ -113,7 +113,7 @@ async def process_pending_calls() -> None:
                     
                     if model_calls_to_process:
                         logger.debug(
-                            f"Processing {len(model_calls_to_process)} API calls "
+                            f"Processing {len(model_calls_to_process)} API calls: {model} "
                         )
                     
                     calls_to_process.extend(model_calls_to_process)
