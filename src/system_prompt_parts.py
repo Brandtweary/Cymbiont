@@ -1,4 +1,12 @@
-from custom_dataclasses import SystemMessagePart
+from custom_dataclasses import SystemMessagePart, SystemPromptPartsData, SystemPromptPartInfo
+
+DEFAULT_SYSTEM_PROMPT_PARTS = SystemPromptPartsData(parts={
+    "chat_agent_base_prompt": SystemPromptPartInfo(toggled=True, index=0),
+    "cymbiont_agent_overview": SystemPromptPartInfo(toggled=False, index=1),
+    "shell_command_info": SystemPromptPartInfo(toggled=False, index=2),
+    "handling_shell_command_requests": SystemPromptPartInfo(toggled=False, index=3),
+    "response_guidelines": SystemPromptPartInfo(toggled=True, index=4)
+})
 
 
 SYSTEM_MESSAGE_PARTS = {
@@ -25,36 +33,53 @@ It is up to you what you want to become.
 ''',
         required_params=[]
     ),
-    "cymbiont_shell": SystemMessagePart(
-        header="Cymbiont Shell",
-        content='''Both the user and you can run shell commands in the Cymbiont shell.
-If you receive a message from the user that is formatted like a shell command, it is probably invalid syntax.
-Just ask the user what they want to do.
-If instead they are asking you to execute a shell command for them, just use execute_shell_command.
-The user may ask you to execute a shell command in multiple ways.
-For example, the following should all result in the 'help' command being executed:
-'Can you run help?' (direct request)
-'Can you show me the help menu?'(what the command does)
-'Can you show me the list of available commands?'(describing what the command does)
-
-The user may also ask you to execute a shell command with arguments, for example:
-'Can you show me help for the process_documents command?' --> help process_documents
-'Can you process test.txt?' --> process_documents test.txt
-
-If you are not sure which command to use, just ask the user for clarification.
-If the user does not know which commands are available, execute the 'help' command for them.
-
-Available Shell Commands
+    "shell_command_info": SystemMessagePart(
+        header="Shell Command Information",
+        content='''Available Shell Commands:
 {shell_command_documentation}
 
-Required arguments are marked with <angle_brackets>, while optional arguments are in [square_brackets]. 
-Arguments with quotes should be provided as a full sentence or phrase rather than a single word.
+Command Argument Format:
+- Required arguments are marked with <angle_brackets>
+- Optional arguments are in [square_brackets]
+- Arguments with quotes should be provided as a full sentence or phrase rather than a single word
+''',
+        required_params=[]
+    ),
+    "handling_shell_command_requests": SystemMessagePart(
+        header="Handling Shell Command Requests",
+        content='''Users may request shell command execution in various ways:
+
+Direct requests:
+- "Can you run help?"
+- "Please execute process_documents"
+
+Functional descriptions:
+- "Can you show me the help menu?" → help
+- "Can you show me the list of available commands?" → help
+- "Can you show me help for the process_documents command?" → help process_documents
+
+Task-based requests:
+- "Can you process test.txt?" → process_documents test.txt
+- "Could you analyze the contents of data.txt?" → process_documents data.txt
+
+When handling requests:
+1. Identify the intended command from context
+2. Parse any provided arguments
+3. Use execute_shell_command with the correct syntax
+4. If unclear, ask for clarification
 ''',
         required_params=[]
     ),
     "response_guidelines": SystemMessagePart(
         header="Response Guidelines",
-        content='''Do not prefix your name in front of your responses. The prefix is applied automatically.''',
+        content='''Do not prefix your name in front of your responses. The prefix is applied automatically.
+
+When handling shell commands:
+- If you receive a partial or malformed shell command, ask the user what they want to do
+- If you can infer the correct command and arguments from context, use execute_shell_command directly
+- For multiple sequential commands, use the shell_loop tool
+- If unsure about command syntax, use shell_loop to make multiple attempts. It will automatically toggle on shell_command_info during the loop.
+- If the user doesn't know available commands, execute the 'help' command for them''',
         required_params=[]
     ),
     "biographical": SystemMessagePart(

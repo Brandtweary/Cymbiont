@@ -11,7 +11,7 @@ from constants import LogLevel, ToolName
 from agents.chat_agent import get_response
 from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS
 from agents.tool_schemas import format_all_tool_schemas
-from system_message_parts import SYSTEM_MESSAGE_PARTS
+from system_prompt_parts import SYSTEM_MESSAGE_PARTS
 import re
 
 from .command_completer import CommandCompleter
@@ -79,10 +79,10 @@ class CymbiontShell:
             'print_total_tokens': self.do_print_total_tokens,
         }
         
-        # Generate command documentation and format cymbiont_shell part
+        # Generate command documentation and format shell_command_info part
         shell_doc = self.generate_command_documentation()
-        SYSTEM_MESSAGE_PARTS['cymbiont_shell'].content = \
-            SYSTEM_MESSAGE_PARTS['cymbiont_shell'].content.format(
+        SYSTEM_MESSAGE_PARTS['shell_command_info'].content = \
+            SYSTEM_MESSAGE_PARTS['shell_command_info'].content.format(
                 shell_command_documentation=shell_doc
             )
         

@@ -132,6 +132,7 @@ async def process_toggle_prompt_part(
 async def process_execute_shell_command(
     command: str,
     args: List[str],
+    tool_loop_data: Optional[ToolLoopData] = None
 ) -> str:
     """Process the execute_shell_command tool call."""
     logger.log(
@@ -146,13 +147,17 @@ async def process_execute_shell_command(
     elif should_exit:
         return f"Command {command} requested shell exit"
     
-    # Format command and args in blue
-    formatted_cmd = f"\033[38;2;0;128;254m{command}\033[0m"  # #0080FE in RGB
-    formatted_args = ', '.join(f"\033[38;2;0;128;254m{arg}\033[0m" for arg in args) if args else ""
-    if args:
-        return f"I have executed the command: {formatted_cmd} with args {formatted_args}"
-    else:
-        return f"I have executed the command: {formatted_cmd}"
+    # Only return execution message if not in a tool loop
+    if not tool_loop_data:
+        # Format command and args in blue
+        formatted_cmd = f"\033[38;2;0;128;254m{command}\033[0m"  # #0080FE in RGB
+        formatted_args = ', '.join(f"\033[38;2;0;128;254m{arg}\033[0m" for arg in args) if args else ""
+        if args:
+            return f"I have executed the command: {formatted_cmd} with args {formatted_args}"
+        else:
+            return f"I have executed the command: {formatted_cmd}"
+    
+    return ''
 
 async def process_introduce_self(
     tool_loop_data: Optional[ToolLoopData],
@@ -194,8 +199,6 @@ async def process_introduce_self(
 
 async def process_shell_loop(
     chat_history: ChatHistory,
-    initial_command: Optional[str] = None,
-    initial_command_args: Optional[List[str]] = None,
     tool_loop_data: Optional[ToolLoopData] = None,
     token_budget: int = 20000,
     mock: bool = False,
@@ -206,10 +209,8 @@ async def process_shell_loop(
     Process the 'shell_loop' tool call.
 
     Args:
-        initial_command: Optional initial command to run when entering the shell loop.
-        initial_command_args: Optional list of arguments for the initial command.
-        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
         chat_history: The ChatHistory instance.
+        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
         token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
         mock: If True, uses mock_messages instead of normal message setup.
         mock_messages: List of mock messages to use when mock=True.
@@ -227,6 +228,7 @@ async def process_shell_loop(
     
     tool_loop_data = create_tool_loop_data(
         loop_type="SHELL",
+        tools = {ToolName.EXECUTE_SHELL_COMMAND},
         loop_message=(
             "You are inside a shell loop where you can chain together shell commands. "
             "Use exit_loop when finished.\n"
@@ -238,20 +240,13 @@ async def process_shell_loop(
     # Ensure system_prompt_parts is not None (should never happen due to create_tool_loop_data logic)
     assert tool_loop_data.system_prompt_parts is not None, "System prompt parts unexpectedly None after create_tool_loop_data"
 
-    # Add cymbiont_shell part if it doesn't exist and ensure it's toggled on
-    if 'cymbiont_shell' not in tool_loop_data.system_prompt_parts.parts:
-        tool_loop_data.system_prompt_parts.parts['cymbiont_shell'] = SystemPromptPartInfo(toggled=True, index=len(tool_loop_data.system_prompt_parts.parts))
+    # Add shell_command_info part if it doesn't exist and ensure it's toggled on
+    if 'shell_command_info' not in tool_loop_data.system_prompt_parts.parts:
+        tool_loop_data.system_prompt_parts.parts['shell_command_info'] = SystemPromptPartInfo(toggled=True, index=len(tool_loop_data.system_prompt_parts.parts))
     else:
-        tool_loop_data.system_prompt_parts.parts['cymbiont_shell'].toggled = True
+        tool_loop_data.system_prompt_parts.parts['shell_command_info'].toggled = True
 
     logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: shell_loop - now entering shell loop")
-    
-    # Execute initial command if provided
-    if initial_command:
-        await process_execute_shell_command(
-            command=initial_command,
-            args=initial_command_args or []
-        )
 
     max_iterations = MAX_LOOP_ITERATIONS  # Adjust as needed
     iterations = 0
