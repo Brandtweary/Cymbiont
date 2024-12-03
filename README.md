@@ -117,8 +117,9 @@ You can run tests directly from the command line using a '--test' flag on the cy
 # Run all tests
 python cymbiont.py --test
 
-# Run a specific test
+# Run a specific test by including the suffix in the test module name as an argument
 python cymbiont.py --test logger
+python cymbiont.py --test api_queue
 ```
 
 ### 3. Module Execution
