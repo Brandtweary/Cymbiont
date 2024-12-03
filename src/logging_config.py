@@ -1,7 +1,7 @@
 import logging
 import logging.handlers
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 from datetime import datetime
 from constants import LogLevel
 
@@ -25,8 +25,19 @@ class ConsoleFilter(logging.Filter):
         self.prompt = prompt
         self.response = response
         self.tool = tool
+        self._quiet = False  # New flag for quiet mode
+
+    @property
+    def quiet(self) -> bool:
+        return self._quiet
+
+    @quiet.setter
+    def quiet(self, value: bool) -> None:
+        self._quiet = value
 
     def filter(self, record: logging.LogRecord) -> bool:
+        if self._quiet:
+            return False  # Block all messages in quiet mode
         if record.levelno == LogLevel.SHELL:
             return False  # Never show SHELL messages in console
         if record.levelno == logging.DEBUG:
@@ -87,8 +98,12 @@ def setup_logging(
     response: bool = False,
     tool: bool = False,
     log_prefix: Optional[str] = None
-) -> logging.Logger:
-    """Configure logging with separate handlers for cymbiont and all logs"""
+) -> Tuple[logging.Logger, ConsoleFilter]:
+    """Configure logging with separate handlers for cymbiont and all logs
+    
+    Returns:
+        A tuple of (logger, console_filter)
+    """
     # Create logs directory
     log_dir.mkdir(parents=True, exist_ok=True)
     
@@ -150,4 +165,4 @@ def setup_logging(
     cymbiont_logger.debug(f"App log created at: {cymbiont_log_file}") # only Cymbiont logs
     cymbiont_logger.debug(f"Full log created at: {complete_log_file}") # includes logs from all modules, not just Cymbiont
     
-    return cymbiont_logger
+    return cymbiont_logger, console_filter

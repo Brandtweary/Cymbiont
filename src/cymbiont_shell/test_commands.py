@@ -1,4 +1,4 @@
-from shared_resources import logger
+from shared_resources import logger, console_filter
 from tests.test_api_queue import run_api_queue_tests
 from tests.test_document_processing import run_document_processing_tests
 from tests.test_logger import run_logger_test
@@ -95,41 +95,58 @@ async def do_test_agent_tools(shell, args: str) -> None:
 
 
 async def do_run_all_tests(shell, args: str) -> None:
-    """Run all tests"""
+    """Run all tests
+
+    Usage: run_all_tests [-v | --verbose]
+        -verbose flag to show all logs
+    """
+    # Parse args for standard flags
+    args_list = args.split()
+    verbose = any(arg in ('-v', '--verbose') for arg in args_list)
+    
     test_commands = [cmd for cmd in shell.commands.keys() if cmd.startswith('test_')]
     total_successes = 0
     total_failures = 0
     failed_tests: list[tuple[str, str]] = []
-
-    for cmd in test_commands:
-        try:
-            # Reset test counters before each test
-            shell.test_successes = 0
-            shell.test_failures = 0
+        
+    try:
+        if not verbose:
+            console_filter.quiet = True
             
-            # Run the test
-            method = shell.commands[cmd]
-            await method('')
-            
-            # Accumulate results
-            total_successes += shell.test_successes
-            total_failures += shell.test_failures
-            
-            if shell.test_failures > 0:
-                failed_tests.append((cmd, f"{shell.test_failures} tests failed"))
-                logger.error(f"❌ {cmd} failed\n")
-            else:
-                logger.info(f"✅ {cmd} passed\n")
+        for cmd in test_commands:
+            try:
+                # Reset test counters before each test
+                shell.test_successes = 0
+                shell.test_failures = 0
                 
-        except Exception as e:
-            total_failures += 1
-            failed_tests.append((cmd, str(e)))
-            logger.error(f"❌ {cmd} failed\n")
+                # Run the test
+                method = shell.commands[cmd]
+                await method('')
+                
+                # Accumulate results
+                total_successes += shell.test_successes
+                total_failures += shell.test_failures
+                
+                if shell.test_failures > 0:
+                    failed_tests.append((cmd, f"{shell.test_failures} tests failed"))
+                    logger.error(f"❌ {cmd} failed\n")
+                else:
+                    logger.info(f"✅ {cmd} passed\n")
+                    
+            except Exception as e:
+                total_failures += 1
+                failed_tests.append((cmd, str(e)))
+                logger.error(f"❌ {cmd} failed\n")
+
+    finally:
+        # Restore console output
+        if not verbose:
+            console_filter.quiet = False
 
     total_tests = total_successes + total_failures
     success_rate = (total_successes / total_tests) * 100 if total_tests > 0 else 0
 
-    # Print results with logger
+    # Always show final results
     logger.info("\n=== Test Results ===")
     logger.info(f"Tests Run: {total_tests}")
     logger.info(f"Passed: {total_successes}")
