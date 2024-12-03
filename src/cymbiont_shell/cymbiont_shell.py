@@ -1,4 +1,5 @@
 import math
+from pickle import TRUE
 from unittest.mock import DEFAULT
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
@@ -35,17 +36,29 @@ COMMAND_METADATA = {
     'exit': {'takes_args': False},
     'help': {'takes_args': True},  # Optional command name to get help for
     'hello_world': {'takes_args': False},
-    'process_documents': {'takes_args': True},  # File paths
-    'create_data_snapshot': {'takes_args': True},  # Snapshot name \\ file paths
-    'parse_documents': {'takes_args': True},  # File paths
-    'revise_document': {'takes_args': True},  # File path
+    'process_documents': {
+        'takes_args': True,
+        'arg_types': ['filepaths']  # File paths
+    },
+    'create_data_snapshot': {
+        'takes_args': True,
+        'arg_types': ['text', 'filepaths']  # Snapshot name, file paths
+    },
+    'parse_documents': {
+        'takes_args': True,
+        'arg_types': ['filepaths']  # File paths
+    },
+    'revise_document': {
+        'takes_args': True,
+        'arg_types': ['file', 'text', 'text']  # File path, revision instructions
+    },
     'test_api_queue': {'takes_args': False},
     'test_document_processing': {'takes_args': False},
     'test_logger': {'takes_args': False},
     'test_parsing': {'takes_args': False},
     'test_progressive_summarization': {'takes_args': False},
     'test_agent_tools': {'takes_args': False},
-    'run_all_tests': {'takes_args': False},
+    'run_all_tests': {'takes_args': True},  # -v flag
     'print_total_tokens': {'takes_args': False},
 }
 
@@ -114,7 +127,7 @@ class CymbiontShell:
         )
         
         # Initialize command completer
-        self.completer = CommandCompleter(self.commands)
+        self.completer = CommandCompleter(self.commands, self.command_metadata)
         
         # Create prompt session with styling
         style = Style.from_dict({
