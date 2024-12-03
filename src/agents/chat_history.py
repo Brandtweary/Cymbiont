@@ -6,7 +6,7 @@ import logging
 import re
 from api_queue import enqueue_api_call
 from constants import LogLevel
-from model_configuration import CHAT_AGENT_MODEL, PROGRESSIVE_SUMMARY_MODEL
+from model_configuration import PROGRESSIVE_SUMMARY_MODEL
 from prompt_helpers import get_system_message, create_system_prompt_parts_data
 from utils import convert_messages_to_string
 from custom_dataclasses import ChatMessage, MessageRole
@@ -15,8 +15,9 @@ from custom_dataclasses import ChatMessage, MessageRole
 @dataclass
 class ChatHistory:
     def __init__(self) -> None:
-        from shared_resources import logger  # avoiding a circular import
+        from shared_resources import logger, DEBUG_ENABLED  # avoiding a circular import
         self.logger = logger
+        self.DEBUG_ENABLED = DEBUG_ENABLED
         self.all_messages: List[ChatMessage] = []
         self.buffer_messages: List[ChatMessage] = []
         self.message_word_limit: int = 300
@@ -149,8 +150,8 @@ class ChatHistory:
             self.progressive_summary = await self.create_progressive_summary(messages)
         except Exception as e:
             self.logger.error(f"Progressive summarization failed: {str(e)}")
-            import traceback
-            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            if self.DEBUG_ENABLED:
+                raise
         finally:
             self.is_summarizing = False
 

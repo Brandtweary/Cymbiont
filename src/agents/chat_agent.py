@@ -1,7 +1,7 @@
 import asyncio
 from typing import Any, List, Optional, Set, Dict, Tuple, Union, Callable
 from api_queue import enqueue_api_call
-from shared_resources import logger, AGENT_NAME
+from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED
 from constants import LogLevel, ToolName
 from model_configuration import CHAT_AGENT_MODEL
 from prompt_helpers import get_system_message
@@ -149,6 +149,8 @@ async def get_response(
         if 'tool_call_results' in response:
             if not isinstance(response['tool_call_results'], dict):
                 logger.error(f"Expected dict for tool_call_results, got {type(response['tool_call_results'])}")
+                if DEBUG_ENABLED:
+                    raise 
                 return "Sorry, I encountered an error while processing your request."
 
             user_message = await process_tool_calls(
@@ -174,6 +176,8 @@ async def get_response(
 
         if not response["content"]:
             logger.error("Received an empty message from the OpenAI API.")
+            if DEBUG_ENABLED:
+                raise
             return "Sorry, I encountered an error while processing your request."
 
         content = response["content"]
@@ -199,6 +203,8 @@ async def get_response(
         return content
     except Exception as e:
         logger.error(f"Error communicating with API: {e}")
+        if DEBUG_ENABLED:
+            raise
         return "Sorry, I encountered an error while processing your request."
 
 
@@ -274,6 +280,8 @@ async def process_tool_calls(
                 messages.append(response)
         except Exception as e:
             logger.error(f"Error processing tool '{tool_name}': {e}")
+            if DEBUG_ENABLED:
+                raise
 
     if messages:
         final_message = ' '.join(messages)

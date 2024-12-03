@@ -2,7 +2,7 @@ import re
 from typing import List, Optional
 from custom_dataclasses import Chunk
 from pathlib import Path
-from shared_resources import DATA_DIR, logger
+from shared_resources import DATA_DIR, logger, DEBUG_ENABLED
 from utils import get_paths
 import unicodedata
 
@@ -373,5 +373,7 @@ def test_parse(doc_name: Optional[str] = None) -> None:
                 error_msg = f"Error processing {doc_path.name}: {str(e)}"
                 logger.error(error_msg)
                 f.write(f"\nERROR: {error_msg}\n")
+                if DEBUG_ENABLED:
+                    raise
     
     logger.info(f"Parse test results written to {log_file}")

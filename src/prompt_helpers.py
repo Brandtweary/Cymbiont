@@ -1,5 +1,5 @@
 from typing import Any, List, Optional
-from shared_resources import logger
+from shared_resources import logger, DEBUG_ENABLED
 import re
 from custom_dataclasses import SystemPromptPartsData, SystemPromptPartInfo
 from system_prompt_parts import SYSTEM_MESSAGE_PARTS, DEFAULT_SYSTEM_PROMPT_PARTS
@@ -113,6 +113,8 @@ def get_system_message(
                 message_parts.append(f"{header_text}\n{formatted_content}")
             except Exception as e:
                 logger.error(f"Failed to format {part}: {e}")
+                if DEBUG_ENABLED:
+                    raise
         else:
             message_parts.append(header_text)
             

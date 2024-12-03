@@ -1,4 +1,4 @@
-from shared_resources import logger, DATA_DIR
+from shared_resources import logger, DATA_DIR, DEBUG_ENABLED
 from token_logger import token_logger
 from knowledge_graph.documents import process_documents, create_data_snapshot, find_unprocessed_documents
 from knowledge_graph.text_parser import test_parse
@@ -23,6 +23,8 @@ async def do_process_documents(args: str) -> None:
             await process_documents(DATA_DIR, args if args else None)
     except Exception as e:
         logger.error(f"Document processing failed: {str(e)}")
+        if DEBUG_ENABLED:
+            raise
 
 
 async def do_create_data_snapshot(args: str) -> None:
@@ -48,6 +50,8 @@ async def do_create_data_snapshot(args: str) -> None:
             logger.info(f"Created snapshot at {snapshot_path}")
     except Exception as e:
         logger.error(f"Snapshot creation failed: {str(e)}")
+        if DEBUG_ENABLED:
+            raise
 
 
 async def do_parse_documents(args: str) -> None:
@@ -61,6 +65,8 @@ async def do_parse_documents(args: str) -> None:
         test_parse(args if args else None)
     except Exception as e:
         logger.error(f"Parse testing failed: {str(e)}")
+        if DEBUG_ENABLED:
+            raise
 
 
 async def do_revise_document(args: str) -> None:
@@ -81,6 +87,8 @@ async def do_revise_document(args: str) -> None:
             arg_parts = shlex.split(args)
         except ValueError as e:
             logger.error(f"Error parsing arguments: {str(e)}")
+            if DEBUG_ENABLED:
+                raise
             return
             
         if not arg_parts:
@@ -169,11 +177,15 @@ async def do_revise_document(args: str) -> None:
                 )
             except Exception as e:
                 logger.error(f"API error during iteration {i+1}: {str(e)}")
+                if DEBUG_ENABLED:
+                    raise
                 break
             
             revised_text = response.get("content", "")
             if not revised_text:
                 logger.error(f"Error: Received empty response in iteration {i+1}")
+                if DEBUG_ENABLED:
+                    raise
                 break
                 
             current_text = revised_text

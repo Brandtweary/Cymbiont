@@ -1,4 +1,4 @@
-from shared_resources import logger, AGENT_NAME, get_shell
+from shared_resources import logger, AGENT_NAME, get_shell, DEBUG_ENABLED
 from constants import LogLevel, ToolName, MAX_LOOP_ITERATIONS
 from .chat_agent import get_response
 from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS, create_system_prompt_parts_data
@@ -114,10 +114,14 @@ async def process_toggle_prompt_part(
     """Process the toggle_prompt_part tool call."""
     if not system_prompt_parts:
         logger.error("No system prompt parts available")
+        if DEBUG_ENABLED:
+            raise
         return ""
     
     if part_name not in system_prompt_parts.parts:
         logger.error(f"Unknown prompt part '{part_name}'")
+        if DEBUG_ENABLED:
+            raise
         return ""
     
     # Toggle the part

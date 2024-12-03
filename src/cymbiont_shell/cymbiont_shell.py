@@ -4,7 +4,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
 from typing import Callable, Dict, Any, Tuple
-from shared_resources import USER_NAME, AGENT_NAME, logger
+from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED
 from token_logger import token_logger
 from agents.chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel, ToolName
@@ -12,8 +12,6 @@ from agents.chat_agent import get_response
 from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS
 from agents.tool_schemas import format_all_tool_schemas
 from system_prompt_parts import SYSTEM_MESSAGE_PARTS
-import re
-import inspect
 
 from .command_completer import CommandCompleter
 from .doc_processing_commands import (
@@ -243,6 +241,8 @@ class CymbiontShell:
         
         except Exception as e:
             logger.error(f"Chat response failed: {str(e)}")
+            if DEBUG_ENABLED:
+                raise
     
     async def execute_command(self, command: str, args: str, name: str = '') -> Tuple[bool, bool]:
         """Execute a shell command
@@ -279,6 +279,8 @@ class CymbiontShell:
             
         except Exception as e:
             logger.error(f"Command failed: {str(e)}")
+            if DEBUG_ENABLED:
+                raise
             return (False, False)
 
     async def run(self) -> None:

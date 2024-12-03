@@ -71,6 +71,7 @@ Only use the shell_loop tool if:
 - The user requests multiple sequential commands
 - The command previously failed
 - The command has unclear syntax and you need to troubleshoot it yourself
+- You want to follow up the command with a message, i.e. you need the result of the command in order to answer the user's question
 
 If the user has been asking you to run complex shell commands over the course of the conversation, make sure that the shell_command_info prompt part is toggled on even outside of shell loops. 
 ''',

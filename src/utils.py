@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from collections import defaultdict
-from shared_resources import logger, FILE_RESET, DELETE_LOGS
+from shared_resources import logger, FILE_RESET, DELETE_LOGS, DEBUG_ENABLED
 from pathlib import Path
 import json
 from constants import LogLevel
@@ -130,6 +130,7 @@ def move_processed_to_documents(paths: Paths) -> None:
                 logger.debug(f"Moved file {file_path.name} back to input_documents")
             except Exception as e:
                 logger.error(f"Failed to move file {file_path.name}: {str(e)}")
+                raise
     
     # Handle folders
     for folder_path in paths.processed_dir.glob("*"):
@@ -139,6 +140,7 @@ def move_processed_to_documents(paths: Paths) -> None:
                 logger.debug(f"Moved folder {folder_path.name} back to input_documents")
             except Exception as e:
                 logger.error(f"Failed to move folder {folder_path.name}: {str(e)}")
+                raise
 
 def clean_directories(paths: Paths) -> None:
     """Remove all files from chunks directory"""
@@ -200,6 +202,8 @@ def delete_logs(base_dir: Path) -> None:
             log_file.unlink()
         except Exception as e:
             logger.error(f"Failed to delete log file {log_file}: {str(e)}")
+            if DEBUG_ENABLED:
+                raise
 
 def convert_messages_to_string(
     messages: List[ChatMessage], 

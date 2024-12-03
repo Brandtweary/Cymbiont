@@ -3,7 +3,7 @@ import time
 import json
 from typing import Any, Optional, List, Dict, Set, Union
 from collections import deque
-from shared_resources import logger, openai_client, anthropic_client
+from shared_resources import DEBUG_ENABLED, logger, openai_client, anthropic_client
 from token_logger import token_logger
 from custom_dataclasses import APICall, TokenUsage, ChatMessage, SystemPromptPartsData
 from process_log import ProcessLog
@@ -135,7 +135,7 @@ async def process_pending_calls() -> None:
             await asyncio.sleep(BATCH_INTERVAL_TIME)
         except Exception as e:
             logger.error(f"Error in processor: {str(e)}")
-            if asyncio.get_event_loop().get_debug():
+            if DEBUG_ENABLED:
                 raise
 
 async def execute_call(call: APICall) -> None:
