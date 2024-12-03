@@ -2,6 +2,8 @@
 from pathlib import Path
 import sys
 import asyncio
+import os
+import warnings
 
 def setup_python_path() -> None:
     """Add project directories to Python path."""
@@ -29,10 +31,29 @@ async def async_main() -> None:
     # Start API queue
     await start_api_queue()
     
+    # Initialize shell
+    shell = CymbiontShell()
+    set_shell(shell)
+    
     try:
-        # Create and run shell
-        shell = CymbiontShell()
-        set_shell(shell)
+        # Check if we have a one-shot command
+        if len(sys.argv) > 1 and sys.argv[1] == '--test':
+            # Run the test command
+            if len(sys.argv) > 2:
+                test_name = sys.argv[2]
+                logger.info(f"Running test: {test_name}")
+                success, _ = await shell.execute_command(f'test_{test_name}', '')
+                if not success:
+                    sys.exit(1)
+            else:
+                logger.info("Running all tests")
+                success, _ = await shell.execute_command('run_all_tests', '')
+                if not success:
+                    sys.exit(1)
+            # Exit after test
+            return
+            
+        # Normal interactive mode
         await shell.run()
         
     except KeyboardInterrupt:

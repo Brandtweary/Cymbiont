@@ -1,7 +1,20 @@
-from agents.chat_history import ChatHistory
-from shared_resources import logger
+if __name__ == "__main__":
+    import os
+    import sys
+    from pathlib import Path
+    
+    # Get path to cymbiont.py
+    project_root = Path(__file__).parent.parent
+    cymbiont_path = project_root / 'cymbiont.py'
+    
+    # Re-run through cymbiont
+    os.execv(sys.executable, [sys.executable, str(cymbiont_path), '--test', 'progressive_summarization'])
+else:
+    # Normal imports for when the module is imported properly
+    from agents.chat_history import ChatHistory
+    from shared_resources import logger
 
-async def test_progressive_summarization() -> None:
+async def run_progressive_summarization_test() -> None:
     """Test that progressive summarization works correctly with mock API"""
     try:
         # Create chat history with mock enabled

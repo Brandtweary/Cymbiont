@@ -100,6 +100,38 @@ cp config.example.toml config.toml
 # Edit config.toml with your preferred settings
 ```
 
+## Testing
+
+There are three ways to run tests in Cymbiont:
+
+### 1. Interactive Shell Command
+From within Cymbiont, use the shell command:
+```
+run_all_tests
+```
+This will run all tests and display the results. You can also run specific test modules with commands like `test_logger`, `test_api_queue`, etc.
+
+### 2. Command Line Interface
+You can run tests directly from the command line using a '--test' flag on the cymbiont executable:
+```bash
+# Run all tests
+python cymbiont.py --test
+
+# Run a specific test
+python cymbiont.py --test logger
+```
+
+### 3. Module Execution
+You can run test scripts using Python's module execution:
+```bash
+# Run all test modules
+python -m tests
+
+# Run a specific test module
+python -m tests.test_logger
+```
+This will automatically route the test through the cymbiont executable to ensure proper environment setup.
+
 ### Alternative Environment Managers
 If you prefer to use conda, poetry, or another environment manager:
 1. Create your config file if you haven't done so already: `cp config.example.toml config.toml`

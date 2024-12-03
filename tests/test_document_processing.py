@@ -1,9 +1,21 @@
-from pathlib import Path
-from knowledge_graph.documents import process_documents, create_data_snapshot
-from utils import get_paths, load_index, save_index
-import shutil
-from shared_resources import logger
-
+if __name__ == "__main__":
+    import os
+    import sys
+    from pathlib import Path
+    
+    # Get path to cymbiont.py
+    project_root = Path(__file__).parent.parent
+    cymbiont_path = project_root / 'cymbiont.py'
+    
+    # Re-run through cymbiont
+    os.execv(sys.executable, [sys.executable, str(cymbiont_path), '--test', 'document_processing'])
+else:
+    # Normal imports for when the module is imported properly
+    import shutil
+    from pathlib import Path
+    from shared_resources import logger
+    from knowledge_graph.documents import process_documents, create_data_snapshot
+    from utils import get_paths, load_index, save_index
 
 async def test_process_documents() -> None:
     """Test the document processing pipeline with a mock document."""
@@ -153,4 +165,3 @@ async def run_document_processing_tests() -> tuple[int, int]:
             failed += 1
     
     return passed, failed
-    

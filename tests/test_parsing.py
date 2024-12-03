@@ -1,13 +1,24 @@
-from knowledge_graph.text_parser import split_into_chunks
-import logging
+if __name__ == "__main__":
+    import os
+    import sys
+    from pathlib import Path
+    
+    # Get path to cymbiont.py
+    project_root = Path(__file__).parent.parent
+    cymbiont_path = project_root / 'cymbiont.py'
+    
+    # Re-run through cymbiont
+    os.execv(sys.executable, [sys.executable, str(cymbiont_path), '--test', 'parsing'])
+else:
+    # Normal imports for when the module is imported properly
+    from knowledge_graph.text_parser import split_into_chunks
+    from shared_resources import logger
 
-logger = logging.getLogger(__name__)
-
-def run_text_parsing_test() -> None:
-    """Test the text parsing functionality with a sample document."""
-    try:
-        # Test input
-        test_text = '''I. The Principles of Magic\u0000\u001F
+    def run_text_parsing_test() -> None:
+        """Test the text parsing functionality with a sample document."""
+        try:
+            # Test input
+            test_text = '''I. The Principles of Magic\u0000\u001F
 
 1. The Laws of Magic
 
@@ -58,12 +69,12 @@ Anthropology, 1899.
 of Magical Practices," 1901.
 '''
 
-        # Process the document
-        chunks = split_into_chunks(test_text, "test_doc")
-        
-        # Expected output for each chunk
-        expected_chunks = [
-            '''I. The Principles of Magic
+            # Process the document
+            chunks = split_into_chunks(test_text, "test_doc")
+            
+            # Expected output for each chunk
+            expected_chunks = [
+                '''I. The Principles of Magic
 1. The Laws of Magic
 The fundamental principles of magic have been well studied. Here we shall
 examine them in detail, starting with sympathetic magic, which relies on
@@ -87,16 +98,16 @@ of Magical Practices," 1901.
           • Once connected, always connected
           • Part equals whole
           • Essence persists through time''',
-            
-            '''A simple example of sympathetic magic can be illustrated as follows:
+                
+                '''A simple example of sympathetic magic can be illustrated as follows:
                    Types of Magic
                          |
             ------------------------
             |                      |
     Sympathetic Magic       Contagious Magic
     (Like affects like)    (Part affects whole)''',
-            
-            '''The above classification helps us understand the basic principles that
+                
+                '''The above classification helps us understand the basic principles that
 govern magical thinking in primitive societies. Let me illustrate with a
 common spell:
 "By this pin I pierce the heart,
@@ -105,19 +116,19 @@ common spell:
 J. G. FRAZER.
 1 BRICK COURT, TEMPLE,
 June 1922.'''
-        ]
+            ]
 
-        # Assert the number of chunks matches
-        if len(chunks) != len(expected_chunks):
-            raise AssertionError(f"Expected {len(expected_chunks)} chunks, got {len(chunks)}")
+            # Assert the number of chunks matches
+            if len(chunks) != len(expected_chunks):
+                raise AssertionError(f"Expected {len(expected_chunks)} chunks, got {len(chunks)}")
 
-        # Assert each chunk's text matches exactly
-        for i, (chunk, expected) in enumerate(zip(chunks, expected_chunks)):
-            if chunk.text.strip() != expected.strip():
-                raise AssertionError(
-                    f"Chunk {i+1} does not match expected output.\n"
-                    f"Expected:\n{expected.strip()}\n"
-                    f"Got:\n{chunk.text.strip()}"
-                )
-    except Exception as e:
-        logger.error(f"Text parsing test failed: {str(e)}")
+            # Assert each chunk's text matches exactly
+            for i, (chunk, expected) in enumerate(zip(chunks, expected_chunks)):
+                if chunk.text.strip() != expected.strip():
+                    raise AssertionError(
+                        f"Chunk {i+1} does not match expected output.\n"
+                        f"Expected:\n{expected.strip()}\n"
+                        f"Got:\n{chunk.text.strip()}"
+                    )
+        except Exception as e:
+            logger.error(f"Text parsing test failed: {str(e)}")

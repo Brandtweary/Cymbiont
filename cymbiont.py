@@ -20,19 +20,20 @@ def ensure_venv() -> None:
     if not venv_path.exists():
         print("\033[31mError: No virtual environment found. Please run bootstrap.sh first.\033[0m")
         sys.exit(1)
-
-    # Re-execute using the venv's Python
-    if sys.platform == 'win32':
-        python = venv_path / 'Scripts' / 'python.exe'
-    else:
-        python = venv_path / 'bin' / 'python'
-
-    if not python.exists():
-        print("\033[31mError: Virtual environment appears corrupted. Try running bootstrap.sh again.\033[0m")
+        
+    # Get the path to the virtual environment's Python interpreter
+    if os.name == 'nt':  # Windows
+        python_path = venv_path / 'Scripts' / 'python.exe'
+    else:  # Unix
+        python_path = venv_path / 'bin' / 'python'
+        
+    if not python_path.exists():
+        print("\033[31mError: Virtual environment is corrupt. Please delete .venv and run bootstrap.sh again.\033[0m")
         sys.exit(1)
+        
+    # Re-execute the script with the virtual environment's Python
+    os.execl(str(python_path), str(python_path), __file__, *sys.argv[1:])
 
-    # Replace current process with one using the venv's Python
-    os.execv(str(python), [str(python), __file__])
 
 if __name__ == "__main__":
     ensure_venv()

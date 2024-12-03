@@ -3,7 +3,7 @@ from tests.test_api_queue import run_api_queue_tests
 from tests.test_document_processing import run_document_processing_tests
 from tests.test_logger import run_logger_test
 from tests.test_parsing import run_text_parsing_test
-from tests.test_progressive_summarization import test_progressive_summarization
+from tests.test_progressive_summarization import run_progressive_summarization_test
 from tests.test_agent_tools import run_agent_tool_tests
 
 
@@ -68,7 +68,7 @@ async def do_test_parsing(shell, args: str) -> None:
 async def do_test_progressive_summarization(shell, args: str) -> None:
     """Test progressive summarization functionality."""
     try:
-        await test_progressive_summarization()  # Will raise an exception if test fails
+        await run_progressive_summarization_test()  # Will raise an exception if test fails
         shell.test_successes = 1
         shell.test_failures = 0
         logger.info("✓ Progressive summarization tests passed")

@@ -1,9 +1,28 @@
-import asyncio
-from typing import List
-from api_queue import enqueue_api_call, BATCH_INTERVAL_TIME, TPM_SOFT_LIMIT, is_queue_empty, clear_token_history
-from shared_resources import logger
-from custom_dataclasses import ChatMessage
-from constants import LLM, model_data
+if __name__ == "__main__":
+    import os
+    import sys
+    from pathlib import Path
+    
+    # Get path to cymbiont.py
+    project_root = Path(__file__).parent.parent
+    cymbiont_path = project_root / 'cymbiont.py'
+    
+    # Re-run through cymbiont
+    os.execv(sys.executable, [sys.executable, str(cymbiont_path), '--test', 'api_queue'])
+else:
+    # Normal imports for when the module is imported properly
+    import asyncio
+    from typing import List
+    from shared_resources import logger
+    from api_queue import (
+        enqueue_api_call, 
+        BATCH_INTERVAL_TIME, 
+        TPM_SOFT_LIMIT, 
+        clear_token_history,
+        is_queue_empty
+    )
+    from custom_dataclasses import ChatMessage
+    from constants import LLM, model_data
 
 async def test_rpm_rate_limiting() -> None:
     """Test RPM rate limiting processes correct batch size."""
