@@ -1,6 +1,4 @@
 import math
-from pickle import TRUE
-from unittest.mock import DEFAULT
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
@@ -10,57 +8,10 @@ from token_logger import token_logger
 from agents.chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel, ToolName
 from agents.chat_agent import get_response
-from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS
 from agents.tool_schemas import format_all_tool_schemas
 from system_prompt_parts import SYSTEM_MESSAGE_PARTS
-
 from .command_completer import CommandCompleter
-from .doc_processing_commands import (
-    do_process_documents,
-    do_create_data_snapshot,
-    do_parse_documents,
-    do_revise_document
-)
-from .test_commands import (
-    do_test_api_queue,
-    do_test_document_processing,
-    do_test_logger,
-    do_test_parsing,
-    do_test_progressive_summarization,
-    do_test_agent_tools,
-    do_run_all_tests,
-)
-
-# Define which commands accept arguments
-COMMAND_METADATA = {
-    'exit': {'takes_args': False},
-    'help': {'takes_args': True},  # Optional command name to get help for
-    'hello_world': {'takes_args': False},
-    'process_documents': {
-        'takes_args': True,
-        'arg_types': ['filepaths']  # File paths
-    },
-    'create_data_snapshot': {
-        'takes_args': True,
-        'arg_types': ['text', 'filepaths']  # Snapshot name, file paths
-    },
-    'parse_documents': {
-        'takes_args': True,
-        'arg_types': ['filepaths']  # File paths
-    },
-    'revise_document': {
-        'takes_args': True,
-        'arg_types': ['file', 'text', 'text']  # File path, revision instructions
-    },
-    'test_api_queue': {'takes_args': False},
-    'test_document_processing': {'takes_args': False},
-    'test_logger': {'takes_args': False},
-    'test_parsing': {'takes_args': False},
-    'test_progressive_summarization': {'takes_args': False},
-    'test_agent_tools': {'takes_args': False},
-    'run_all_tests': {'takes_args': True},  # -v flag
-    'print_total_tokens': {'takes_args': False},
-}
+from .command_metadata import create_commands
 
 
 class CymbiontShell:
@@ -72,45 +23,13 @@ class CymbiontShell:
         # Connect chat history to logger
         setup_chat_history_handler(logger, self.chat_history)
         
-        # Define command handlers
-        self.commands: Dict[str, Callable] = {
-            'exit': self.do_exit,
-            'help': self.do_help,
-            'hello_world': self.do_hello_world,
-            'process_documents': self.do_process_documents,
-            'create_data_snapshot': self.do_create_data_snapshot,
-            'parse_documents': self.do_parse_documents,
-            'revise_document': self.do_revise_document,
-            'test_api_queue': self.do_test_api_queue,
-            'test_document_processing': self.do_test_document_processing,
-            'test_logger': self.do_test_logger,
-            'test_parsing': self.do_test_parsing,
-            'test_progressive_summarization': self.do_test_progressive_summarization,
-            'test_agent_tools': self.do_test_agent_tools,
-            'run_all_tests': self.do_run_all_tests,
-            'print_total_tokens': self.do_print_total_tokens,
-        }
-        
-        self.command_metadata = COMMAND_METADATA
-        
-        # Map commands to their original functions for documentation
-        self.command_mapping: Dict[str, Callable] = {
-            'exit': self.do_exit,  # Built-in commands use their wrapper docstrings
-            'help': self.do_help,
-            'hello_world': self.do_hello_world,
-            'process_documents': do_process_documents,  # Imported commands use their original docstrings
-            'create_data_snapshot': do_create_data_snapshot,
-            'parse_documents': do_parse_documents,
-            'revise_document': do_revise_document,
-            'test_api_queue': do_test_api_queue,
-            'test_document_processing': do_test_document_processing,
-            'test_logger': do_test_logger,
-            'test_parsing': do_test_parsing,
-            'test_progressive_summarization': do_test_progressive_summarization,
-            'test_agent_tools': do_test_agent_tools,
-            'run_all_tests': do_run_all_tests,
-            'print_total_tokens': self.do_print_total_tokens,
-        }
+        # Store command metadata
+        self.commands = create_commands(
+            do_exit=self.do_exit,
+            do_help=self.do_help,
+            do_hello_world=self.do_hello_world,
+            do_print_total_tokens=self.do_print_total_tokens
+        )
         
         # Generate command documentation and format shell_command_info part
         shell_doc = self.generate_command_documentation()
@@ -119,15 +38,14 @@ class CymbiontShell:
                 shell_command_documentation=shell_doc
             )
         
-        # Format tool schemas with command metadata
+        # Format tool schemas with dynamic content
         format_all_tool_schemas(
             {ToolName.EXECUTE_SHELL_COMMAND},
-            commands=list(self.commands.keys()),
-            command_metadata=self.command_metadata
+            command_metadata=self.commands
         )
         
         # Initialize command completer
-        self.completer = CommandCompleter(self.commands, self.command_metadata)
+        self.completer = CommandCompleter(self.commands)
         
         # Create prompt session with styling
         style = Style.from_dict({
@@ -197,11 +115,11 @@ class CymbiontShell:
         """
         doc_lines = []
         
-        for cmd_name, handler in self.command_mapping.items():
-            if not handler.__doc__:
+        for cmd_name, cmd_data in self.commands.items():
+            if not cmd_data.callable.__doc__:
                 continue
                 
-            doc_lines.append(f"{cmd_name}: {handler.__doc__.strip()}")
+            doc_lines.append(f"{cmd_name}: {cmd_data.callable.__doc__.strip()}")
         
         return '\n'.join(doc_lines)
 
@@ -220,9 +138,9 @@ class CymbiontShell:
             logger.info(formatted_commands + "\n")
         else:
             # Show specific command help
-            cmd = self.command_mapping.get(args)
-            if cmd:
-                logger.info(f"{args}: {cmd.__doc__ or 'No help available'}\n")
+            cmd_data = self.commands.get(args)
+            if cmd_data:
+                logger.info(f"{args}: {cmd_data.callable.__doc__ or 'No help available'}\n")
             else:
                 logger.info(f"No help available for '{args}'\n")
     
@@ -277,7 +195,7 @@ class CymbiontShell:
             )
             
             # Execute command and get return value
-            result = await self.commands[command](args)
+            result = await self.commands[command].callable(args)
             
             # Handle different return types for backward compatibility
             if isinstance(result, bool):
@@ -322,67 +240,6 @@ class CymbiontShell:
                 continue
             except EOFError:
                 break
-
-    # Document processing commands
-    async def do_process_documents(self, args: str) -> None:
-        """Process documents in the data/input_documents directory for LLM tag extraction.
-        Usage: process_documents [document_name]
-        - document_name: Optional. If provided, only this file or folder will be processed.
-                        Otherwise, processes all .txt and .md files."""
-        await do_process_documents(args)
-
-    async def do_create_data_snapshot(self, args: str) -> None:
-        """Creates an isolated snapshot folder by processing documents in the data/input_documents directory.
-        The snapshot contains all processing artifacts (chunks, indexes, etc.) as if you had
-        only processed the specified documents.
-
-        Usage: create_data_snapshot <snapshot_name> [document_name]
-        - snapshot_name: Name for the new snapshot folder
-        - document_name: Optional. If provided, only this file or folder will be processed.
-                        Otherwise, processes all .txt and .md files."""
-        await do_create_data_snapshot(args)
-
-    async def do_parse_documents(self, args: str) -> None:
-        """Test document parsing without running LLM tag extraction.
-        This command parses documents in data/input_documents into chunks and records the results to logs/parse_test_results.log.
-
-        Usage: parse_documents [document_name]
-        - document_name: Optional. If provided, only this file or folder will be tested.
-                        Otherwise, tests all .txt and .md files."""
-        await do_parse_documents(args)
-
-    async def do_revise_document(self, args: str) -> None:
-        """Revise a document"""
-        await do_revise_document(args)
-
-    # Test commands
-    async def do_test_api_queue(self, args: str) -> None:
-        """Run API queue tests."""
-        await do_test_api_queue(self, args)
-
-    async def do_test_document_processing(self, args: str) -> None:
-        """Test document processing pipeline with mock API calls."""
-        await do_test_document_processing(self, args)
-
-    async def do_test_logger(self, args: str) -> None:
-        """Test all logging levels with colored output."""
-        await do_test_logger(self, args)
-
-    async def do_test_parsing(self, args: str) -> None:
-        """Run text parsing tests."""
-        await do_test_parsing(self, args)
-
-    async def do_test_progressive_summarization(self, args: str) -> None:
-        """Test progressive summarization functionality."""
-        await do_test_progressive_summarization(self, args)
-
-    async def do_test_agent_tools(self, args: str) -> None:
-        """Test agent tools functionality."""
-        await do_test_agent_tools(self, args)
-
-    async def do_run_all_tests(self, args: str) -> None:
-        """Run all tests."""
-        await do_run_all_tests(self, args)
 
     async def do_print_total_tokens(self, args: str) -> None:
         """Print the total token count"""

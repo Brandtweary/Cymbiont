@@ -28,6 +28,14 @@ class LLM(Enum):
     SONNET_3_5 = "claude-3-5-sonnet-latest"
     HAIKU_3_5 = "claude-3-5-haiku-latest"
 
+class CommandArgType(Enum):
+    """Types of arguments that shell commands can accept"""
+    FILENAME = "filename"      # File name
+    ENTRY = "entry"       # File or folder name
+    TEXT = "text"             # Free-form text
+    FLAG = "flag"             # Command flag (e.g., -v)
+    COMMAND = "command"       # Command name (for help command)
+
 # Rate limits are assuming tier 2 API access for both OpenAI and Anthropic
 model_data = {
     LLM.SONNET_3_5.value: {

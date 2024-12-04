@@ -2,7 +2,7 @@ from constants import ToolName
 from typing import Dict, Any, List, Set, Optional, Union
 from copy import deepcopy
 from shared_resources import logger
-
+from custom_dataclasses import CommandData
 
 def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     """Format a single tool schema, handling any dynamic content based on runtime state.
@@ -11,8 +11,7 @@ def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         schema: The base schema to format
         **kwargs: Dynamic parameters that may be required by different schemas:
             - system_prompt_parts: Required for toggle_prompt_part schema
-            - commands: Required for execute_shell_command schema
-            - command_metadata: Required for execute_shell_command schema, maps command names to metadata dict
+            - command_metadata: Required for execute_shell_command schema, maps command names to CommandData
     """
     schema = deepcopy(schema)
     schema_name = schema.get("function", {}).get("name")
@@ -25,19 +24,15 @@ def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         part_names = list(kwargs["system_prompt_parts"].parts.keys())
         schema["function"]["parameters"]["properties"]["part_name"]["enum"] = part_names
     
-    elif schema_name == "execute_shell_command":
-        if "commands" not in kwargs:
-            logger.warning("commands required for execute_shell_command schema formatting")
-            return schema
-            
+    elif schema_name == "execute_shell_command":  
         if "command_metadata" not in kwargs:
             logger.warning("command_metadata required for execute_shell_command schema formatting")
             return schema
             
         # Mark commands that take args with an asterisk
         marked_commands = []
-        for cmd in kwargs["commands"]:
-            if kwargs["command_metadata"].get(cmd, {}).get('takes_args', False):
+        for cmd, cmd_data in kwargs["command_metadata"].items():
+            if cmd_data.takes_args:
                 marked_commands.append(f"{cmd}*")
             else:
                 marked_commands.append(cmd)
@@ -54,8 +49,7 @@ def format_all_tool_schemas(tools: Set[ToolName], **kwargs) -> None:
         tools: Set of tools to format schemas for
         **kwargs: Parameters required by different schema types:
             - system_prompt_parts: Required for toggle_prompt_part schema
-            - commands: Required for execute_shell_command schema
-            - command_metadata: Required for execute_shell_command schema, maps command names to metadata dict
+            - command_metadata: Required for execute_shell_command schema, maps command names to CommandData
     """
     for tool in tools:
         if tool in TOOL_SCHEMAS:

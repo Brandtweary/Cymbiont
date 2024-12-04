@@ -1,33 +1,27 @@
 from prompt_toolkit.completion import Completer, Completion, WordCompleter
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List
 from pathlib import Path
 import os
 
-from utils import get_paths, Paths
+from utils import get_paths
 from shared_resources import DATA_DIR
+from custom_dataclasses import CommandData
+from constants import CommandArgType
 
 
 class CommandCompleter(Completer):
-    def __init__(self, commands: Dict[str, Callable], command_metadata: Dict) -> None:
+    def __init__(self, command_metadata: Dict[str, CommandData]) -> None:
         """Initialize the command completer.
         
         Args:
-            commands: Dictionary mapping command names to their handler functions
-            command_metadata: Dictionary containing metadata for each command, including:
-                - takes_args: Whether the command accepts arguments
-                - arg_types: List of argument types in order (e.g. ['file', 'text'])
-                           Valid types are:
-                           - 'filepaths': Files or folders in input_documents
-                           - 'file': Only files in input_documents
-                           - 'text': No autocompletion needed
+            command_metadata: Dictionary mapping command names to their CommandData
         """
-        self.commands = commands
-        self.command_metadata = command_metadata
+        self.commands = command_metadata
         self.paths = get_paths(DATA_DIR)
         
         # Create a word completer for command arguments
         self.arg_completions: Dict[str, WordCompleter] = {
-            'help': WordCompleter(list(commands.keys()), ignore_case=True),
+            'help': WordCompleter(list(command_metadata.keys()), ignore_case=True),
         }
 
     def _get_filepaths_completions(self, word_before_cursor: str) -> List[Completion]:
@@ -138,10 +132,9 @@ class CommandCompleter(Completer):
         first_word = words[0].lower()
         if first_word in self.commands:
             # Try argument completion first
-            command_info = self.command_metadata.get(first_word, {})
-            arg_types = command_info.get('arg_types', [])
+            cmd_data = self.commands[first_word]
             
-            if arg_types:  # Only try arg completion if command has arg types defined
+            if cmd_data.arg_types:  # Only try arg completion if command has arg types defined
                 # Get current argument index (subtract 1 for command itself)
                 # If we're at a space, we're starting the next argument
                 current_arg_idx = len(words) - 1
@@ -150,19 +143,25 @@ class CommandCompleter(Completer):
                 current_arg_idx -= 1  # Subtract 1 for the command itself
                 
                 # If we haven't exceeded the number of expected arguments
-                if current_arg_idx < len(arg_types):
+                if current_arg_idx < len(cmd_data.arg_types):
                     # Get completions based on the current argument type
                     if not text_before_cursor.endswith(' '):
                         word_before_cursor = words[-1]
-                        arg_type = arg_types[current_arg_idx]
+                        arg_type = cmd_data.arg_types[current_arg_idx]
                         
-                        if arg_type == 'filepaths':
-                            yield from self._get_filepaths_completions(word_before_cursor)
-                            return
-                        elif arg_type == 'file':
+                        if arg_type == CommandArgType.FILENAME:
                             yield from self._get_file_completions(word_before_cursor)
                             return
-                        # text type has no completions
+                        elif arg_type == CommandArgType.ENTRY:
+                            yield from self._get_file_completions(word_before_cursor)
+                            return
+                        elif arg_type == CommandArgType.COMMAND:
+                            # Complete with available commands
+                            for command in self.commands:
+                                if command.startswith(word_before_cursor.lower()):
+                                    yield Completion(command, start_position=-len(word_before_cursor))
+                            return
+                        # text and flag types have no completions
             elif first_word in self.arg_completions:  # Fall back to basic WordCompleter
                 yield from self.arg_completions[first_word].get_completions(document, complete_event)
                 return

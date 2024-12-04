@@ -1,9 +1,9 @@
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, List, Dict, Literal, Optional, NamedTuple, Set, Union
+from typing import Any, List, Dict, Literal, Optional, NamedTuple, Set, Union, Callable
 from pathlib import Path
-from constants import ToolName
+from constants import ToolName, CommandArgType
 from process_log import ProcessLog
 
 
@@ -80,6 +80,13 @@ class SystemPromptPartsData:
                     self.parts[part_name] = SystemPromptPartInfo(**part_info)
                 else:
                     raise ValueError(f"Invalid part info for {part_name}: {part_info}")
+
+@dataclass
+class CommandData:
+    """Data structure for shell command metadata"""
+    callable: Callable
+    takes_args: bool
+    arg_types: Optional[List[CommandArgType]] = None
 
 @dataclass
 class ToolLoopData:
