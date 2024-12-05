@@ -10,7 +10,7 @@ from .tool_schemas import TOOL_SCHEMAS
 
 # Common arguments that can be passed to any tool processing function
 COMMON_TOOL_ARGS = {
-    'chat_history',          
+    'chat_history',   # we could probably remove chat history and just rely on chat agent instance       
     'tool_loop_data',        
     'token_budget',          
     'mock',                  
@@ -105,8 +105,18 @@ def validate_tool_args(
     except (KeyError, ValueError):
         return None, f"No schema found for tool: '{tool_name}'"
 
-    # TODO: Implement schema validation
-    # For now, just return the arguments as is
+    # Validate required parameters
+    required_params = tool_schema["function"]["parameters"].get("required", [])
+    missing_params = [param for param in required_params if param not in arguments]
+    if missing_params:
+        return None, f"Missing required parameters: {', '.join(missing_params)}"
+
+    # Validate no unrecognized arguments
+    valid_params = tool_schema["function"]["parameters"]["properties"].keys()
+    invalid_params = [param for param in arguments if param not in valid_params]
+    if invalid_params:
+        return None, f"Unrecognized arguments: {', '.join(invalid_params)}"
+
     return arguments, None
 
 async def process_tool_calls(
@@ -255,5 +265,3 @@ def log_token_budget_warnings(loop_tokens: int, token_budget: int, loop_type: st
         logger.warning(f"{loop_type} loop is approaching token budget limit of {token_budget}")
     elif loop_tokens >= token_budget * 0.75:
         logger.warning(f"{loop_type} loop has used 75% of token budget {token_budget}")
-
-# Note: register_tools() should be called by the application at startup, not at module level

@@ -10,7 +10,7 @@ from typing import Optional, List, Set
 async def process_contemplate_loop(
     question: str,
     tool_loop_data: Optional[ToolLoopData],
-    chat_history: ChatHistory,
+    chat_agent: ChatAgent,
     token_budget: int = 20000,
     mock: bool = False,
     mock_messages: Optional[List[ChatMessage]] = None,
@@ -22,7 +22,7 @@ async def process_contemplate_loop(
     Args:
         question: The question to ponder during the contemplation loop.
         tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
-        chat_history: The ChatHistory instance.
+        chat_agent: The ChatAgent instance.
         token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
         mock: If True, uses mock_messages instead of normal message setup.
         mock_messages: List of mock messages to use when mock=True.
@@ -58,7 +58,6 @@ async def process_contemplate_loop(
 
     while iterations < max_iterations:
         iterations += 1
-        chat_agent = ChatAgent(chat_history)
         response = await chat_agent.get_chat_response(
             tools=tool_loop_data.available_tools,
             tool_loop_data=tool_loop_data,
@@ -137,8 +136,8 @@ async def process_toggle_prompt_part(
 async def process_execute_shell_command(
     command: str,
     args: List[str],
+    chat_agent: ChatAgent,
     tool_loop_data: Optional[ToolLoopData] = None,
-    chat_history: Optional[ChatHistory] = None,
     token_budget: int = 20000,
     mock: bool = False,
     mock_messages: Optional[List[ChatMessage]] = None,
@@ -152,18 +151,18 @@ async def process_execute_shell_command(
     shell = get_shell()
     args_str = ' '.join(args) if args else ''
     success, should_exit = await shell.execute_command(command, args_str, name=AGENT_NAME)
-    if not success and not tool_loop_data and chat_history:
+    if not success and not tool_loop_data:
         # Command failed and we're not in a loop - start a shell loop
         logger.log(LogLevel.TOOL, f"Command failed, starting shell loop for troubleshooting")
         return await process_shell_loop(
-            chat_history=chat_history,
+            chat_agent=chat_agent,
             token_budget=token_budget,
             mock=mock,
             mock_messages=mock_messages,
             system_prompt_parts=system_prompt_parts
         ) or f"Failed to execute command: {command}{' ' + args_str if args_str else ''}"
     elif not success:
-        # Command failed but we're either in a loop or missing chat_history
+        # Command failed but we're in a loop
         return f"Failed to execute command: {command}{' ' + args_str if args_str else ''}"
     elif should_exit:
         return f"Command {command} requested shell exit"
@@ -182,7 +181,7 @@ async def process_execute_shell_command(
 
 async def process_introduce_self(
     tool_loop_data: Optional[ToolLoopData],
-    chat_history: ChatHistory,
+    chat_agent: ChatAgent,
     token_budget: int = 2000,
     mock: bool = False,
     mock_messages: Optional[List[ChatMessage]] = None
@@ -192,7 +191,7 @@ async def process_introduce_self(
 
     Args:
         tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
-        chat_history: The ChatHistory instance to maintain conversation context.
+        chat_agent: The ChatAgent instance to use for responses.
         token_budget: Maximum number of tokens allowed. Default is 2000.
         mock: If True, uses mock_messages instead of normal message setup.
         mock_messages: List of mock messages to use when mock=True.
@@ -208,7 +207,6 @@ async def process_introduce_self(
     introduction_prompt_parts = create_system_prompt_parts_data(["biographical", "response_guidelines"])
 
     # Get response with biographical prompt
-    chat_agent = ChatAgent(chat_history)
     response = await chat_agent.get_chat_response(
         token_budget=token_budget,
         mock=mock,
@@ -219,7 +217,7 @@ async def process_introduce_self(
     return response
 
 async def process_shell_loop(
-    chat_history: ChatHistory,
+    chat_agent: ChatAgent,
     tool_loop_data: Optional[ToolLoopData] = None,
     token_budget: int = 20000,
     mock: bool = False,
@@ -230,7 +228,7 @@ async def process_shell_loop(
     Process the 'shell_loop' tool call.
 
     Args:
-        chat_history: The ChatHistory instance.
+        chat_agent: The ChatAgent instance to use for responses.
         tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
         token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
         mock: If True, uses mock_messages instead of normal message setup.
@@ -274,7 +272,6 @@ async def process_shell_loop(
 
     while iterations < max_iterations:
         iterations += 1
-        chat_agent = ChatAgent(chat_history)
         response = await chat_agent.get_chat_response(
             tools=tool_loop_data.available_tools,
             tool_loop_data=tool_loop_data,

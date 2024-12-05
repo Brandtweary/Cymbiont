@@ -6,12 +6,13 @@ from prompt_toolkit.formatted_text import FormattedText
 from typing import Callable, Dict, Any, Tuple, Optional
 from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED
 from token_logger import token_logger
+from token_logger import token_logger
 from agents.chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel, ToolName
 from agents.chat_agent import ChatAgent
 from agents.tool_agent import ToolAgent
 from agents.tool_schemas import format_all_tool_schemas
-from system_prompt_parts import SYSTEM_MESSAGE_PARTS
+from system_prompt_parts import SYSTEM_MESSAGE_PARTS, DEFAULT_SYSTEM_PROMPT_PARTS
 from .command_completer import CommandCompleter
 from .command_metadata import create_commands
 
@@ -46,7 +47,10 @@ class CymbiontShell:
             )
         
         # Format tool schemas with dynamic content
-        format_all_tool_schemas(command_metadata=self.commands)
+        format_all_tool_schemas(
+            command_metadata=self.commands,
+            system_prompt_parts=DEFAULT_SYSTEM_PROMPT_PARTS
+        )
         
         # Initialize command completer
         self.completer = CommandCompleter(self.commands)
@@ -203,10 +207,11 @@ class CymbiontShell:
         while True:
             try:
                 # Run the tool agent with specific tools
-                response = await self.tool_agent.get_tool_response(
-                    tools=tool_set,
-                    token_budget=20000
-                )
+                with token_logger.show_tokens():
+                    response = await self.tool_agent.get_tool_response(
+                        tools=tool_set,
+                        token_budget=20000
+                    )
 
                 if response:
                     # Tool agent found something to do
@@ -241,7 +246,7 @@ class CymbiontShell:
             )
             
             # Execute command and get return value
-            result = await self.commands[command].callable(args)
+            result = await self.commands[command].callable(self, args)
             
             # Handle different return types for backward compatibility
             if isinstance(result, bool):
@@ -280,20 +285,12 @@ class CymbiontShell:
         """Run the shell"""
         try:
             # Start the tool agent
-            await self.start_tool_agent()
+           # await self.start_tool_agent()
 
-            # Create and configure the prompt session
-            session = PromptSession()
-            
             while True:
                 try:
                     # Get user input
-                    text = await session.prompt_async(
-                        FormattedText([
-                            ("", f"{USER_NAME}> ")
-                        ]),
-                        completer=CommandCompleter(self.commands)
-                    )
+                    text = await self.session.prompt_async()
                     
                     # Skip empty lines
                     if not text.strip():

@@ -7,18 +7,26 @@ from custom_dataclasses import CommandData
 def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     """Format a single tool schema, handling any dynamic content based on runtime state.
     
+    Some schemas require specific kwargs for initial formatting in CymbiontShell.__init__:
+    - toggle_prompt_part: Requires 'system_prompt_parts' for available prompt parts
+    - execute_shell_command: Requires 'command_metadata' for available shell commands
+    
+    These kwargs should be provided when calling format_all_tool_schemas in CymbiontShell.__init__.
+    Other dynamic formatting (like toggle_prompt_part's current system_prompt_parts) happens at runtime.
+    
     Args:
         schema: The base schema to format
-        **kwargs: Dynamic parameters that may be required by different schemas:
+        **kwargs: Dynamic parameters for initial schema formatting:
             - system_prompt_parts: Required for toggle_prompt_part schema
-            - command_metadata: Required for execute_shell_command schema, maps command names to CommandData
+            - command_metadata: Required for execute_shell_command schema
     """
     schema = deepcopy(schema)
     schema_name = schema.get("function", {}).get("name")
     
     if schema_name == "toggle_prompt_part":
         if "system_prompt_parts" not in kwargs:
-            logger.warning("system_prompt_parts required for toggle_prompt_part schema formatting")
+            logger.warning("Missing 'system_prompt_parts' kwarg required for toggle_prompt_part schema. "
+                         "This should be added to the format_all_tool_schemas call in CymbiontShell.__init__")
             return schema
             
         part_names = list(kwargs["system_prompt_parts"].parts.keys())
@@ -26,7 +34,8 @@ def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     
     elif schema_name == "execute_shell_command":  
         if "command_metadata" not in kwargs:
-            logger.warning("command_metadata required for execute_shell_command schema formatting")
+            logger.warning("Missing 'command_metadata' kwarg required for execute_shell_command schema. "
+                         "This should be added to the format_all_tool_schemas call in CymbiontShell.__init__")
             return schema
             
         # Mark commands that take args with an asterisk

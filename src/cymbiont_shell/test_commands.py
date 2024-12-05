@@ -120,8 +120,8 @@ async def do_run_all_tests(shell, args: str) -> None:
                 shell.test_failures = 0
                 
                 # Run the test
-                method = shell.commands[cmd]
-                await method('')
+                method = shell.commands[cmd].callable
+                await method(shell, '')
                 
                 # Accumulate results
                 total_successes += shell.test_successes
