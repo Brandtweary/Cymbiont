@@ -114,3 +114,4 @@ class APICall:
     process_log: Optional[ProcessLog] = None
     tools: Optional[Set[ToolName]] = None
     system_prompt_parts: Optional[SystemPromptPartsData] = None
+    tool_choice: Literal["auto", "required", "none"] = "auto"

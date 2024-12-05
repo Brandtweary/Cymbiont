@@ -1,7 +1,7 @@
 import asyncio
 import time
 import json
-from typing import Any, Optional, List, Dict, Set, Union
+from typing import Any, Optional, List, Dict, Set, Union, Literal
 from collections import deque
 from shared_resources import DEBUG_ENABLED, logger, openai_client, anthropic_client
 from token_logger import token_logger
@@ -220,7 +220,8 @@ async def execute_call(call: APICall) -> None:
                 process_log=call.process_log,
                 max_completion_tokens=call.max_completion_tokens,
                 tools=call.tools,
-                system_prompt_parts=call.system_prompt_parts
+                system_prompt_parts=call.system_prompt_parts,
+                tool_choice=call.tool_choice
             )
             pending_calls.append(new_call)
         else:
@@ -248,7 +249,8 @@ def enqueue_api_call(
     process_log: Optional[ProcessLog] = None,
     tools: Optional[Set[ToolName]] = None,
     max_completion_tokens: int = 4000,
-    system_prompt_parts: Optional[SystemPromptPartsData] = None
+    system_prompt_parts: Optional[SystemPromptPartsData] = None,
+    tool_choice: Literal["auto", "required", "none"] = "auto"
 ) -> asyncio.Future[Dict[str, Any]]:
     """Enqueue an API call with retry counter."""
     try:
@@ -281,7 +283,8 @@ def enqueue_api_call(
         process_log=process_log,
         max_completion_tokens=max_completion_tokens,
         tools=tools,
-        system_prompt_parts=system_prompt_parts
+        system_prompt_parts=system_prompt_parts,
+        tool_choice=tool_choice
     )
     pending_calls.append(call)
     return call.future

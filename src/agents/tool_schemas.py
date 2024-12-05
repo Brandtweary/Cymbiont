@@ -39,21 +39,24 @@ def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
                 
         schema["function"]["parameters"]["properties"]["command"]["enum"] = marked_commands
     
+    elif schema_name == "use_tool":
+        # For use_tool, provide a list of all available tool names
+        tool_names = [tool.value for tool in ToolName]
+        schema["function"]["parameters"]["properties"]["tool_name"]["enum"] = tool_names
+    
     return schema
 
-def format_all_tool_schemas(tools: Set[ToolName], **kwargs) -> None:
-    """Format all tool schemas for the specified tools, handling any dynamic content.
-    Modifies TOOL_SCHEMAS in place.
+def format_all_tool_schemas(**kwargs) -> None:
+    """Format all tool schemas with dynamic content.
     
     Args:
-        tools: Set of tools to format schemas for
-        **kwargs: Parameters required by different schema types:
+        **kwargs: Dynamic parameters that may be required by different schemas:
             - system_prompt_parts: Required for toggle_prompt_part schema
-            - command_metadata: Required for execute_shell_command schema, maps command names to CommandData
+            - command_metadata: Required for execute_shell_command schema
     """
-    for tool in tools:
-        if tool in TOOL_SCHEMAS:
-            TOOL_SCHEMAS[tool] = format_tool_schema(TOOL_SCHEMAS[tool], **kwargs)
+    # Format each schema
+    for tool_name, schema in TOOL_SCHEMAS.items():
+        TOOL_SCHEMAS[tool_name] = format_tool_schema(schema, **kwargs)
 
 TOOL_SCHEMAS = {
     ToolName.CONTEMPLATE_LOOP: {
@@ -70,6 +73,23 @@ TOOL_SCHEMAS = {
                     }
                 },
                 "required": ["question"]
+            }
+        }
+    },
+    ToolName.USE_TOOL: {
+        "type": "function",
+        "function": {
+            "name": "use_tool",
+            "description": "Request the tool agent to use a specific tool. This triggers a tool response from the tool agent.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tool_name": {
+                        "type": "string",
+                        "description": "The name of the tool to use."
+                    }
+                },
+                "required": ["tool_name"]
             }
         }
     },

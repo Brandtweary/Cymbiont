@@ -1,13 +1,15 @@
 import math
+import asyncio
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
-from typing import Callable, Dict, Any, Tuple
+from typing import Callable, Dict, Any, Tuple, Optional
 from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED
 from token_logger import token_logger
 from agents.chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel, ToolName
-from agents.chat_agent import get_response
+from agents.chat_agent import ChatAgent
+from agents.tool_agent import ToolAgent
 from agents.tool_schemas import format_all_tool_schemas
 from system_prompt_parts import SYSTEM_MESSAGE_PARTS
 from .command_completer import CommandCompleter
@@ -19,6 +21,11 @@ class CymbiontShell:
         self.chat_history = ChatHistory()
         self.test_successes: int = 0
         self.test_failures: int = 0
+        
+        # Initialize agents
+        self.chat_agent = ChatAgent(self.chat_history)
+        self.tool_agent = ToolAgent(self.chat_history)
+        self.tool_agent_task: Optional[asyncio.Task] = None
         
         # Connect chat history to logger
         setup_chat_history_handler(logger, self.chat_history)
@@ -39,10 +46,7 @@ class CymbiontShell:
             )
         
         # Format tool schemas with dynamic content
-        format_all_tool_schemas(
-            {ToolName.EXECUTE_SHELL_COMMAND},
-            command_metadata=self.commands
-        )
+        format_all_tool_schemas(command_metadata=self.commands)
         
         # Initialize command completer
         self.completer = CommandCompleter(self.commands)
@@ -155,15 +159,11 @@ class CymbiontShell:
                 # Wait for any ongoing summarization
                 await self.chat_history.wait_for_summary()
                 
-                response = await get_response(
-                    chat_history=self.chat_history,
+                response = await self.chat_agent.get_chat_response(
                     tools={
-                        ToolName.CONTEMPLATE_LOOP, 
-                        ToolName.EXECUTE_SHELL_COMMAND,
-                        ToolName.TOGGLE_PROMPT_PART,
-                        ToolName.INTRODUCE_SELF,
-                        ToolName.SHELL_LOOP
-                        },
+                        ToolName.USE_TOOL,
+                        ToolName.INTRODUCE_SELF
+                    },
                     token_budget=20000
                 )
 
@@ -174,7 +174,53 @@ class CymbiontShell:
             logger.error(f"Chat response failed: {str(e)}")
             if DEBUG_ENABLED:
                 raise
-    
+
+    async def start_tool_agent(self) -> None:
+        """Start the tool agent background task."""
+        if self.tool_agent_task is None or self.tool_agent_task.done():
+            self.tool_agent_task = asyncio.create_task(self.run_tool_agent())
+            logger.info("Tool agent started")
+
+    async def stop_tool_agent(self) -> None:
+        """Stop the tool agent background task."""
+        if self.tool_agent_task and not self.tool_agent_task.done():
+            self.tool_agent_task.cancel()
+            try:
+                await self.tool_agent_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("Tool agent stopped")
+
+    async def run_tool_agent(self) -> None:
+        """Background task that continuously runs the tool agent."""
+        tool_set = {
+            ToolName.CONTEMPLATE_LOOP,
+            ToolName.EXECUTE_SHELL_COMMAND,
+            ToolName.SHELL_LOOP,
+            ToolName.TOGGLE_PROMPT_PART
+        }
+        
+        while True:
+            try:
+                # Run the tool agent with specific tools
+                response = await self.tool_agent.get_tool_response(
+                    tools=tool_set,
+                    token_budget=20000
+                )
+
+                if response:
+                    # Tool agent found something to do
+                    logger.info(f"Tool agent action: {response}")
+
+                # Brief pause to prevent excessive API calls
+                await asyncio.sleep(1)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in tool agent loop: {str(e)}")
+                await asyncio.sleep(5)  # Longer pause on error
+
     async def execute_command(self, command: str, args: str, name: str = '') -> Tuple[bool, bool]:
         """Execute a shell command
         
@@ -214,32 +260,57 @@ class CymbiontShell:
                 raise
             return (False, False)
 
+    async def handle_input(self, text: str) -> bool:
+        """Handle user input, returns True if shell should exit"""
+        # Parse command and arguments
+        parts = text.strip().split(maxsplit=1)
+        command = parts[0].lower()
+        args = parts[1] if len(parts) > 1 else ''
+        
+        # Execute command or treat as chat
+        if command in self.commands:
+            success, should_exit = await self.execute_command(command, args)
+            return should_exit
+        else:
+            # Handle as chat message
+            await self.handle_chat(text)
+            return False
+
     async def run(self) -> None:
-        """Main shell loop"""
-        while True:
-            try:
-                text = await self.session.prompt_async()
-                if not text:
-                    continue
+        """Run the shell"""
+        try:
+            # Start the tool agent
+            await self.start_tool_agent()
+
+            # Create and configure the prompt session
+            session = PromptSession()
+            
+            while True:
+                try:
+                    # Get user input
+                    text = await session.prompt_async(
+                        FormattedText([
+                            ("", f"{USER_NAME}> ")
+                        ]),
+                        completer=CommandCompleter(self.commands)
+                    )
                     
-                # Parse command and arguments
-                parts = text.strip().split(maxsplit=1)
-                command = parts[0].lower()
-                args = parts[1] if len(parts) > 1 else ''
-                
-                # Execute command or treat as chat
-                if command in self.commands:
-                    success, should_exit = await self.execute_command(command, args)
+                    # Skip empty lines
+                    if not text.strip():
+                        continue
+                    
+                    # Handle the input
+                    should_exit = await self.handle_input(text)
                     if should_exit:
                         break
-                else:
-                    # Handle as chat message
-                    await self.handle_chat(text)
-                    
-            except KeyboardInterrupt:
-                continue
-            except EOFError:
-                break
+                
+                except KeyboardInterrupt:
+                    continue
+                except EOFError:
+                    break
+        finally:
+            # Stop the tool agent
+            await self.stop_tool_agent()
 
     async def do_print_total_tokens(self, args: str) -> None:
         """Print the total token count"""

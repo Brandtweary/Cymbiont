@@ -10,6 +10,7 @@ import time
 import json
 from typing import Dict, Any, Optional, Set, List, Union
 from constants import ToolName
+from shared_resources import logger
 
 def get_formatted_tool_schemas(
     tools: Optional[Set[ToolName]],
@@ -84,7 +85,7 @@ def convert_to_openai_params(call: APICall) -> Dict[str, Any]:
         formatted_tools = get_formatted_tool_schemas(call.tools, call.system_prompt_parts)
         if formatted_tools:
             api_params["tools"] = formatted_tools
-            api_params["tool_choice"] = "auto"
+            api_params["tool_choice"] = call.tool_choice
             api_params["response_format"] = ResponseFormatJSONObject(type="json_object")
     
     return api_params
@@ -255,7 +256,12 @@ def convert_to_anthropic_params(call: APICall) -> Dict[str, Any]:
                 }
                 tools.append(anthropic_tool)
             api_params["tools"] = tools
-            api_params["tool_choice"] = {"type": "auto"}
+            if call.tool_choice == "required":
+                api_params["tool_choice"] = {"type": "any"}
+            elif call.tool_choice == "none":
+                api_params["tool_choice"] = {"type": "auto"}
+            else:  # "auto"
+                api_params["tool_choice"] = {"type": "auto"}
     
     return api_params
 
@@ -278,7 +284,8 @@ def convert_from_anthropic_response(response, call: APICall) -> Dict[str, Any]:
         if content_block.type == "text":
             result["content"] = content_block.text
         elif content_block.type == "tool_use":
-            tool_call_results[content_block.id] = {
+            # Use the tool name as the key instead of the ID
+            tool_call_results[content_block.name] = {
                 "tool_name": content_block.name,
                 "arguments": content_block.input
             }

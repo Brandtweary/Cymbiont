@@ -20,6 +20,7 @@ class ToolName(Enum):
     TOGGLE_PROMPT_PART = "toggle_prompt_part"
     INTRODUCE_SELF = "introduce_self"
     SHELL_LOOP = "shell_loop"
+    USE_TOOL = "use_tool"
 
 class LLM(Enum):
     GPT_4O = "gpt-4o"

@@ -1,6 +1,7 @@
 from shared_resources import logger, AGENT_NAME, get_shell, DEBUG_ENABLED
 from constants import LogLevel, ToolName, MAX_LOOP_ITERATIONS
-from .chat_agent import get_response
+from .chat_agent import ChatAgent
+from .tool_agent import ToolAgent
 from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS, create_system_prompt_parts_data
 from custom_dataclasses import ToolLoopData, ChatMessage, SystemPromptPartsData, SystemPromptPartInfo
 from .chat_history import ChatHistory
@@ -57,8 +58,8 @@ async def process_contemplate_loop(
 
     while iterations < max_iterations:
         iterations += 1
-        response = await get_response(
-            chat_history=chat_history,
+        chat_agent = ChatAgent(chat_history)
+        response = await chat_agent.get_chat_response(
             tools=tool_loop_data.available_tools,
             tool_loop_data=tool_loop_data,
             token_budget=token_budget,
@@ -207,8 +208,8 @@ async def process_introduce_self(
     introduction_prompt_parts = create_system_prompt_parts_data(["biographical", "response_guidelines"])
 
     # Get response with biographical prompt
-    response = await get_response(
-        chat_history=chat_history,
+    chat_agent = ChatAgent(chat_history)
+    response = await chat_agent.get_chat_response(
         token_budget=token_budget,
         mock=mock,
         mock_messages=mock_messages,
@@ -273,8 +274,8 @@ async def process_shell_loop(
 
     while iterations < max_iterations:
         iterations += 1
-        response = await get_response(
-            chat_history=chat_history,
+        chat_agent = ChatAgent(chat_history)
+        response = await chat_agent.get_chat_response(
             tools=tool_loop_data.available_tools,
             tool_loop_data=tool_loop_data,
             token_budget=token_budget,
