@@ -4,6 +4,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
 from typing import Callable, Dict, Any, Tuple, Optional
+from agents.tool_helpers import register_tools
 from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED
 from token_logger import token_logger
 from token_logger import token_logger
@@ -24,7 +25,8 @@ class CymbiontShell:
         self.test_failures: int = 0
         
         # Initialize agents
-        self.chat_agent = ChatAgent(self.chat_history)
+        register_tools()
+        self.chat_agent = ChatAgent(self.chat_history, AGENT_NAME)
         self.tool_agent = ToolAgent(self.chat_history)
         self.tool_agent_task: Optional[asyncio.Task] = None
         
@@ -163,14 +165,8 @@ class CymbiontShell:
                 # Wait for any ongoing summarization
                 await self.chat_history.wait_for_summary()
                 
-                response = await self.chat_agent.get_chat_response(
-                    tools={
-                        ToolName.USE_TOOL,
-                        ToolName.INTRODUCE_SELF
-                    },
-                    token_budget=20000
-                )
-
+                response = await self.chat_agent.get_response(token_budget=20000)
+                
                 if response:
                     print(f"\x1b[38;2;0;255;255m{AGENT_NAME}\x1b[0m> {response}")
         
@@ -197,19 +193,11 @@ class CymbiontShell:
 
     async def run_tool_agent(self) -> None:
         """Background task that continuously runs the tool agent."""
-        tool_set = {
-            ToolName.CONTEMPLATE_LOOP,
-            ToolName.EXECUTE_SHELL_COMMAND,
-            ToolName.SHELL_LOOP,
-            ToolName.TOGGLE_PROMPT_PART
-        }
-        
         while True:
             try:
                 # Run the tool agent with specific tools
                 with token_logger.show_tokens():
-                    response = await self.tool_agent.get_tool_response(
-                        tools=tool_set,
+                    response = await self.tool_agent.get_response(
                         token_budget=20000
                     )
 
@@ -246,7 +234,10 @@ class CymbiontShell:
             )
             
             # Execute command and get return value
-            result = await self.commands[command].callable(self, args)
+            if self.commands[command].needs_shell:
+                result = await self.commands[command].callable(self, args)
+            else:
+                result = await self.commands[command].callable(args)
             
             # Handle different return types for backward compatibility
             if isinstance(result, bool):

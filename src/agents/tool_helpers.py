@@ -2,7 +2,6 @@ import asyncio
 from typing import Any, List, Optional, Set, Dict, Tuple, Union, Callable
 from functools import lru_cache
 import inspect
-from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS
 from shared_resources import logger
 from constants import ToolName
 from custom_dataclasses import ChatMessage, ToolLoopData, SystemPromptPartsData, SystemPromptPartInfo
@@ -10,13 +9,12 @@ from .tool_schemas import TOOL_SCHEMAS
 
 # Common arguments that can be passed to any tool processing function
 COMMON_TOOL_ARGS = {
-    'chat_history',   # we could probably remove chat history and just rely on chat agent instance       
     'tool_loop_data',        
     'token_budget',          
     'mock',                  
     'mock_messages',        
     'system_prompt_parts',
-    'chat_agent'
+    'agent'
 }
 
 @lru_cache(maxsize=1)
@@ -122,13 +120,12 @@ def validate_tool_args(
 async def process_tool_calls(
     tool_call_results: Dict[str, Dict[str, Any]],
     available_tools: Optional[Set[ToolName]],
-    tool_loop_data: Optional[ToolLoopData],
-    chat_history: Any,  # ChatHistory type
-    chat_agent: Any,  # ChatAgent type
+    agent: Any,  # Avoiding circular import but should be an Agent instance
+    system_prompt_parts: SystemPromptPartsData,
+    tool_loop_data: Optional[ToolLoopData] = None,
     token_budget: int = 20000,
     mock: bool = False,
-    mock_messages: Optional[List[ChatMessage]] = None,
-    system_prompt_parts: Optional[SystemPromptPartsData] = None
+    mock_messages: Optional[List[ChatMessage]] = None
 ) -> Optional[str]:
     """
     Process tool calls by matching them to corresponding functions.
@@ -136,13 +133,12 @@ async def process_tool_calls(
     Args:
         tool_call_results: A dictionary of tool call results from the API response.
         available_tools: A set of ToolName enums representing the tools available to the agent.
+        agent: The Agent instance.
+        system_prompt_parts: SystemPromptPartsData instance with prompt parts.
         tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
-        chat_history: The ChatHistory instance.
-        chat_agent: The ChatAgent instance.
         token_budget: Maximum number of tokens allowed for the tool loop.
         mock: If True, uses mock_messages instead of normal message setup.
         mock_messages: List of mock messages to use when mock=True.
-        system_prompt_parts: Optional SystemPromptPartsData instance with prompt parts.
 
     Returns:
         Optional[str]: A message to be returned to the user, if available.
@@ -164,13 +160,12 @@ async def process_tool_calls(
             # Get common args for this function
             common_args = get_common_args_for_function(
                 tool_map[tool_name],
-                chat_history=chat_history,
                 tool_loop_data=tool_loop_data,
                 token_budget=token_budget,
                 mock=mock,
                 mock_messages=mock_messages,
                 system_prompt_parts=system_prompt_parts,
-                chat_agent=chat_agent
+                agent=agent
             )
             
             # Build kwargs by combining common args with validated args
@@ -231,37 +226,44 @@ def register_tools() -> None:
         if extra_params:
             logger.warning(f"Tool function {tool_name} has extra parameters: {extra_params}")
 
-def handle_tool_loop_parts(system_prompt_parts: Optional[SystemPromptPartsData], 
-                         tool_loop_data: ToolLoopData, 
-                         kwargs: Dict[str, Any]) -> SystemPromptPartsData:
-    """Add tool loop parts to system prompt."""
-    if system_prompt_parts is None:
-        system_prompt_parts = DEFAULT_SYSTEM_PROMPT_PARTS
-    system_prompt_parts.parts["tool_loop"] = SystemPromptPartInfo(toggled=True, index=len(system_prompt_parts.parts))
-    tool_loop_data.system_prompt_parts = system_prompt_parts
-    kwargs["loop_type"] = tool_loop_data.loop_type
-    return system_prompt_parts
-
-def remove_tool_loop_part(system_prompt_parts: Optional[SystemPromptPartsData]) -> SystemPromptPartsData:
-    """Remove tool loop part from system prompt."""
-    if system_prompt_parts is None:
-        system_prompt_parts = DEFAULT_SYSTEM_PROMPT_PARTS
-    if "tool_loop" in system_prompt_parts.parts:
-        del system_prompt_parts.parts["tool_loop"]
-    return system_prompt_parts
-
-def log_token_budget_warnings(loop_tokens: int, token_budget: int, loop_type: str) -> None:
-    """
-    Log warnings when token usage approaches the budget limit.
+def create_tool_loop_data(
+    loop_type: str,
+    loop_message: str,
+    system_prompt_parts: SystemPromptPartsData,
+    tools: Optional[Set[ToolName]] = None,
+    new_system_prompt: bool = False
+) -> ToolLoopData:
+    """Create a ToolLoopData instance with required tools and settings.
     
     Args:
-        loop_tokens: Current number of tokens used in the loop
-        token_budget: Maximum token budget for the loop
-        loop_type: Type of the current loop (e.g., "CONTEMPLATION")
+        loop_type: Type of the loop (e.g., "CONTEMPLATION")
+        loop_message: Message describing the loop's purpose
+        system_prompt_parts: The system prompt parts to use
+        tools: Optional set of additional tools to include
+        new_system_prompt: If True, creates a copy of system prompt parts. If False, uses the provided parts directly.
     """
-    if loop_tokens >= token_budget:
-        logger.warning(f"{loop_type} loop has reached token budget limit of {token_budget}")
-    elif loop_tokens >= token_budget * 0.9:
-        logger.warning(f"{loop_type} loop is approaching token budget limit of {token_budget}")
-    elif loop_tokens >= token_budget * 0.75:
-        logger.warning(f"{loop_type} loop has used 75% of token budget {token_budget}")
+    # Always include these tools in any loop
+    required_tools = {
+        ToolName.EXIT_LOOP,
+        ToolName.MESSAGE_SELF,
+        ToolName.TOGGLE_PROMPT_PART
+    }
+
+    # Combine with provided tools if any
+    final_tools = required_tools | (tools or set())
+
+    # Handle system prompt parts
+    if new_system_prompt:
+        # Create a deep copy of the provided parts
+        from copy import deepcopy
+        final_prompt_parts = deepcopy(system_prompt_parts)
+    else:
+        # Use the provided parts directly
+        final_prompt_parts = system_prompt_parts
+
+    return ToolLoopData(
+        loop_type=loop_type,
+        loop_message=loop_message,
+        system_prompt_parts=final_prompt_parts,
+        available_tools=final_tools
+    )

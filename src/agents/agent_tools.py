@@ -1,20 +1,19 @@
-from shared_resources import logger, AGENT_NAME, get_shell, DEBUG_ENABLED
+from shared_resources import logger, get_shell, DEBUG_ENABLED
 from constants import LogLevel, ToolName, MAX_LOOP_ITERATIONS
-from .chat_agent import ChatAgent
-from .tool_agent import ToolAgent
-from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS, create_system_prompt_parts_data
+from .agent import Agent
+from prompt_helpers import create_system_prompt_parts_data
+from .tool_helpers import create_tool_loop_data
 from custom_dataclasses import ToolLoopData, ChatMessage, SystemPromptPartsData, SystemPromptPartInfo
-from .chat_history import ChatHistory
-from typing import Optional, List, Set
+from typing import Optional, List
 
 async def process_contemplate_loop(
     question: str,
+    system_prompt_parts: SystemPromptPartsData,
     tool_loop_data: Optional[ToolLoopData],
-    chat_agent: ChatAgent,
+    agent: Agent,
     token_budget: int = 20000,
     mock: bool = False,
-    mock_messages: Optional[List[ChatMessage]] = None,
-    system_prompt_parts: Optional[SystemPromptPartsData] = None
+    mock_messages: Optional[List[ChatMessage]] = None
 ) -> Optional[str]:
     """
     Process the 'contemplate_loop' tool call.
@@ -22,7 +21,7 @@ async def process_contemplate_loop(
     Args:
         question: The question to ponder during the contemplation loop.
         tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
-        chat_agent: The ChatAgent instance.
+        agent: The Agent instance.
         token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
         mock: If True, uses mock_messages instead of normal message setup.
         mock_messages: List of mock messages to use when mock=True.
@@ -32,7 +31,7 @@ async def process_contemplate_loop(
         Optional[str]: Message to the user, if any.
     """
     if tool_loop_data:
-        logger.warning(f"{AGENT_NAME} used tool: contemplate_loop - no effect, agent already inside tool loop")
+        logger.warning(f"{agent.agent_name} used tool: contemplate_loop - no effect, agent already inside tool loop")
         return None
 
     # Start a new contemplation loop
@@ -52,13 +51,13 @@ async def process_contemplate_loop(
         system_prompt_parts=system_prompt_parts,
     )
 
-    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: contemplate - now entering contemplation loop")
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: contemplate - now entering contemplation loop")
     max_iterations = MAX_LOOP_ITERATIONS  # Adjust as needed
     iterations = 0
 
     while iterations < max_iterations:
         iterations += 1
-        response = await chat_agent.get_chat_response(
+        response = await agent.get_response(
             tools=tool_loop_data.available_tools,
             tool_loop_data=tool_loop_data,
             token_budget=token_budget,
@@ -83,33 +82,51 @@ async def process_contemplate_loop(
 
 async def process_exit_loop(
     exit_message: str,
-    tool_loop_data: Optional[ToolLoopData]
+    tool_loop_data: Optional[ToolLoopData],
+    agent: Agent
 ) -> Optional[str]:
-    """Process the exit_loop tool call."""
+    """
+    Process the exit_loop tool call.
+    
+    Args:
+        exit_message: The message to return when exiting the loop
+        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop
+        agent: The Agent instance
+    """
     if not tool_loop_data or not tool_loop_data.active:
-        logger.warning(f"{AGENT_NAME} used tool: exit_loop - no effect, agent not inside tool loop")
+        logger.warning(f"{agent.agent_name} used tool: exit_loop - no effect, agent not inside tool loop")
         return None
 
     tool_loop_data.active = False
-    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: exit_loop - exiting tool loop")
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: exit_loop - exiting tool loop")
     return exit_message
 
 
 async def process_message_self(
     message: str,
-    tool_loop_data: Optional[ToolLoopData]
+    tool_loop_data: Optional[ToolLoopData],
+    agent: Agent
 ) -> Optional[str]:
-    """Process the message_self tool call."""
+    """
+    Process the message_self tool call.
+    
+    Args:
+        message: The message to record
+        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop
+        agent: The Agent instance
+    """
     if not tool_loop_data or not tool_loop_data.active:
-        logger.warning(f"{AGENT_NAME} used tool: message_self - no effect, agent not inside tool loop")
+        logger.warning(f"{agent.agent_name} used tool: message_self - no effect, agent not inside tool loop")
         return None
 
-    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: message_self - recording message")
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: message_self - recording message")
     return message
 
 async def process_toggle_prompt_part(
     part_name: str,
-    system_prompt_parts: Optional[SystemPromptPartsData] = None
+    agent: Agent,
+    system_prompt_parts: Optional[SystemPromptPartsData] = None,
+    
 ) -> str:
     """Process the toggle_prompt_part tool call."""
     if not system_prompt_parts:
@@ -130,32 +147,32 @@ async def process_toggle_prompt_part(
     
     # Get current state
     state = "on" if part_info.toggled else "off"
-    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: toggle_prompt_part - Toggled prompt part '{part_name}' {state}")
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: toggle_prompt_part - Toggled prompt part '{part_name}' {state}")
     return f"I've turned {part_name} {state}."
 
 async def process_execute_shell_command(
     command: str,
     args: List[str],
-    chat_agent: ChatAgent,
+    agent: Agent,
+    system_prompt_parts: SystemPromptPartsData,
     tool_loop_data: Optional[ToolLoopData] = None,
     token_budget: int = 20000,
     mock: bool = False,
-    mock_messages: Optional[List[ChatMessage]] = None,
-    system_prompt_parts: Optional[SystemPromptPartsData] = None
+    mock_messages: Optional[List[ChatMessage]] = None
 ) -> str:
     """Process the execute_shell_command tool call."""
     logger.log(
         LogLevel.TOOL,
-        f"{AGENT_NAME} used tool: execute_shell_command - {command}{' with args: ' + ', '.join(args) if args else ''}"
+        f"{agent.agent_name} used tool: execute_shell_command - {command}{' with args: ' + ', '.join(args) if args else ''}"
     )
     shell = get_shell()
     args_str = ' '.join(args) if args else ''
-    success, should_exit = await shell.execute_command(command, args_str, name=AGENT_NAME)
+    success, should_exit = await shell.execute_command(command, args_str, name=agent.agent_name)
     if not success and not tool_loop_data:
         # Command failed and we're not in a loop - start a shell loop
         logger.log(LogLevel.TOOL, f"Command failed, starting shell loop for troubleshooting")
         return await process_shell_loop(
-            chat_agent=chat_agent,
+            agent=agent,
             token_budget=token_budget,
             mock=mock,
             mock_messages=mock_messages,
@@ -181,7 +198,7 @@ async def process_execute_shell_command(
 
 async def process_introduce_self(
     tool_loop_data: Optional[ToolLoopData],
-    chat_agent: ChatAgent,
+    agent: Agent,
     token_budget: int = 2000,
     mock: bool = False,
     mock_messages: Optional[List[ChatMessage]] = None
@@ -190,24 +207,25 @@ async def process_introduce_self(
     Process the introduce_self tool call.
 
     Args:
-        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
-        chat_agent: The ChatAgent instance to use for responses.
-        token_budget: Maximum number of tokens allowed. Default is 2000.
-        mock: If True, uses mock_messages instead of normal message setup.
-        mock_messages: List of mock messages to use when mock=True.
+        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop
+        agent: The Agent instance
+        token_budget: Maximum number of tokens allowed. Default is 2000
+        mock: If True, uses mock_messages instead of normal message setup
+        mock_messages: List of mock messages to use when mock=True
 
     Returns:
         Optional[str]: Message to the user, if any.
     """
     if tool_loop_data:
-        logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: introduce_self - no effect, agent already inside tool loop")
+        logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: introduce_self - no effect, agent already inside tool loop")
         return None
 
     # Create a new system prompt with just the biographical information
     introduction_prompt_parts = create_system_prompt_parts_data(["biographical", "response_guidelines"])
 
     # Get response with biographical prompt
-    response = await chat_agent.get_chat_response(
+    response = await agent.get_response(
+        tools={},
         token_budget=token_budget,
         mock=mock,
         mock_messages=mock_messages,
@@ -217,29 +235,30 @@ async def process_introduce_self(
     return response
 
 async def process_shell_loop(
-    chat_agent: ChatAgent,
+    agent: Agent,
+    system_prompt_parts: SystemPromptPartsData,
     tool_loop_data: Optional[ToolLoopData] = None,
     token_budget: int = 20000,
     mock: bool = False,
-    mock_messages: Optional[List[ChatMessage]] = None,
-    system_prompt_parts: Optional[SystemPromptPartsData] = None
+    mock_messages: Optional[List[ChatMessage]] = None
+    
 ) -> Optional[str]:
     """
     Process the 'shell_loop' tool call.
 
     Args:
-        chat_agent: The ChatAgent instance to use for responses.
-        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
-        token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
-        mock: If True, uses mock_messages instead of normal message setup.
-        mock_messages: List of mock messages to use when mock=True.
-        system_prompt_parts: Optional dict of prompt parts with toggle and index info.
+        agent: The Agent instance
+        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop
+        token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000
+        mock: If True, uses mock_messages instead of normal message setup
+        mock_messages: List of mock messages to use when mock=True
+        system_prompt_parts: Optional dict of prompt parts with toggle and index info
 
     Returns:
         Optional[str]: Message to the user, if any.
     """
     if tool_loop_data:
-        logger.warning(f"{AGENT_NAME} used tool: shell_loop - no effect, agent already inside tool loop")
+        logger.warning(f"{agent.agent_name} used tool: shell_loop - no effect, agent already inside tool loop")
         return None
 
     # Start a new shell loop
@@ -265,14 +284,14 @@ async def process_shell_loop(
     else:
         tool_loop_data.system_prompt_parts.parts['shell_command_info'].toggled = True
 
-    logger.log(LogLevel.TOOL, f"{AGENT_NAME} used tool: shell_loop - now entering shell loop")
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: shell_loop - now entering shell loop")
 
     max_iterations = MAX_LOOP_ITERATIONS  # Adjust as needed
     iterations = 0
 
     while iterations < max_iterations:
         iterations += 1
-        response = await chat_agent.get_chat_response(
+        response = await agent.get_response(
             tools=tool_loop_data.available_tools,
             tool_loop_data=tool_loop_data,
             token_budget=token_budget,
@@ -293,46 +312,3 @@ async def process_shell_loop(
         return None
 
     return None
-
-def create_tool_loop_data(
-    loop_type: str,
-    loop_message: str,
-    system_prompt_parts: Optional[SystemPromptPartsData] = None,
-    tools: Optional[Set[ToolName]] = None,
-    new_system_prompt: bool = False
-) -> ToolLoopData:
-    """Create a ToolLoopData instance with required tools and settings.
-    
-    Args:
-        loop_type: Type of the loop (e.g., "CONTEMPLATION")
-        loop_message: Message describing the loop's purpose
-        system_prompt_parts: Optional dict of prompt parts with toggle and index info
-        tools: Optional set of additional tools to include
-        new_system_prompt: If True, creates a copy of system prompt parts. If False, uses the provided parts directly.
-    """
-    # Always include these tools in any loop
-    required_tools = {
-        ToolName.EXIT_LOOP,
-        ToolName.MESSAGE_SELF,
-        ToolName.TOGGLE_PROMPT_PART
-    }
-
-    # Combine with provided tools if any
-    final_tools = required_tools | (tools or set())
-
-    # Handle system prompt parts
-    if new_system_prompt:
-        # Create a deep copy of the provided parts or default parts
-        from copy import deepcopy
-        parts_to_copy = system_prompt_parts if system_prompt_parts is not None else DEFAULT_SYSTEM_PROMPT_PARTS
-        final_prompt_parts = deepcopy(parts_to_copy)
-    else:
-        # Use the provided parts directly, falling back to default if none provided
-        final_prompt_parts = system_prompt_parts if system_prompt_parts is not None else DEFAULT_SYSTEM_PROMPT_PARTS
-
-    return ToolLoopData(
-        loop_type=loop_type,
-        loop_message=loop_message,
-        system_prompt_parts=final_prompt_parts,
-        available_tools=final_tools
-    )

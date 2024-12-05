@@ -87,6 +87,7 @@ class CommandData:
     callable: Callable
     takes_args: bool
     arg_types: Optional[List[CommandArgType]] = None
+    needs_shell: bool = False
 
 @dataclass
 class ToolLoopData:

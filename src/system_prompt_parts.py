@@ -3,14 +3,7 @@ from custom_dataclasses import SystemMessagePart, SystemPromptPartsData, SystemP
 DEFAULT_SYSTEM_PROMPT_PARTS = SystemPromptPartsData(parts={
     "chat_agent_base_prompt": SystemPromptPartInfo(toggled=True, index=0),
     "cymbiont_agent_overview": SystemPromptPartInfo(toggled=False, index=1),
-    "response_guidelines": SystemPromptPartInfo(toggled=True, index=4)
-})
-
-DEFAULT_TOOL_AGENT_SYSTEM_PROMPT_PARTS = SystemPromptPartsData(parts={
-    "tool_agent_base_prompt": SystemPromptPartInfo(toggled=True, index=0),
-    "cymbiont_agent_overview": SystemPromptPartInfo(toggled=False, index=1),
-    "shell_command_info": SystemPromptPartInfo(toggled=True, index=2),
-    "handling_shell_command_requests": SystemPromptPartInfo(toggled=True, index=3),
+    "response_guidelines": SystemPromptPartInfo(toggled=True, index=2)
 })
 
 SYSTEM_MESSAGE_PARTS = {

@@ -1,5 +1,6 @@
 from enum import IntEnum, Enum
 import logging
+from typing import Literal
 
 class LogLevel(IntEnum):
     BENCHMARK = logging.INFO + 5
@@ -21,6 +22,16 @@ class ToolName(Enum):
     INTRODUCE_SELF = "introduce_self"
     SHELL_LOOP = "shell_loop"
     USE_TOOL = "use_tool"
+
+class ToolChoice(Enum):
+    """Tool choice options for API calls."""
+    AUTO = "auto"
+    REQUIRED = "required"
+    NONE = "none"
+
+    def to_literal(self) -> Literal["auto", "required", "none"]:
+        """Convert enum value to literal type expected by API."""
+        return self.value  # type: ignore
 
 class LLM(Enum):
     GPT_4O = "gpt-4o"

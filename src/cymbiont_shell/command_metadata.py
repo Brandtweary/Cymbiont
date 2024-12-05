@@ -42,7 +42,7 @@ def create_commands(
         'help': CommandData(
             callable=do_help,
             takes_args=True,
-            arg_types=[CommandArgType.COMMAND],
+            arg_types=[CommandArgType.COMMAND]
         ),
         'hello_world': CommandData(
             callable=do_hello_world,
@@ -70,35 +70,42 @@ def create_commands(
         ),
         'test_api_queue': CommandData(
             callable=do_test_api_queue,
-            takes_args=False
+            takes_args=False,
+            needs_shell=True  # Needs shell to update test results
         ),
         'test_document_processing': CommandData(
             callable=do_test_document_processing,
-            takes_args=False
+            takes_args=False,
+            needs_shell=True  # Needs shell to update test results
         ),
         'test_logger': CommandData(
             callable=do_test_logger,
-            takes_args=False
+            takes_args=False,
+            needs_shell=True  # Needs shell to update test results
         ),
         'test_parsing': CommandData(
             callable=do_test_parsing,
-            takes_args=False
+            takes_args=False,
+            needs_shell=True  # Needs shell to update test results
         ),
         'test_progressive_summarization': CommandData(
             callable=do_test_progressive_summarization,
-            takes_args=False
+            takes_args=False,
+            needs_shell=True  # Needs shell to update test results
         ),
         'test_agent_tools': CommandData(
             callable=do_test_agent_tools,
-            takes_args=False
+            takes_args=False,
+            needs_shell=True  # Needs shell to update test results
         ),
         'run_all_tests': CommandData(
             callable=do_run_all_tests,
             takes_args=True,
             arg_types=[CommandArgType.FLAG],
+            needs_shell=True  # Needs shell to update test results
         ),
         'print_total_tokens': CommandData(
             callable=do_print_total_tokens,
             takes_args=False
-        ),
+        )
     }

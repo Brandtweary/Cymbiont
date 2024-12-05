@@ -74,7 +74,7 @@ else:
         ]
         
         # Run the contemplation loop with mock messages
-        response = await chat_agent.get_chat_response(
+        response = await chat_agent.get_response(
             tools={ToolName.MESSAGE_SELF, ToolName.EXIT_LOOP, ToolName.CONTEMPLATE_LOOP},
             mock=True,
             mock_messages=mock_messages
@@ -188,7 +188,7 @@ else:
         ]
         
         # Run with a low token budget
-        response = await chat_agent.get_chat_response(
+        response = await chat_agent.get_response(
             tools={ToolName.MESSAGE_SELF, ToolName.EXIT_LOOP, ToolName.CONTEMPLATE_LOOP},
             token_budget=10000,  # Lower than the mock usage
             mock=True,
