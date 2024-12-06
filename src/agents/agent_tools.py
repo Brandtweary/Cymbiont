@@ -7,6 +7,7 @@ from .tool_helpers import create_tool_loop_data
 from custom_dataclasses import ToolLoopData, ChatMessage, SystemPromptPartsData, SystemPromptPartInfo
 from typing import Optional, List, Dict, Any
 from token_logger import token_logger
+from copy import deepcopy
 
 async def process_contemplate_loop(
     question: str,
@@ -317,62 +318,78 @@ async def process_shell_loop(
 
     return None
 
-async def process_request_tool_use(
+async def process_execute_tool_call(
     agent: Agent,
-    tool_name: Optional[str] = None,
+    category: Optional[str] = None,
 ) -> str:
-    """Process a request to use tools from the chat agent.
+    """Process a tool operation execution.
     
     Args:
-        agent: The agent making the request
-        tool_name: Optional specific tool being requested
+        agent: The agent executing the operation
+        category: Optional category of operation to perform
     """
     if not agent.bound_tool_agent:
-        logger.error("No tool agent bound to this agent for tool requests")
+        logger.error("No tool agent bound to this agent for operations")
         if DEBUG_ENABLED:
             raise
 
     tool_agent = agent.bound_tool_agent
     assert isinstance(tool_agent, ToolAgent), "bound_tool_agent must be a ToolAgent instance"
     
-    tool_desc = f" for tool: {tool_name}" if tool_name else ""
-    logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: request_tool_use{tool_desc}")
+    category_desc = f" for category: {category}" if category else ""
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} initiated operation{category_desc}")
     
-    # Activate the tool agent for this request
-    tool_agent.activate_for_tool_request(tool_name)
+    # Switch to tool execution mode
+    tool_agent.activate_for_operation(category)
     
-    return "Let me make a tool call..."
+    return "Executing operation..."
 
-async def process_resolve_tool_request(agent: ToolAgent, request_letter: str) -> None:
-    """Process resolve_tool_request tool call.
+async def process_resolve_pending_operation(agent: ToolAgent, letter: str) -> None:
+    """Process resolve_pending_operation tool call.
     
     Args:
-        agent: The agent making the request
-        request_letter: Letter label of the request to resolve (A, B, C, etc.)
+        agent: The agent resolving the operation
+        letter: Letter label of the operation to resolve (A, B, C, etc.)
     """
     if not agent.bound_chat_agent:
-        logger.error("No chat agent bound to this agent for tool requests")
+        logger.error("No chat agent bound to this agent")
         if DEBUG_ENABLED:
-            raise ValueError("No chat agent bound to this agent for tool requests")
+            raise ValueError("No chat agent bound to this agent")
         return
     
-    # Try to resolve the specific tool request
-    request = agent.resolve_tool_request(request_letter)
-    if request is None:
-        logger.error(f"Failed to resolve tool request {request_letter} - request not found")
+    # Try to resolve the operation
+    operation = agent.resolve_pending_operation(letter)
+    if operation is None:
+        logger.error(f"Failed to resolve operation {letter} - not found")
         return
 
-    logger.log(LogLevel.TOOL, f"{agent.agent_name} resolved {request}")
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} completed {operation}")
     
-    # Get a new response from the chat agent
+    # Get a new response from the chat agent with operation follow-up prompt
     try:
         with token_logger.show_tokens():
-            response = await agent.bound_chat_agent.get_response(token_budget=20000)
+            # Make a complete copy of the system prompt parts
+            system_prompt_parts = SystemPromptPartsData(
+                parts=agent.bound_chat_agent.default_system_prompt_parts.parts.copy(),
+                kwargs=agent.bound_chat_agent.default_system_prompt_parts.kwargs.copy()
+            )
+            
+            # Add category to kwargs and operation_follow_up part
+            system_prompt_parts.kwargs["category"] = operation.split(":")[0]  # Get category from "category:details" format
+            system_prompt_parts.add_part(
+                "operation_follow_up",
+                SystemPromptPartInfo(toggled=True, index=len(system_prompt_parts.parts))
+            )
+            
+            response = await agent.bound_chat_agent.get_response(
+                token_budget=20000,
+                system_prompt_parts=system_prompt_parts
+            )
             
             if response:
                 print(f"\x1b[38;2;0;255;255m{agent.bound_chat_agent.agent_name}\x1b[0m> {response}")
                 
     except Exception as e:
-        logger.error(f"Chat response failed after tool request resolved: {str(e)}")
+        logger.error(f"Chat response failed after operation completed: {str(e)}")
         if DEBUG_ENABLED:
             raise

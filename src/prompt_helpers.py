@@ -45,12 +45,13 @@ def escape_json_in_prompt(content: str) -> tuple[str, bool]:
     
     return escaped_content, found_unescaped
 
-def create_system_prompt_parts_data(part_names: List[str]) -> SystemPromptPartsData:
+def create_system_prompt_parts_data(part_names: List[str], **kwargs) -> SystemPromptPartsData:
     """Create a SystemPromptPartsData instance from a list of part names.
     Each part will be toggled on with an incrementing index.
     
     Args:
         part_names: List of part names to include
+        **kwargs: Additional format arguments for the message parts
         
     Returns:
         SystemPromptPartsData with the specified parts enabled
@@ -61,18 +62,17 @@ def create_system_prompt_parts_data(part_names: List[str]) -> SystemPromptPartsD
             logger.warning(f"Unknown system message part: {name}")
             continue
         parts[name] = SystemPromptPartInfo(toggled=True, index=i)
-    return SystemPromptPartsData(parts=parts)
+        
+    return SystemPromptPartsData(parts=parts, kwargs=kwargs)
 
 def get_system_message(
-    system_prompt_parts: Optional[SystemPromptPartsData] = None,
-    **kwargs
+    system_prompt_parts: Optional[SystemPromptPartsData] = None
 ) -> str:
     """Build a system message from specified parts.
     
     Args:
         system_prompt_parts: Optional SystemPromptPartsData instance containing which parts to include
                            and their toggle/index info. If None, uses DEFAULT_SYSTEM_PROMPT_PARTS.
-        **kwargs: Additional format arguments for the message parts
     """
     message_parts = []
     
@@ -95,7 +95,7 @@ def get_system_message(
         part_info = SYSTEM_MESSAGE_PARTS[part]
         
         # Check all required parameters are provided
-        if not all(param in kwargs for param in part_info.required_params):
+        if not all(param in system_prompt_parts.kwargs for param in part_info.required_params):
             logger.warning(f"Missing required parameters for {part}")
             continue
         
@@ -113,7 +113,7 @@ def get_system_message(
                     logger.warning(f"Found and escaped JSON-like objects in {part}")
                 
                 # Format the content with provided parameters
-                formatted_content = escaped_content.format(**kwargs)
+                formatted_content = escaped_content.format(**system_prompt_parts.kwargs)
                 # Strip any extra newlines from the end of the content
                 formatted_content = formatted_content.rstrip()
                 # Join header and content with single newline

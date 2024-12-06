@@ -21,8 +21,8 @@ class ToolName(Enum):
     TOGGLE_PROMPT_PART = "toggle_prompt_part"
     INTRODUCE_SELF = "introduce_self"
     SHELL_LOOP = "shell_loop"
-    REQUEST_TOOL_USE = "request_tool_use"
-    RESOLVE_TOOL_REQUEST = "resolve_tool_request"
+    EXECUTE_TOOL_CALL = "execute_tool_call"
+    RESOLVE_PENDING_OPERATION = "resolve_pending_operation"
 
 class ToolChoice(Enum):
     """Tool choice options for API calls."""

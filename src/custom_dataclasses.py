@@ -71,6 +71,7 @@ class SystemPromptPartsData:
     """Data structure for system prompt parts configuration.
     Each part has a toggle state and an index for ordering."""
     parts: Dict[str, SystemPromptPartInfo]
+    kwargs: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         # Validate that all values are SystemPromptPartInfo
@@ -80,6 +81,11 @@ class SystemPromptPartsData:
                     self.parts[part_name] = SystemPromptPartInfo(**part_info)
                 else:
                     raise ValueError(f"Invalid part info for {part_name}: {part_info}")
+
+    def add_part(self, name: str, info: SystemPromptPartInfo, **kwargs):
+        """Add a new part with its kwargs"""
+        self.parts[name] = info
+        self.kwargs.update(kwargs)
 
 @dataclass
 class CommandData:

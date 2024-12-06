@@ -1,3 +1,4 @@
+from pydoc import text
 from typing import Optional, List
 from shared_resources import logger, DEBUG_ENABLED
 from custom_dataclasses import Chunk, ProcessLog, ChatMessage
@@ -17,7 +18,7 @@ async def extract_tags(
 ) -> None:
     """Extract relevant tags from a chunk of text."""
     try:
-        system_content = get_system_message(create_system_prompt_parts_data(["tag_extraction_system"]), text=chunk.text)
+        system_content = get_system_message(create_system_prompt_parts_data(["tag_extraction_system"], text=chunk.text))
         process_log.prompt(f"Tag Extraction Prompt:\n{system_content}")
 
         expiration_counter = 0

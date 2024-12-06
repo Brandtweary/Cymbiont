@@ -4,6 +4,7 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.formatted_text.base import StyleAndTextTuples
 from typing import Tuple, Optional
+from agents import agent
 from agents.tool_helpers import register_tools
 from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED, TOOL_AGENT_ACTIVATION_MODE, console_handler
 from token_logger import token_logger
@@ -33,7 +34,7 @@ class CymbiontShell:
         )
         self.chat_agent = ChatAgent(
             self.chat_history,
-            AGENT_NAME,
+            agent_name=AGENT_NAME,
         )
         Agent.bind_agents(self.chat_agent, self.tool_agent)
         self.tool_agent_task: Optional[asyncio.Task] = None
@@ -315,5 +316,5 @@ class CymbiontShell:
 
     async def do_hello_world(self, args: str = '') -> bool:
         """A friendly greeting with emojis! 🤖"""
-        print("Hello World! 🤖 ⚡")
+        logger.info("Hello World! 🤖 ⚡")
         return False

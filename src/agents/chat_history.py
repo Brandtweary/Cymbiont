@@ -178,7 +178,7 @@ class ChatHistory:
             return ', '.join(message.content for message in messages)
         
         # Get system message using get_system_message
-        system_content = get_system_message(create_system_prompt_parts_data(["progressive_summary_system"]), conversation=full_conversation)
+        system_content = get_system_message(create_system_prompt_parts_data(["progressive_summary_system"], conversation=full_conversation))
         
         # Create a concise user message requesting the summary
         messages_to_send = [

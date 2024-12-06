@@ -1,20 +1,21 @@
 from typing import Optional, Set, List, Literal, Any, Dict, Tuple
-from shared_resources import logger, AGENT_NAME
+from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED
 from custom_dataclasses import SystemPromptPartsData, SystemPromptPartInfo
 from model_configuration import CHAT_AGENT_MODEL 
 from constants import ToolChoice, ToolName
 from .agent import Agent
 from .chat_history import ChatHistory
+from agents import agent
 
 
 class ToolAgent(Agent):
     """Agent focused on making tool calls and optionally generating messages."""
 
-    def __init__(self, chat_history: ChatHistory, activation_mode: str = "continuous"):
+    def __init__(self, chat_history: ChatHistory, agent_name: str = AGENT_NAME, activation_mode: str = "continuous"):
         super().__init__(
             chat_history=chat_history,
             model=CHAT_AGENT_MODEL,
-            agent_name=f"Tool {AGENT_NAME}",
+            agent_name=agent_name,
             default_system_prompt_parts=SystemPromptPartsData(
                 parts={
                     "tool_agent_base_prompt": SystemPromptPartInfo(toggled=True, index=0),
@@ -29,55 +30,60 @@ class ToolAgent(Agent):
                 ToolName.EXECUTE_SHELL_COMMAND,
                 ToolName.SHELL_LOOP,
                 ToolName.TOGGLE_PROMPT_PART,
-                ToolName.RESOLVE_TOOL_REQUEST
+                ToolName.RESOLVE_PENDING_OPERATION
             }
         )
         self.activation_mode = activation_mode
         self.active = activation_mode == "continuous"  # Active by default in continuous mode
-        self.active_tool_requests: List[str] = []  # List of active tool requests
+        self.pending_operations: List[str] = []  # List of pending operations
         
-    def setup_unique_prompt_parts(self, system_prompt_parts: SystemPromptPartsData, kwargs: Dict[str, Any]) -> Tuple[SystemPromptPartsData, Dict[str, Any]]:
-        """Add active tool requests to prompt parts if any exist."""
-        if self.active_tool_requests:
-            system_prompt_parts.parts["active_tool_requests"] = SystemPromptPartInfo(
+    def setup_unique_prompt_parts(
+        self,
+        system_prompt_parts: SystemPromptPartsData
+    ) -> SystemPromptPartsData:
+        """Add pending operations to prompt parts if any exist."""
+        if self.pending_operations:
+            system_prompt_parts.parts["pending_operations"] = SystemPromptPartInfo(
                 toggled=True,
                 index=len(system_prompt_parts.parts)
             )
             # Add letter labels A, B, C, etc.
-            labeled_requests = [f"{chr(65 + i)}) {req}" for i, req in enumerate(self.active_tool_requests)]
-            kwargs["active_tool_requests"] = "\n".join(labeled_requests)
-        return system_prompt_parts, kwargs
+            labeled_requests = [f"{chr(65 + i)}) {req}" for i, req in enumerate(self.pending_operations)]
+            system_prompt_parts.kwargs["pending_operations"] = "\n".join(labeled_requests)
+        return system_prompt_parts
             
-    def activate_for_tool_request(self, tool_name: Optional[str] = None) -> None:
-        """Activate the agent for a tool request.
+    def activate_for_operation(self, category: Optional[str] = None) -> None:
+        """Activate the agent for a tool operation.
         
         Args:
-            tool_name: Optional name of the tool being requested
+            category: Optional category of the tool to use
         """
         self.active = True
-        request_description = f"Tool request: {tool_name if tool_name else 'unspecified tool'}"
-        self.active_tool_requests.append(request_description)
+        operation_description = f"Operation: {category if category else 'unspecified'}"
+        self.pending_operations.append(operation_description)
             
-    def resolve_tool_request(self, request_letter: str) -> Optional[str]:
-        """Mark a specific tool request as resolved.
+    def resolve_pending_operation(self, letter: str) -> Optional[str]:
+        """Complete a specific pending operation.
         
         Args:
-            request_letter: Letter label of the request to resolve (A, B, C, etc.)
+            letter: Letter label of the operation to resolve (A, B, C, etc.)
             
         Returns:
-            The resolved request description if found and resolved, None otherwise
+            The operation description if found and resolved, None otherwise
         """
         try:
             # Convert letter to index (A->0, B->1, etc.)
-            index = ord(request_letter) - ord('A')
-            if 0 <= index < len(self.active_tool_requests):
-                request = self.active_tool_requests.pop(index)
+            index = ord(letter) - ord('A')
+            if 0 <= index < len(self.pending_operations):
+                request = self.pending_operations.pop(index)
                 
-                # Deactivate if no more requests and not in continuous mode
-                if not self.active_tool_requests and self.activation_mode != "continuous":
+                # Deactivate if no more operations and not in continuous mode
+                if not self.pending_operations and self.activation_mode != "continuous":
                     self.active = False
                 return request
             
-            return None
-        except (TypeError, ValueError):
-            return None
+        except Exception as e:
+            logger.error(f"Error resolving operation {letter}: {str(e)}")
+            if DEBUG_ENABLED:
+                raise
+        return None

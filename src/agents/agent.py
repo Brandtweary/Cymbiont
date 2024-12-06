@@ -58,7 +58,7 @@ class Agent:
         """Bind a chat agent and tool agent together.
         
         This creates a bidirectional reference between the agents, allowing them
-        to coordinate on tool requests.
+        to coordinate on operations.
         
         Args:
             chat_agent: The chat agent to bind
@@ -78,44 +78,34 @@ class Agent:
             
         chat_agent.bound_tool_agent = tool_agent
         tool_agent.bound_chat_agent = chat_agent
+        tool_agent.agent_name = chat_agent.agent_name
 
-    def setup_unique_prompt_parts(self, system_prompt_parts: SystemPromptPartsData, kwargs: Dict[str, Any]) -> Tuple[SystemPromptPartsData, Dict[str, Any]]:
-        """Set up any unique prompt parts for this agent type.
-        
-        This method is called by setup_system_prompt_parts after setting up the common parts.
-        Override this in subclasses to add agent-specific prompt parts.
-        
-        Args:
-            system_prompt_parts: The SystemPromptPartsData to modify
-            kwargs: The kwargs dict to modify with any required parameters
-            
-        Returns:
-            Tuple of (SystemPromptPartsData, kwargs dict)
-        """
-        return system_prompt_parts, kwargs
+    def setup_unique_prompt_parts(
+        self,
+        system_prompt_parts: SystemPromptPartsData
+    ) -> SystemPromptPartsData:
+        """Add unique prompt parts for this agent type."""
+        # Base agent has no unique parts to add
+        return system_prompt_parts
 
     def setup_system_prompt_parts(
         self,
         system_prompt_parts: Optional[SystemPromptPartsData],
         tool_loop_data: Optional[ToolLoopData] = None,
         summary: Optional[str] = None
-    ) -> Tuple[SystemPromptPartsData, Dict[str, Any]]:
-        """Helper method to set up system prompt parts with tool loop and summary handling.
-        
-        Returns:
-            Tuple containing:
-            - The configured SystemPromptPartsData
-            - kwargs dict for get_system_message
-        """
+    ) -> SystemPromptPartsData:
+        """Helper method to set up system prompt parts with tool loop and summary handling."""
         if not system_prompt_parts:
             system_prompt_parts = self.default_system_prompt_parts
-            
-        kwargs = {"agent_name": self.agent_name}
+        
+        system_prompt_parts.kwargs["agent_name"] = self.agent_name
         
         # Handle tool loop parts
         if tool_loop_data:
-            kwargs["loop_type"] = tool_loop_data.loop_type
-            kwargs["loop_message"] = tool_loop_data.loop_message
+            system_prompt_parts.kwargs.update({
+                "loop_type": tool_loop_data.loop_type,
+                "loop_message": tool_loop_data.loop_message
+            })
             if "tool_loop" not in system_prompt_parts.parts:
                 system_prompt_parts.parts["tool_loop"] = SystemPromptPartInfo(toggled=True, index=len(system_prompt_parts.parts))
         elif "tool_loop" in system_prompt_parts.parts:
@@ -123,13 +113,13 @@ class Agent:
         
         # Handle progressive summary if provided
         if summary and system_prompt_parts:
-            kwargs["summary"] = summary
+            system_prompt_parts.kwargs["summary"] = summary
             system_prompt_parts.parts["progressive_summary"] = SystemPromptPartInfo(toggled=True, index=len(system_prompt_parts.parts))
         elif system_prompt_parts and "progressive_summary" in system_prompt_parts.parts:
             del system_prompt_parts.parts["progressive_summary"]
             
         # Let subclasses add their unique prompt parts
-        return self.setup_unique_prompt_parts(system_prompt_parts, kwargs)
+        return self.setup_unique_prompt_parts(system_prompt_parts)
 
     def handle_token_usage(
         self,
@@ -225,12 +215,12 @@ class Agent:
                 system_content = "mock system message"
             else:
                 messages, summary = self.chat_history.get_recent_messages()
-                system_prompt_parts, kwargs = self.setup_system_prompt_parts(
+                system_prompt_parts = self.setup_system_prompt_parts(
                     system_prompt_parts,
                     tool_loop_data,
                     summary
                 )
-                system_content = get_system_message(system_prompt_parts=system_prompt_parts, **kwargs)
+                system_content = get_system_message(system_prompt_parts=system_prompt_parts)
                 messages_to_send = messages
 
             prompt_text = f"SYSTEM: {system_content}\n\n{convert_messages_to_string(messages_to_send, truncate_last=False)}"

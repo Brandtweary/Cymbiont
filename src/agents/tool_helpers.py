@@ -31,8 +31,8 @@ def get_tool_function_map() -> Dict[str, Callable]:
                             process_toggle_prompt_part,
                             process_introduce_self,
                             process_shell_loop,
-                            process_request_tool_use,
-                            process_resolve_tool_request
+                            process_execute_tool_call,
+                            process_resolve_pending_operation
                             )
     import inspect
     from . import agent_tools
@@ -45,8 +45,8 @@ def get_tool_function_map() -> Dict[str, Callable]:
         ToolName.TOGGLE_PROMPT_PART.value: process_toggle_prompt_part,
         ToolName.INTRODUCE_SELF.value: process_introduce_self,
         ToolName.SHELL_LOOP.value: process_shell_loop,
-        ToolName.REQUEST_TOOL_USE.value: process_request_tool_use,
-        ToolName.RESOLVE_TOOL_REQUEST.value: process_resolve_tool_request
+        ToolName.EXECUTE_TOOL_CALL.value: process_execute_tool_call,
+        ToolName.RESOLVE_PENDING_OPERATION.value: process_resolve_pending_operation
     }
 
     # Get all functions from agent_tools module
@@ -323,11 +323,6 @@ def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
                 marked_commands.append(cmd)
                 
         schema["function"]["parameters"]["properties"]["command"]["enum"] = marked_commands
-    
-    elif schema_name == "request_tool_use":
-        # For request_tool_use, provide a list of all available tool names
-        tool_names = [tool.value for tool in ToolName]
-        schema["function"]["parameters"]["properties"]["tool_name"]["enum"] = tool_names
     
     return schema
 

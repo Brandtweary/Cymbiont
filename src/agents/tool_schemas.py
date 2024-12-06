@@ -19,23 +19,7 @@ TOOL_SCHEMAS = {
             }
         }
     },
-    ToolName.REQUEST_TOOL_USE: {
-        "type": "function",
-        "function": {
-            "name": "request_tool_use",
-            "description": "Request the tool agent to use a specific tool. This triggers a tool response from the tool agent.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "tool_name": {
-                        "type": "string",
-                        "description": "The name of the tool to use. Only include if you know which tool. Otherwise, let the tool agent decide.",
-                    }
-                },
-                "required": []
-            }
-        }
-    },
+
     ToolName.MESSAGE_SELF: {
         "type": "function",
         "function": {
@@ -95,6 +79,24 @@ TOOL_SCHEMAS = {
             }
         }
     },
+    ToolName.EXECUTE_TOOL_CALL: {
+        "type": "function",
+        "function": {
+            "name": "execute_tool_call",
+            "description": "Execute a tool operation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "description": "The category of operation to perform",
+                        "enum": ["shell_command", "file", "test", "search", "system"]
+                    }
+                },
+                "required": ["category"]
+            }
+        }
+    },
     ToolName.TOGGLE_PROMPT_PART: {
         "type": "function",
         "function": {
@@ -137,21 +139,20 @@ TOOL_SCHEMAS = {
             }
         }
     },
-    ToolName.RESOLVE_TOOL_REQUEST: {
+    ToolName.RESOLVE_PENDING_OPERATION: {
         "type": "function",
         "function": {
-            "name": "resolve_tool_request",
-            "description": "Resolve a specific tool request by its letter label (A, B, C, etc.).",
+            "name": "resolve_pending_operation",
+            "description": "Complete a pending operation identified by its letter label (A, B, C, etc.).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "request_letter": {
+                    "letter": {
                         "type": "string",
-                        "description": "The letter label of the request to resolve (A, B, C, etc.)",
-                        "pattern": "^[A-Z]$"
+                        "description": "The letter label of the operation to resolve."
                     }
                 },
-                "required": ["request_letter"]
+                "required": ["letter"]
             }
         }
     }
