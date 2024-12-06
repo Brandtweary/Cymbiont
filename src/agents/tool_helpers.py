@@ -28,7 +28,9 @@ def get_tool_function_map() -> Dict[str, Callable]:
                             process_execute_shell_command,
                             process_toggle_prompt_part,
                             process_introduce_self,
-                            process_shell_loop
+                            process_shell_loop,
+                            process_request_tool_use,
+                            process_resolve_tool_request
                             )
     import inspect
     from . import agent_tools
@@ -40,7 +42,9 @@ def get_tool_function_map() -> Dict[str, Callable]:
         ToolName.EXECUTE_SHELL_COMMAND.value: process_execute_shell_command,
         ToolName.TOGGLE_PROMPT_PART.value: process_toggle_prompt_part,
         ToolName.INTRODUCE_SELF.value: process_introduce_self,
-        ToolName.SHELL_LOOP.value: process_shell_loop
+        ToolName.SHELL_LOOP.value: process_shell_loop,
+        ToolName.REQUEST_TOOL_USE.value: process_request_tool_use,
+        ToolName.RESOLVE_TOOL_REQUEST.value: process_resolve_tool_request
     }
 
     # Get all functions from agent_tools module
@@ -103,14 +107,17 @@ def validate_tool_args(
     except (KeyError, ValueError):
         return None, f"No schema found for tool: '{tool_name}'"
 
+    # Get parameters schema
+    params_schema = tool_schema["function"]["parameters"]
+    
     # Validate required parameters
-    required_params = tool_schema["function"]["parameters"].get("required", [])
+    required_params = params_schema.get("required", [])
     missing_params = [param for param in required_params if param not in arguments]
     if missing_params:
         return None, f"Missing required parameters: {', '.join(missing_params)}"
 
     # Validate no unrecognized arguments
-    valid_params = tool_schema["function"]["parameters"]["properties"].keys()
+    valid_params = params_schema["properties"].keys()
     invalid_params = [param for param in arguments if param not in valid_params]
     if invalid_params:
         return None, f"Unrecognized arguments: {', '.join(invalid_params)}"
@@ -209,20 +216,23 @@ def register_tools() -> None:
         sig = inspect.signature(func)
         func_params = set(sig.parameters.keys())
         
-        # Get required parameters from schema
+        # Get required and optional parameters from schema
         required_params = set()
+        optional_params = set()
         if "parameters" in schema.get("function", {}):
             schema_params = schema["function"]["parameters"]
             if "required" in schema_params:
                 required_params = set(schema_params["required"])
+            if "properties" in schema_params:
+                optional_params = set(schema_params["properties"].keys()) - required_params
         
         # Validate parameters
         missing_params = required_params - func_params
         if missing_params:
             raise ValueError(f"Tool function {tool_name} missing required parameters: {missing_params}")
             
-        # Check that any additional parameters are either optional in schema or common args
-        extra_params = func_params - required_params - COMMON_TOOL_ARGS
+        # Check that any additional parameters are either in schema or common args
+        extra_params = func_params - required_params - optional_params - COMMON_TOOL_ARGS
         if extra_params:
             logger.warning(f"Tool function {tool_name} has extra parameters: {extra_params}")
 

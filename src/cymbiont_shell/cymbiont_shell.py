@@ -5,15 +5,15 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
 from typing import Callable, Dict, Any, Tuple, Optional
 from agents.tool_helpers import register_tools
-from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED
-from token_logger import token_logger
+from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED, TOOL_AGENT_ACTIVATION_MODE
 from token_logger import token_logger
 from agents.chat_history import ChatHistory, setup_chat_history_handler
-from constants import LogLevel, ToolName
+from constants import LogLevel
+from agents.agent import Agent, DEFAULT_SYSTEM_PROMPT_PARTS
 from agents.chat_agent import ChatAgent
 from agents.tool_agent import ToolAgent
 from agents.tool_schemas import format_all_tool_schemas
-from system_prompt_parts import SYSTEM_MESSAGE_PARTS, DEFAULT_SYSTEM_PROMPT_PARTS
+from system_prompt_parts import SYSTEM_MESSAGE_PARTS
 from .command_completer import CommandCompleter
 from .command_metadata import create_commands
 
@@ -26,8 +26,15 @@ class CymbiontShell:
         
         # Initialize agents
         register_tools()
-        self.chat_agent = ChatAgent(self.chat_history, AGENT_NAME)
-        self.tool_agent = ToolAgent(self.chat_history)
+        self.tool_agent = ToolAgent(
+            self.chat_history,
+            activation_mode=TOOL_AGENT_ACTIVATION_MODE
+        )
+        self.chat_agent = ChatAgent(
+            self.chat_history,
+            AGENT_NAME,
+        )
+        Agent.bind_agents(self.chat_agent, self.tool_agent)
         self.tool_agent_task: Optional[asyncio.Task] = None
         
         # Connect chat history to logger
@@ -179,7 +186,6 @@ class CymbiontShell:
         """Start the tool agent background task."""
         if self.tool_agent_task is None or self.tool_agent_task.done():
             self.tool_agent_task = asyncio.create_task(self.run_tool_agent())
-            logger.info("Tool agent started")
 
     async def stop_tool_agent(self) -> None:
         """Stop the tool agent background task."""
@@ -189,30 +195,29 @@ class CymbiontShell:
                 await self.tool_agent_task
             except asyncio.CancelledError:
                 pass
-            logger.info("Tool agent stopped")
 
     async def run_tool_agent(self) -> None:
-        """Background task that continuously runs the tool agent."""
+        """Background task that runs the tool agent based on its activation mode."""
         while True:
             try:
-                # Run the tool agent with specific tools
+                if not self.tool_agent.active:
+                    await asyncio.sleep(0.1)  # Short sleep when inactive
+                    continue
+
                 with token_logger.show_tokens():
                     response = await self.tool_agent.get_response(
                         token_budget=20000
                     )
 
                 if response:
-                    # Tool agent found something to do
-                    logger.info(f"Tool agent action: {response}")
-
-                # Brief pause to prevent excessive API calls
-                await asyncio.sleep(1)
+                    logger.log(LogLevel.TOOL, f"{self.tool_agent.agent_name}: {response}")
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error in tool agent loop: {str(e)}")
-                await asyncio.sleep(5)  # Longer pause on error
+                if DEBUG_ENABLED:
+                    raise
 
     async def execute_command(self, command: str, args: str, name: str = '') -> Tuple[bool, bool]:
         """Execute a shell command
@@ -276,7 +281,7 @@ class CymbiontShell:
         """Run the shell"""
         try:
             # Start the tool agent
-           # await self.start_tool_agent()
+            await self.start_tool_agent()
 
             while True:
                 try:

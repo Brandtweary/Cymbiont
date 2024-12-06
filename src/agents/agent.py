@@ -3,13 +3,13 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Literal, Union, Callab
 from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED
 from constants import LogLevel, ToolName, ToolChoice
 from model_configuration import CHAT_AGENT_MODEL
-from prompt_helpers import get_system_message
+from prompt_helpers import get_system_message, DEFAULT_SYSTEM_PROMPT_PARTS
 from custom_dataclasses import ChatMessage, ToolLoopData, SystemPromptPartsData, SystemPromptPartInfo
 from utils import log_performance, convert_messages_to_string
 from api_queue import enqueue_api_call
 from .chat_history import ChatHistory
 from .tool_helpers import process_tool_calls
-from system_prompt_parts import DEFAULT_SYSTEM_PROMPT_PARTS
+
 
 class Agent:
     """Base agent class that provides core functionality for all agent types.
@@ -25,7 +25,7 @@ class Agent:
         default_system_prompt_parts: SystemPromptPartsData = DEFAULT_SYSTEM_PROMPT_PARTS,
         default_tool_choice: ToolChoice = ToolChoice.AUTO,
         default_temperature: float = 0.7,
-        default_tools: Optional[Set[ToolName]] = None
+        default_tools: Optional[Set[ToolName]] = None,
     ):
         """Initialize the agent with chat history and model configuration.
 
@@ -38,6 +38,10 @@ class Agent:
             default_temperature: Default temperature for API calls
             default_tools: Default set of tools available to this agent
         """
+        # Import here to avoid circular imports
+        from .chat_agent import ChatAgent
+        from .tool_agent import ToolAgent
+        
         self.chat_history = chat_history
         self.model = model
         self.agent_name = agent_name
@@ -45,6 +49,50 @@ class Agent:
         self.default_tool_choice = default_tool_choice
         self.default_temperature = default_temperature
         self.default_tools = default_tools or set()
+        self.active = False  # Base activation state
+        self.bound_tool_agent: Optional[ToolAgent] = None  # Reference to bound tool agent, if this is a chat agent
+        self.bound_chat_agent: Optional[ChatAgent] = None  # Reference to bound chat agent, if this is a tool agent
+
+    @staticmethod
+    def bind_agents(chat_agent: Any, tool_agent: Any) -> None:
+        """Bind a chat agent and tool agent together.
+        
+        This creates a bidirectional reference between the agents, allowing them
+        to coordinate on tool requests.
+        
+        Args:
+            chat_agent: The chat agent to bind
+            tool_agent: The tool agent to bind
+            
+        Raises:
+            TypeError: If either agent is not of the correct type
+        """
+        # Import here to avoid circular imports
+        from .chat_agent import ChatAgent
+        from .tool_agent import ToolAgent
+        
+        if not isinstance(chat_agent, ChatAgent):
+            raise TypeError("chat_agent must be an instance of ChatAgent")
+        if not isinstance(tool_agent, ToolAgent):
+            raise TypeError("tool_agent must be an instance of ToolAgent")
+            
+        chat_agent.bound_tool_agent = tool_agent
+        tool_agent.bound_chat_agent = chat_agent
+
+    def setup_unique_prompt_parts(self, system_prompt_parts: SystemPromptPartsData, kwargs: Dict[str, Any]) -> Tuple[SystemPromptPartsData, Dict[str, Any]]:
+        """Set up any unique prompt parts for this agent type.
+        
+        This method is called by setup_system_prompt_parts after setting up the common parts.
+        Override this in subclasses to add agent-specific prompt parts.
+        
+        Args:
+            system_prompt_parts: The SystemPromptPartsData to modify
+            kwargs: The kwargs dict to modify with any required parameters
+            
+        Returns:
+            Tuple of (SystemPromptPartsData, kwargs dict)
+        """
+        return system_prompt_parts, kwargs
 
     def setup_system_prompt_parts(
         self,
@@ -80,7 +128,8 @@ class Agent:
         elif system_prompt_parts and "progressive_summary" in system_prompt_parts.parts:
             del system_prompt_parts.parts["progressive_summary"]
             
-        return system_prompt_parts, kwargs
+        # Let subclasses add their unique prompt parts
+        return self.setup_unique_prompt_parts(system_prompt_parts, kwargs)
 
     def handle_token_usage(
         self,

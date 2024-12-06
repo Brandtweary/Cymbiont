@@ -48,8 +48,8 @@ def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
                 
         schema["function"]["parameters"]["properties"]["command"]["enum"] = marked_commands
     
-    elif schema_name == "use_tool":
-        # For use_tool, provide a list of all available tool names
+    elif schema_name == "request_tool_use":
+        # For request_tool_use, provide a list of all available tool names
         tool_names = [tool.value for tool in ToolName]
         schema["function"]["parameters"]["properties"]["tool_name"]["enum"] = tool_names
     
@@ -85,20 +85,20 @@ TOOL_SCHEMAS = {
             }
         }
     },
-    ToolName.USE_TOOL: {
+    ToolName.REQUEST_TOOL_USE: {
         "type": "function",
         "function": {
-            "name": "use_tool",
+            "name": "request_tool_use",
             "description": "Request the tool agent to use a specific tool. This triggers a tool response from the tool agent.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "tool_name": {
                         "type": "string",
-                        "description": "The name of the tool to use."
+                        "description": "The name of the tool to use. Only include if you know which tool. Otherwise, let the tool agent decide.",
                     }
                 },
-                "required": ["tool_name"]
+                "required": []
             }
         }
     },
@@ -157,7 +157,7 @@ TOOL_SCHEMAS = {
                         }
                     }
                 },
-                "required": ["command", "args"]
+                "required": ["command"]
             }
         }
     },
@@ -200,6 +200,24 @@ TOOL_SCHEMAS = {
                 "type": "object",
                 "properties": {},
                 "required": []
+            }
+        }
+    },
+    ToolName.RESOLVE_TOOL_REQUEST: {
+        "type": "function",
+        "function": {
+            "name": "resolve_tool_request",
+            "description": "Resolve a specific tool request by its letter label (A, B, C, etc.).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request_letter": {
+                        "type": "string",
+                        "description": "The letter label of the request to resolve (A, B, C, etc.)",
+                        "pattern": "^[A-Z]$"
+                    }
+                },
+                "required": ["request_letter"]
             }
         }
     }

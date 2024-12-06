@@ -2,7 +2,14 @@ from typing import Any, List, Optional
 from shared_resources import logger, DEBUG_ENABLED
 import re
 from custom_dataclasses import SystemPromptPartsData, SystemPromptPartInfo
-from system_prompt_parts import SYSTEM_MESSAGE_PARTS, DEFAULT_SYSTEM_PROMPT_PARTS
+from system_prompt_parts import SYSTEM_MESSAGE_PARTS
+
+
+DEFAULT_SYSTEM_PROMPT_PARTS = SystemPromptPartsData(parts={
+    "chat_agent_base_prompt": SystemPromptPartInfo(toggled=True, index=0),
+    "cymbiont_agent_overview": SystemPromptPartInfo(toggled=False, index=1),
+    "response_guidelines": SystemPromptPartInfo(toggled=True, index=2)
+})
 
 
 def escape_json_in_prompt(content: str) -> tuple[str, bool]:

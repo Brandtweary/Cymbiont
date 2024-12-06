@@ -1,10 +1,12 @@
 from shared_resources import logger, get_shell, DEBUG_ENABLED
 from constants import LogLevel, ToolName, MAX_LOOP_ITERATIONS
 from .agent import Agent
+from .tool_agent import ToolAgent
 from prompt_helpers import create_system_prompt_parts_data
 from .tool_helpers import create_tool_loop_data
 from custom_dataclasses import ToolLoopData, ChatMessage, SystemPromptPartsData, SystemPromptPartInfo
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
+from token_logger import token_logger
 
 async def process_contemplate_loop(
     question: str,
@@ -149,18 +151,20 @@ async def process_toggle_prompt_part(
     state = "on" if part_info.toggled else "off"
     logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: toggle_prompt_part - Toggled prompt part '{part_name}' {state}")
     return f"I've turned {part_name} {state}."
-
+    
 async def process_execute_shell_command(
     command: str,
-    args: List[str],
     agent: Agent,
     system_prompt_parts: SystemPromptPartsData,
+    args: Optional[List[str]] = None,
     tool_loop_data: Optional[ToolLoopData] = None,
     token_budget: int = 20000,
     mock: bool = False,
     mock_messages: Optional[List[ChatMessage]] = None
 ) -> str:
     """Process the execute_shell_command tool call."""
+    if args is None:
+        args = []
     logger.log(
         LogLevel.TOOL,
         f"{agent.agent_name} used tool: execute_shell_command - {command}{' with args: ' + ', '.join(args) if args else ''}"
@@ -312,3 +316,63 @@ async def process_shell_loop(
         return None
 
     return None
+
+async def process_request_tool_use(
+    agent: Agent,
+    tool_name: Optional[str] = None,
+) -> str:
+    """Process a request to use tools from the chat agent.
+    
+    Args:
+        agent: The agent making the request
+        tool_name: Optional specific tool being requested
+    """
+    if not agent.bound_tool_agent:
+        logger.error("No tool agent bound to this agent for tool requests")
+        if DEBUG_ENABLED:
+            raise
+
+    tool_agent = agent.bound_tool_agent
+    assert isinstance(tool_agent, ToolAgent), "bound_tool_agent must be a ToolAgent instance"
+    
+    tool_desc = f" for tool: {tool_name}" if tool_name else ""
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: request_tool_use{tool_desc}")
+    
+    # Activate the tool agent for this request
+    tool_agent.activate_for_tool_request(tool_name)
+    
+    return "Let me make a tool call..."
+
+async def process_resolve_tool_request(agent: ToolAgent, request_letter: str) -> None:
+    """Process resolve_tool_request tool call.
+    
+    Args:
+        agent: The agent making the request
+        request_letter: Letter label of the request to resolve (A, B, C, etc.)
+    """
+    if not agent.bound_chat_agent:
+        logger.error("No chat agent bound to this agent for tool requests")
+        if DEBUG_ENABLED:
+            raise ValueError("No chat agent bound to this agent for tool requests")
+        return
+    
+    # Try to resolve the specific tool request
+    request = agent.resolve_tool_request(request_letter)
+    if request is None:
+        logger.error(f"Failed to resolve tool request {request_letter} - request not found")
+        return
+
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} resolved {request}")
+    
+    # Get a new response from the chat agent
+    try:
+        with token_logger.show_tokens():
+            response = await agent.bound_chat_agent.get_response(token_budget=20000)
+            
+            if response:
+                print(f"\x1b[38;2;0;255;255m{agent.bound_chat_agent.agent_name}\x1b[0m> {response}")
+                
+    except Exception as e:
+        logger.error(f"Chat response failed after tool request resolved: {str(e)}")
+        if DEBUG_ENABLED:
+            raise

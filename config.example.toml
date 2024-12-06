@@ -22,3 +22,7 @@ agent_name = "chat_agent"
 
 [environment]
 manage_venv = true  # let Cymbiont manage the Python environment
+
+[tool_agent]
+# Tool agent configuration
+tool_agent_activation_mode = "continuous" # Options: "continuous" or "as_needed"

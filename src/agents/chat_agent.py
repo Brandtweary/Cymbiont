@@ -1,10 +1,10 @@
 import asyncio
-from unittest.mock import DEFAULT
 from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED
 from model_configuration import CHAT_AGENT_MODEL
 from .chat_history import ChatHistory
 from constants import ToolName
 from .agent import Agent
+from typing import Any
 
 class ChatAgent(Agent):
     """
@@ -18,7 +18,7 @@ class ChatAgent(Agent):
             agent_name=agent_name,
             model=model,
             default_tools={
-                ToolName.USE_TOOL,
+                ToolName.REQUEST_TOOL_USE,
                 ToolName.INTRODUCE_SELF
             }
         )

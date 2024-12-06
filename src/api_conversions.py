@@ -4,7 +4,6 @@ from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from openai.types.shared_params.response_format_text import ResponseFormatText
 from agents.tool_schemas import TOOL_SCHEMAS, format_tool_schema
-from prompt_helpers import DEFAULT_SYSTEM_PROMPT_PARTS
 from custom_dataclasses import APICall, ChatMessage, SystemPromptPartsData
 import time
 import json
@@ -35,10 +34,11 @@ def get_formatted_tool_schemas(
             continue
             
         schema = TOOL_SCHEMAS[tool].copy()
-        # Only format toggle_prompt_part if system_prompt_parts is provided or using defaults
+        # Only format toggle_prompt_part if system_prompt_parts is provided
         if tool == ToolName.TOGGLE_PROMPT_PART:
-            current_parts = system_prompt_parts or DEFAULT_SYSTEM_PROMPT_PARTS
-            schema = format_tool_schema(schema, system_prompt_parts=current_parts)
+            if system_prompt_parts is None:
+                continue
+            schema = format_tool_schema(schema, system_prompt_parts=system_prompt_parts)
                 
         formatted_tools.append(schema)
         
