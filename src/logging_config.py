@@ -1,7 +1,7 @@
 import logging
 import logging.handlers
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any
 from datetime import datetime
 from constants import LogLevel
 
@@ -90,6 +90,32 @@ class ColoredFormatter(logging.Formatter):
         record.msg = f"{color}{prefix}{record.msg}{self.RESET}"
         return super().format(record)
 
+class PromptRefreshingHandler(logging.StreamHandler):
+    """A handler that refreshes the prompt after emitting logs"""
+    
+    def __init__(self, stream=None):
+        super().__init__(stream)
+        self.prompt_session: Any = None
+    
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            
+            # Clear the prompt first if we have a session
+            if self.prompt_session:
+                self.prompt_session.clear_prompt()
+            
+            # Write the message
+            self.stream.write(msg)
+            self.stream.write(self.terminator)
+            self.flush()
+            
+            # Redraw the prompt after logs
+            if self.prompt_session:
+                self.prompt_session.redraw_prompt()
+        except Exception:
+            self.handleError(record)
+
 def setup_logging(
     log_dir: Path,
     debug: bool = False,
@@ -98,11 +124,11 @@ def setup_logging(
     response: bool = False,
     tool: bool = False,
     log_prefix: Optional[str] = None
-) -> Tuple[logging.Logger, ConsoleFilter]:
+) -> Tuple[logging.Logger, ConsoleFilter, PromptRefreshingHandler]:
     """Configure logging with separate handlers for cymbiont and all logs
     
     Returns:
-        A tuple of (logger, console_filter)
+        A tuple of (logger, console_filter, prompt_handler)
     """
     # Create logs directory
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -149,7 +175,7 @@ def setup_logging(
         tool=tool
     )
     
-    console_handler = logging.StreamHandler()
+    console_handler = PromptRefreshingHandler()
     console_handler.setFormatter(console_formatter)
     console_handler.addFilter(console_filter)
     
@@ -165,4 +191,4 @@ def setup_logging(
     cymbiont_logger.debug(f"App log created at: {cymbiont_log_file}") # only Cymbiont logs
     cymbiont_logger.debug(f"Full log created at: {complete_log_file}") # includes logs from all modules, not just Cymbiont
     
-    return cymbiont_logger, console_filter
+    return cymbiont_logger, console_filter, console_handler

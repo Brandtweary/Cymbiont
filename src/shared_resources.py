@@ -77,7 +77,7 @@ USER_NAME = config["shell"]["user_name"]
 AGENT_NAME = config["shell"]["agent_name"]
 
 # Initialize logging first
-logger, console_filter = setup_logging(
+logger, console_filter, console_handler = setup_logging(
     LOG_DIR, 
     debug=DEBUG_ENABLED,
     benchmark=BENCHMARK_ENABLED,

@@ -1,11 +1,11 @@
 import math
 import asyncio
-from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
-from typing import Callable, Dict, Any, Tuple, Optional
+from prompt_toolkit.formatted_text.base import StyleAndTextTuples
+from typing import Tuple, Optional
 from agents.tool_helpers import register_tools
-from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED, TOOL_AGENT_ACTIVATION_MODE
+from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED, TOOL_AGENT_ACTIVATION_MODE, console_handler
 from token_logger import token_logger
 from agents.chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel
@@ -16,6 +16,7 @@ from agents.tool_helpers import format_all_tool_schemas
 from system_prompt_parts import SYSTEM_MESSAGE_PARTS
 from .command_completer import CommandCompleter
 from .command_metadata import create_commands
+from .log_aware_session import LogAwareSession
 
 
 class CymbiontShell:
@@ -71,11 +72,14 @@ class CymbiontShell:
             'agent': '#00FFFF',   # Bright cyan
         })
         
-        self.session = PromptSession(
+        self.session = LogAwareSession(
             style=style,
             message=self.get_prompt,
             completer=self.completer
         )
+        
+        # Connect the prompt session to the logging handler
+        console_handler.prompt_session = self.session
         
         # Log shell startup
         logger.log(LogLevel.SHELL, "Cymbiont shell started")

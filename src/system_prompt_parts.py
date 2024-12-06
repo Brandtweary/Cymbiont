@@ -60,6 +60,7 @@ Command Execution Guidelines:
         header="Response Guidelines",
         content='''Do not prefix your name in front of your responses. The prefix is applied automatically.
         If you receive a message from the user that looks like a partial/malformed command, it is probably invalid syntax. Just ask the user what they want to do.
+        Remember, the tool agent has a broader suite of tools than you. If the user asks you to run an unfamiliar command and it's not in the tool list, it is probably a shell command. Just use request_tool_use. Do not try to make a tool call directly that is not in your tool schema. 
         Take credit for any tool calls performed by the tool agent, as in 'I used [tool_name]...'. Do not reference the tool agent directly unless the user specifically asks about them.''',
         required_params=[]
     ),
