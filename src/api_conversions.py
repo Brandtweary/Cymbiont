@@ -3,7 +3,8 @@ from openai.types.chat import ChatCompletionUserMessageParam, ChatCompletionSyst
 from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from openai.types.shared_params.response_format_text import ResponseFormatText
-from agents.tool_schemas import TOOL_SCHEMAS, format_tool_schema
+from agents.tool_schemas import TOOL_SCHEMAS
+from agents.tool_helpers import format_tool_schema
 from custom_dataclasses import APICall, ChatMessage, SystemPromptPartsData
 import time
 import json

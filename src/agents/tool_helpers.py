@@ -6,6 +6,8 @@ from shared_resources import logger
 from constants import ToolName
 from custom_dataclasses import ChatMessage, ToolLoopData, SystemPromptPartsData, SystemPromptPartInfo
 from .tool_schemas import TOOL_SCHEMAS
+from copy import deepcopy
+
 
 # Common arguments that can be passed to any tool processing function
 COMMON_TOOL_ARGS = {
@@ -277,3 +279,66 @@ def create_tool_loop_data(
         system_prompt_parts=final_prompt_parts,
         available_tools=final_tools
     )
+
+def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    """Format a single tool schema, handling any dynamic content based on runtime state.
+    
+    Some schemas require specific kwargs for initial formatting in CymbiontShell.__init__:
+    - toggle_prompt_part: Requires 'system_prompt_parts' for available prompt parts
+    - execute_shell_command: Requires 'command_metadata' for available shell commands
+    
+    These kwargs should be provided when calling format_all_tool_schemas in CymbiontShell.__init__.
+    Other dynamic formatting (like toggle_prompt_part's current system_prompt_parts) happens at runtime.
+    
+    Args:
+        schema: The base schema to format
+        **kwargs: Dynamic parameters for initial schema formatting:
+            - system_prompt_parts: Required for toggle_prompt_part schema
+            - command_metadata: Required for execute_shell_command schema
+    """
+    schema = deepcopy(schema)
+    schema_name = schema.get("function", {}).get("name")
+    
+    if schema_name == "toggle_prompt_part":
+        if "system_prompt_parts" not in kwargs:
+            logger.warning("Missing 'system_prompt_parts' kwarg required for toggle_prompt_part schema. "
+                         "This should be added to the format_all_tool_schemas call in CymbiontShell.__init__")
+            return schema
+            
+        part_names = list(kwargs["system_prompt_parts"].parts.keys())
+        schema["function"]["parameters"]["properties"]["part_name"]["enum"] = part_names
+    
+    elif schema_name == "execute_shell_command":  
+        if "command_metadata" not in kwargs:
+            logger.warning("Missing 'command_metadata' kwarg required for execute_shell_command schema. "
+                         "This should be added to the format_all_tool_schemas call in CymbiontShell.__init__")
+            return schema
+            
+        # Mark commands that take args with an asterisk
+        marked_commands = []
+        for cmd, cmd_data in kwargs["command_metadata"].items():
+            if cmd_data.takes_args:
+                marked_commands.append(f"{cmd}*")
+            else:
+                marked_commands.append(cmd)
+                
+        schema["function"]["parameters"]["properties"]["command"]["enum"] = marked_commands
+    
+    elif schema_name == "request_tool_use":
+        # For request_tool_use, provide a list of all available tool names
+        tool_names = [tool.value for tool in ToolName]
+        schema["function"]["parameters"]["properties"]["tool_name"]["enum"] = tool_names
+    
+    return schema
+
+def format_all_tool_schemas(**kwargs) -> None:
+    """Format all tool schemas with dynamic content.
+    
+    Args:
+        **kwargs: Dynamic parameters that may be required by different schemas:
+            - system_prompt_parts: Required for toggle_prompt_part schema
+            - command_metadata: Required for execute_shell_command schema
+    """
+    # Format each schema
+    for tool_name, schema in TOOL_SCHEMAS.items():
+        TOOL_SCHEMAS[tool_name] = format_tool_schema(schema, **kwargs)

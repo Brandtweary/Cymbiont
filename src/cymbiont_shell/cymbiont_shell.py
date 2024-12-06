@@ -12,7 +12,7 @@ from constants import LogLevel
 from agents.agent import Agent, DEFAULT_SYSTEM_PROMPT_PARTS
 from agents.chat_agent import ChatAgent
 from agents.tool_agent import ToolAgent
-from agents.tool_schemas import format_all_tool_schemas
+from agents.tool_helpers import format_all_tool_schemas
 from system_prompt_parts import SYSTEM_MESSAGE_PARTS
 from .command_completer import CommandCompleter
 from .command_metadata import create_commands
