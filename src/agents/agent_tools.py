@@ -1,14 +1,14 @@
 from shared_resources import logger, get_shell, DEBUG_ENABLED
-from constants import LogLevel, ToolName, MAX_LOOP_ITERATIONS
+from cymbiont_logger.logger_types import LogLevel
 from .agent import Agent
-from .tool_agent import ToolAgent
 from llms.prompt_helpers import create_system_prompt_parts_data
 from .tool_helpers import create_tool_loop_data
-from custom_dataclasses import ToolLoopData, ChatMessage, SystemPromptPartsData, SystemPromptPartInfo
+from llms.llm_types import SystemPromptPartsData, SystemPromptPartInfo, ChatMessage, ToolName, ToolLoopData
 from typing import Optional, List, Dict, Any
-from llms.token_logger import token_logger
-from copy import deepcopy
 import asyncio
+
+
+MAX_LOOP_ITERATIONS = 5
 
 async def process_contemplate_loop(
     question: str,

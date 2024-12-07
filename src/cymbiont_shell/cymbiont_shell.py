@@ -7,9 +7,9 @@ from typing import Tuple, Optional
 from agents import agent
 from agents.tool_helpers import register_tools
 from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED, TOOL_AGENT_ACTIVATION_MODE, console_handler
-from llms.token_logger import token_logger
+from cymbiont_logger.token_logger import token_logger
 from agents.chat_history import ChatHistory, setup_chat_history_handler
-from constants import LogLevel
+from cymbiont_logger.logger_types import LogLevel
 from agents.agent import Agent, DEFAULT_SYSTEM_PROMPT_PARTS
 from agents.chat_agent import ChatAgent
 from agents.tool_agent import ToolAgent

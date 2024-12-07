@@ -17,7 +17,7 @@ setup_python_path()
 
 # Project imports
 from shared_resources import logger, DATA_DIR, set_shell
-from llms.token_logger import token_logger
+from cymbiont_logger.token_logger import token_logger
 from cymbiont_shell.cymbiont_shell import CymbiontShell
 from utils import setup_directories, delete_logs
 from llms.api_queue import start_api_queue, stop_api_queue

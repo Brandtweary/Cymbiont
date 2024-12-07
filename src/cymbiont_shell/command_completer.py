@@ -5,8 +5,7 @@ import os
 
 from utils import get_paths
 from shared_resources import DATA_DIR
-from custom_dataclasses import CommandData
-from constants import CommandArgType
+from .shell_types import CommandArgType, CommandData
 
 
 class CommandCompleter(Completer):

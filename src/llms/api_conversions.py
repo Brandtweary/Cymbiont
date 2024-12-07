@@ -1,15 +1,13 @@
-from unittest.mock import DEFAULT
 from openai.types.chat import ChatCompletionUserMessageParam, ChatCompletionSystemMessageParam, ChatCompletionAssistantMessageParam
 from openai.types.chat.completion_create_params import ResponseFormat
 from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from openai.types.shared_params.response_format_text import ResponseFormatText
 from agents.tool_schemas import TOOL_SCHEMAS
 from agents.tool_helpers import format_tool_schema
-from custom_dataclasses import APICall, ChatMessage, SystemPromptPartsData
+from .llm_types import SystemPromptPartsData, APICall, ChatMessage, ToolName
 import time
 import json
 from typing import Dict, Any, Optional, Set, List, Union
-from constants import ToolName
 from shared_resources import logger
 
 def get_formatted_tool_schemas(

@@ -3,7 +3,7 @@ import logging.handlers
 from pathlib import Path
 from typing import Optional, Tuple, Any
 from datetime import datetime
-from constants import LogLevel
+from .logger_types import LogLevel
 
 
 # Register all custom log levels

@@ -4,11 +4,11 @@ import shutil
 from typing import List, Dict, Optional
 import time
 import asyncio
-from shared_resources import logger, FILE_RESET, DATA_DIR
+from shared_resources import logger, FILE_RESET, DATA_DIR, Paths
 from .tag_extraction import extract_tags
 from utils import log_performance, generate_id, load_index, save_index, get_paths
-from custom_dataclasses import Document, Chunk, Paths
-from process_log import ProcessLog
+from .knowledge_graph_types import Document, Chunk
+from cymbiont_logger.process_log import ProcessLog
 from knowledge_graph.text_parser import split_into_chunks
 
 

@@ -1,6 +1,5 @@
 from typing import Dict, Callable
-from custom_dataclasses import CommandData
-from constants import CommandArgType
+from .shell_types import CommandArgType, CommandData
 from .doc_processing_commands import (
     do_process_documents,
     do_create_data_snapshot,

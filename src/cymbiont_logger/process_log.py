@@ -1,6 +1,6 @@
 import logging
 from typing import List, Tuple
-from constants import LogLevel
+from cymbiont_logger.logger_types import LogLevel
 
 
 class ProcessLog:

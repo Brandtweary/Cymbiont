@@ -12,7 +12,7 @@ if __name__ == "__main__":
 else:
     # Normal imports for when the module is imported properly
     from shared_resources import logger
-    from constants import LogLevel
+    from cymbiont_logger.logger_types import LogLevel
 
     def run_logger_test() -> None:
         """Test all available log levels in the logging system"""

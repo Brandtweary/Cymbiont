@@ -1,6 +1,6 @@
 import re
 from typing import List, Optional
-from custom_dataclasses import Chunk
+from .knowledge_graph_types import Chunk
 from pathlib import Path
 from shared_resources import DATA_DIR, logger, DEBUG_ENABLED
 from utils import get_paths

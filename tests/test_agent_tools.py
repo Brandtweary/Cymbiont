@@ -13,11 +13,9 @@ else:
     import json
     from typing import Set
     from agents.chat_agent import ChatAgent
-    from agents.tool_agent import ToolAgent
     from agents.chat_history import ChatHistory
     from agents.tool_helpers import validate_tool_args
-    from constants import ToolName
-    from custom_dataclasses import ChatMessage
+    from llms.llm_types import ChatMessage, ToolName
     from shared_resources import logger
 
     async def test_tool_loop():

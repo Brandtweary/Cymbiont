@@ -1,10 +1,22 @@
 from pathlib import Path
 from openai import AsyncOpenAI
-from logging_config import setup_logging
+from cymbiont_logger.logging_config import setup_logging
 import tomllib
 from dotenv import load_dotenv
-from typing import List
+from typing import NamedTuple
 from anthropic import AsyncAnthropic
+
+
+class Paths(NamedTuple):
+    """Paths for data storage"""
+    base_dir: Path
+    docs_dir: Path
+    processed_dir: Path
+    chunks_dir: Path
+    index_dir: Path
+    logs_dir: Path
+    inert_docs_dir: Path
+    snapshots_dir: Path
 
 # Get the project root (one level up from src)
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -76,7 +88,7 @@ if TOOL_AGENT_ACTIVATION_MODE not in VALID_TOOL_AGENT_ACTIVATION_MODES:
 USER_NAME = config["shell"]["user_name"]
 AGENT_NAME = config["shell"]["agent_name"]
 
-# Initialize logging first
+# Initialize logging
 logger, console_filter, console_handler = setup_logging(
     LOG_DIR, 
     debug=DEBUG_ENABLED,

@@ -3,8 +3,7 @@ from typing import Any, List, Optional, Set, Dict, Tuple, Union, Callable
 from functools import lru_cache
 import inspect
 from shared_resources import logger
-from constants import ToolName
-from custom_dataclasses import ChatMessage, ToolLoopData, SystemPromptPartsData, SystemPromptPartInfo
+from llms.llm_types import SystemPromptPartsData, ChatMessage, ToolName, ToolLoopData
 from .tool_schemas import TOOL_SCHEMAS
 from copy import deepcopy
 

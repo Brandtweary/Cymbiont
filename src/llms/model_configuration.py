@@ -2,8 +2,44 @@ from enum import Enum
 import os
 from typing import Optional
 from shared_resources import config, logger
-from constants import LLM, model_data
+from .llm_types import LLM
 
+
+# Rate limits are assuming tier 2 API access for both OpenAI and Anthropic
+model_data = {
+    LLM.SONNET_3_5.value: {
+        "provider": "anthropic",
+        "max_output_tokens": 200000,
+        "requests_per_minute": 1000,
+        "input_tokens_per_minute": 80000,
+        "output_tokens_per_minute": 16000
+    },
+    LLM.HAIKU_3_5.value: {
+        "provider": "anthropic",
+        "max_output_tokens": 200000,
+        "requests_per_minute": 1000,
+        "input_tokens_per_minute": 100000,
+        "output_tokens_per_minute": 20000
+    },
+    LLM.GPT_4O.value: {
+        "provider": "openai",
+        "max_output_tokens": 16384,
+        "requests_per_minute": 5000,
+        "total_tokens_per_minute": 450000
+    },
+    LLM.GPT_4O_MINI.value: {
+        "provider": "openai",
+        "max_output_tokens": 16384,
+        "requests_per_minute": 5000,
+        "total_tokens_per_minute": 2000000
+    },
+    LLM.O1_PREVIEW.value: {
+        "provider": "openai",
+        "max_output_tokens": 16384,
+        "requests_per_minute": 5000,
+        "total_tokens_per_minute": 450000
+    }
+}
 
 def get_available_providers():
     """Return a set of available providers based on API keys in environment."""

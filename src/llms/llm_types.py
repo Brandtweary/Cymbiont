@@ -1,11 +1,9 @@
-import asyncio
+from enum import Enum
 from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional, Literal, Set
+from cymbiont_logger.process_log import ProcessLog
 from datetime import datetime
-from typing import Any, List, Dict, Literal, Optional, NamedTuple, Set, Union, Callable
-from pathlib import Path
-from constants import ToolName, CommandArgType
-from process_log import ProcessLog
-
+import asyncio
 
 MessageRole = Literal["user", "assistant", "system"]
 
@@ -16,36 +14,12 @@ class ChatMessage:
     name: Optional[str] = None
     timestamp: datetime = field(default_factory=datetime.now)
 
-@dataclass
-class Document:
-    """Represents a processed document"""
-    doc_id: str
-    filename: str
-    processed_at: float
-    metadata: Dict
-    tags: Optional[List[str]] = None
-    folder_id: Optional[str] = None
-
-@dataclass
-class Chunk:
-    """A chunk of text with references"""
-    chunk_id: str
-    doc_id: str
-    text: str
-    position: int
-    metadata: Dict
-    tags: Optional[List[str]] = None
-
-class Paths(NamedTuple):
-    """Paths for data storage"""
-    base_dir: Path
-    docs_dir: Path
-    processed_dir: Path
-    chunks_dir: Path
-    index_dir: Path
-    logs_dir: Path
-    inert_docs_dir: Path
-    snapshots_dir: Path
+class LLM(Enum):
+    GPT_4O = "gpt-4o"
+    GPT_4O_MINI = "gpt-4o-mini"
+    O1_PREVIEW = "o1-preview"
+    SONNET_3_5 = "claude-3-5-sonnet-latest"
+    HAIKU_3_5 = "claude-3-5-haiku-latest"
 
 @dataclass
 class TokenUsage:
@@ -87,13 +61,25 @@ class SystemPromptPartsData:
         self.parts[name] = info
         self.kwargs.update(kwargs)
 
-@dataclass
-class CommandData:
-    """Data structure for shell command metadata"""
-    callable: Callable
-    takes_args: bool
-    arg_types: Optional[List[CommandArgType]] = None
-    needs_shell: bool = False
+class ToolName(Enum):
+    CONTEMPLATE_LOOP = "contemplate_loop"
+    EXIT_LOOP = "exit_loop"
+    MESSAGE_SELF = "message_self"
+    EXECUTE_SHELL_COMMAND = "execute_shell_command"
+    TOGGLE_PROMPT_PART = "toggle_prompt_part"
+    INTRODUCE_SELF = "introduce_self"
+    SHELL_LOOP = "shell_loop"
+    MEDITATE = "meditate"
+
+class ToolChoice(Enum):
+    """Tool choice options for API calls."""
+    AUTO = "auto"
+    REQUIRED = "required"
+    NONE = "none"
+
+    def to_literal(self) -> Literal["auto", "required", "none"]:
+        """Convert enum value to literal type expected by API."""
+        return self.value  # type: ignore
 
 @dataclass
 class ToolLoopData:

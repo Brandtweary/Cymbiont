@@ -21,8 +21,8 @@ else:
         clear_token_history,
         is_queue_empty
     )
-    from custom_dataclasses import ChatMessage
-    from constants import LLM, model_data
+    from llms.llm_types import LLM, ChatMessage
+    from llms.model_configuration import model_data
 
 async def test_rpm_rate_limiting() -> None:
     """Test RPM rate limiting processes correct batch size."""
@@ -176,8 +176,8 @@ async def test_tpm_soft_limit() -> None:
 async def test_retry_mechanism() -> None:
     """Test that API calls retry properly through various failure cases."""
     from knowledge_graph.tag_extraction import extract_tags
-    from custom_dataclasses import Chunk
-    from process_log import ProcessLog
+    from knowledge_graph.knowledge_graph_types import Chunk
+    from cymbiont_logger.process_log import ProcessLog
 
     test_cases = [
         {

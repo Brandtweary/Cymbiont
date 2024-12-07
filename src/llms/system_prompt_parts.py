@@ -1,4 +1,4 @@
-from custom_dataclasses import SystemMessagePart
+from .llm_types import SystemMessagePart
 
 
 SYSTEM_MESSAGE_PARTS = {

@@ -1,7 +1,9 @@
 from pydoc import text
 from typing import Optional, List
 from shared_resources import logger, DEBUG_ENABLED
-from custom_dataclasses import Chunk, ProcessLog, ChatMessage
+from .knowledge_graph_types import Chunk
+from llms.llm_types import ChatMessage
+from cymbiont_logger.process_log import ProcessLog
 from llms.api_queue import enqueue_api_call
 from llms.model_configuration import TAG_EXTRACTION_MODEL
 from llms.prompt_helpers import get_system_message, create_system_prompt_parts_data
