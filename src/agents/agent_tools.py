@@ -8,6 +8,7 @@ from custom_dataclasses import ToolLoopData, ChatMessage, SystemPromptPartsData,
 from typing import Optional, List, Dict, Any
 from token_logger import token_logger
 from copy import deepcopy
+import asyncio
 
 async def process_contemplate_loop(
     question: str,
@@ -318,78 +319,24 @@ async def process_shell_loop(
 
     return None
 
-async def process_execute_tool_call(
-    agent: Agent,
-    category: Optional[str] = None,
-) -> str:
-    """Process a tool operation execution.
+async def process_meditate(agent: Agent, wait_time: int = 0) -> None:
+    """Process the meditate tool call.
+    
+    In continuous mode, sets the agent to inactive for the specified wait time.
+    If wait_time is 0 in continuous mode, the agent remains active (dummy tool call).
+    In as_needed mode, simply sets active to false (wait time is ignored).
     
     Args:
-        agent: The agent executing the operation
-        category: Optional category of operation to perform
+        agent: The agent instance to meditate
+        wait_time: Time in seconds to wait before reactivating (only used in continuous mode)
     """
-    if not agent.bound_tool_agent:
-        logger.error("No tool agent bound to this agent for operations")
-        if DEBUG_ENABLED:
-            raise
-
-    tool_agent = agent.bound_tool_agent
-    assert isinstance(tool_agent, ToolAgent), "bound_tool_agent must be a ToolAgent instance"
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: meditate")
     
-    category_desc = f" for category: {category}" if category else ""
-    logger.log(LogLevel.TOOL, f"{agent.agent_name} initiated operation{category_desc}")
-    
-    # Switch to tool execution mode
-    tool_agent.activate_for_operation(category)
-    
-    return "Executing operation..."
-
-async def process_resolve_pending_operation(agent: ToolAgent, letter: str) -> None:
-    """Process resolve_pending_operation tool call.
-    
-    Args:
-        agent: The agent resolving the operation
-        letter: Letter label of the operation to resolve (A, B, C, etc.)
-    """
-    if not agent.bound_chat_agent:
-        logger.error("No chat agent bound to this agent")
-        if DEBUG_ENABLED:
-            raise ValueError("No chat agent bound to this agent")
-        return
-    
-    # Try to resolve the operation
-    operation = agent.resolve_pending_operation(letter)
-    if operation is None:
-        logger.error(f"Failed to resolve operation {letter} - not found")
-        return
-
-    logger.log(LogLevel.TOOL, f"{agent.agent_name} completed {operation}")
-    
-    # Get a new response from the chat agent with operation follow-up prompt
-    try:
-        with token_logger.show_tokens():
-            # Make a complete copy of the system prompt parts
-            system_prompt_parts = SystemPromptPartsData(
-                parts=agent.bound_chat_agent.default_system_prompt_parts.parts.copy(),
-                kwargs=agent.bound_chat_agent.default_system_prompt_parts.kwargs.copy()
-            )
-            
-            # Add category to kwargs and operation_follow_up part
-            system_prompt_parts.kwargs["category"] = operation.split(":")[0]  # Get category from "category:details" format
-            system_prompt_parts.add_part(
-                "operation_follow_up",
-                SystemPromptPartInfo(toggled=True, index=len(system_prompt_parts.parts))
-            )
-            
-            response = await agent.bound_chat_agent.get_response(
-                token_budget=20000,
-                system_prompt_parts=system_prompt_parts
-            )
-            
-            if response:
-                print(f"\x1b[38;2;0;255;255m{agent.bound_chat_agent.agent_name}\x1b[0m> {response}")
-                
-    except Exception as e:
-        logger.error(f"Chat response failed after operation completed: {str(e)}")
-        if DEBUG_ENABLED:
-            raise
+    if agent.activation_mode == "continuous":
+        if wait_time > 0:
+            agent.active = False
+            await asyncio.sleep(wait_time)
+            agent.active = True
+        # If wait_time is 0, do nothing (remain active)
+    else:  # as_needed mode
+        agent.active = False

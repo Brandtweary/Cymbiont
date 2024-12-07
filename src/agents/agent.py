@@ -50,6 +50,7 @@ class Agent:
         self.default_temperature = default_temperature
         self.default_tools = default_tools or set()
         self.active = False  # Base activation state
+        self.activation_mode = "as_needed"  # Default to as_needed mode
         self.bound_tool_agent: Optional[ToolAgent] = None  # Reference to bound tool agent, if this is a chat agent
         self.bound_chat_agent: Optional[ChatAgent] = None  # Reference to bound chat agent, if this is a tool agent
 

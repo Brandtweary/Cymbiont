@@ -31,8 +31,7 @@ def get_tool_function_map() -> Dict[str, Callable]:
                             process_toggle_prompt_part,
                             process_introduce_self,
                             process_shell_loop,
-                            process_execute_tool_call,
-                            process_resolve_pending_operation
+                            process_meditate
                             )
     import inspect
     from . import agent_tools
@@ -45,8 +44,7 @@ def get_tool_function_map() -> Dict[str, Callable]:
         ToolName.TOGGLE_PROMPT_PART.value: process_toggle_prompt_part,
         ToolName.INTRODUCE_SELF.value: process_introduce_self,
         ToolName.SHELL_LOOP.value: process_shell_loop,
-        ToolName.EXECUTE_TOOL_CALL.value: process_execute_tool_call,
-        ToolName.RESOLVE_PENDING_OPERATION.value: process_resolve_pending_operation
+        ToolName.MEDITATE.value: process_meditate
     }
 
     # Get all functions from agent_tools module

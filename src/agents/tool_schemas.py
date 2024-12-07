@@ -79,24 +79,6 @@ TOOL_SCHEMAS = {
             }
         }
     },
-    ToolName.EXECUTE_TOOL_CALL: {
-        "type": "function",
-        "function": {
-            "name": "execute_tool_call",
-            "description": "Execute a tool operation.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "category": {
-                        "type": "string",
-                        "description": "The category of operation to perform",
-                        "enum": ["shell_command", "file", "test", "search", "system"]
-                    }
-                },
-                "required": ["category"]
-            }
-        }
-    },
     ToolName.TOGGLE_PROMPT_PART: {
         "type": "function",
         "function": {
@@ -139,20 +121,21 @@ TOOL_SCHEMAS = {
             }
         }
     },
-    ToolName.RESOLVE_PENDING_OPERATION: {
+    ToolName.MEDITATE: {
         "type": "function",
         "function": {
-            "name": "resolve_pending_operation",
-            "description": "Complete a pending operation identified by its letter label (A, B, C, etc.).",
+            "name": "meditate",
+            "description": "Signal to the system that you have completed all tasks and have nothing else to do.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "letter": {
-                        "type": "string",
-                        "description": "The letter label of the operation to resolve."
+                    "wait_time": {
+                        "type": "integer",
+                        "description": "Optional number of seconds to wait. Only has an effect in continuous mode.",
+                        "default": 0
                     }
                 },
-                "required": ["letter"]
+                "required": []
             }
         }
     }

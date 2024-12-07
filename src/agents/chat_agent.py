@@ -18,7 +18,6 @@ class ChatAgent(Agent):
             agent_name=agent_name,
             model=model,
             default_tools={
-                ToolName.EXECUTE_TOOL_CALL,
                 ToolName.INTRODUCE_SELF
             }
         )

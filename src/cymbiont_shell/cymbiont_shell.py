@@ -174,6 +174,9 @@ class CymbiontShell:
                 # Record user message
                 self.chat_history.add_message("user", text, name=USER_NAME)
                 
+                # Activate tool agent
+                self.tool_agent.active = True
+                
                 # Wait for any ongoing summarization
                 await self.chat_history.wait_for_summary()
                 
@@ -210,6 +213,9 @@ class CymbiontShell:
                     continue
 
                 with token_logger.show_tokens():
+                    # Wait for any ongoing summarization
+                    await self.chat_history.wait_for_summary()
+                    
                     response = await self.tool_agent.get_response(
                         token_budget=20000
                     )
