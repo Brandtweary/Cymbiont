@@ -6,3 +6,5 @@ sphinx
 html2text
 pdftotext
 prompt_toolkit
+faiss-cpu
+sentence-transformers

@@ -2,7 +2,7 @@ from typing import Any, List, Optional
 from shared_resources import logger, DEBUG_ENABLED
 import re
 from custom_dataclasses import SystemPromptPartsData, SystemPromptPartInfo
-from system_prompt_parts import SYSTEM_MESSAGE_PARTS
+from llms.system_prompt_parts import SYSTEM_MESSAGE_PARTS
 
 
 DEFAULT_SYSTEM_PROMPT_PARTS = SystemPromptPartsData(parts={

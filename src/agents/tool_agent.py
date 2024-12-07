@@ -1,7 +1,7 @@
 from typing import Optional, Set, List, Literal, Any, Dict, Tuple
 from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED
 from custom_dataclasses import SystemPromptPartsData, SystemPromptPartInfo
-from model_configuration import CHAT_AGENT_MODEL 
+from llms.model_configuration import CHAT_AGENT_MODEL 
 from constants import ToolChoice, ToolName
 from .agent import Agent
 from .chat_history import ChatHistory

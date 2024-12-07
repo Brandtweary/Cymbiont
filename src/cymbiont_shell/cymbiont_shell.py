@@ -7,14 +7,14 @@ from typing import Tuple, Optional
 from agents import agent
 from agents.tool_helpers import register_tools
 from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED, TOOL_AGENT_ACTIVATION_MODE, console_handler
-from token_logger import token_logger
+from llms.token_logger import token_logger
 from agents.chat_history import ChatHistory, setup_chat_history_handler
 from constants import LogLevel
 from agents.agent import Agent, DEFAULT_SYSTEM_PROMPT_PARTS
 from agents.chat_agent import ChatAgent
 from agents.tool_agent import ToolAgent
 from agents.tool_helpers import format_all_tool_schemas
-from system_prompt_parts import SYSTEM_MESSAGE_PARTS
+from llms.system_prompt_parts import SYSTEM_MESSAGE_PARTS
 from .command_completer import CommandCompleter
 from .command_metadata import create_commands
 from .log_aware_session import LogAwareSession
@@ -292,7 +292,7 @@ class CymbiontShell:
         """Run the shell"""
         try:
             # Start the tool agent
-            await self.start_tool_agent()
+            #await self.start_tool_agent()
 
             while True:
                 try:

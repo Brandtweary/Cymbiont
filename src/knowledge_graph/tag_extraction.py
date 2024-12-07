@@ -2,9 +2,9 @@ from pydoc import text
 from typing import Optional, List
 from shared_resources import logger, DEBUG_ENABLED
 from custom_dataclasses import Chunk, ProcessLog, ChatMessage
-from api_queue import enqueue_api_call
-from model_configuration import TAG_EXTRACTION_MODEL
-from prompt_helpers import get_system_message, create_system_prompt_parts_data
+from llms.api_queue import enqueue_api_call
+from llms.model_configuration import TAG_EXTRACTION_MODEL
+from llms.prompt_helpers import get_system_message, create_system_prompt_parts_data
 from utils import log_performance
 import json
 

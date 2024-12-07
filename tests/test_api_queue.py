@@ -14,7 +14,7 @@ else:
     import asyncio
     from typing import List
     from shared_resources import logger
-    from api_queue import (
+    from llms.api_queue import (
         enqueue_api_call, 
         BATCH_INTERVAL_TIME, 
         TPM_SOFT_LIMIT, 

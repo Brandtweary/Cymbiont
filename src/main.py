@@ -2,8 +2,6 @@
 from pathlib import Path
 import sys
 import asyncio
-import os
-import warnings
 
 def setup_python_path() -> None:
     """Add project directories to Python path."""
@@ -19,10 +17,10 @@ setup_python_path()
 
 # Project imports
 from shared_resources import logger, DATA_DIR, set_shell
-from token_logger import token_logger
+from llms.token_logger import token_logger
 from cymbiont_shell.cymbiont_shell import CymbiontShell
 from utils import setup_directories, delete_logs
-from api_queue import start_api_queue, stop_api_queue
+from llms.api_queue import start_api_queue, stop_api_queue
 
 async def async_main() -> None:
     # Setup directories
