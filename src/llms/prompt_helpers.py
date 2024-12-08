@@ -8,7 +8,9 @@ from llms.system_prompt_parts import SYSTEM_MESSAGE_PARTS
 DEFAULT_SYSTEM_PROMPT_PARTS = SystemPromptPartsData(parts={
     "chat_agent_base_prompt": SystemPromptPartInfo(toggled=True, index=0),
     "cymbiont_agent_overview": SystemPromptPartInfo(toggled=False, index=1),
-    "response_guidelines": SystemPromptPartInfo(toggled=True, index=2)
+    "biographical": SystemPromptPartInfo(toggled=False, index=2),
+    "shell_command_info": SystemPromptPartInfo(toggled=False, index=3),
+    "response_guidelines": SystemPromptPartInfo(toggled=True, index=4)
 })
 
 

@@ -1,6 +1,7 @@
 import asyncio
 from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED
 from llms.model_configuration import CHAT_AGENT_MODEL
+from llms.llm_types import ToolName
 from .chat_history import ChatHistory
 from .agent import Agent
 from typing import Any
@@ -16,5 +17,9 @@ class ChatAgent(Agent):
             chat_history=chat_history,
             agent_name=agent_name,
             model=model,
-            default_tools=set()
+            default_tools={
+                ToolName.EXECUTE_SHELL_COMMAND,
+                ToolName.TOGGLE_PROMPT_PART,
+                ToolName.MEDITATE
+            }
         )

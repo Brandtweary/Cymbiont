@@ -176,6 +176,20 @@ class Agent:
                 )
                 break
 
+    def clean_agent_prefix(self, message: str) -> str:
+        """
+        Removes accidental agent name prefixes from the message.
+        Handles cases like "HECTOR: message" or "Hector>message".
+        """
+        agent_name = self.agent_name.upper()
+        # Check for patterns like "HECTOR: " or "Hector: "
+        if message.upper().startswith(f"{agent_name}: "):
+            message = message[len(agent_name) + 2:]
+        # Check for patterns like "HECTOR>" or "Hector>"
+        elif message.upper().startswith(f"{agent_name}>"):
+            message = message[len(agent_name) + 1:]
+        return message.strip()
+
     @log_performance
     async def get_response(
         self,
@@ -262,6 +276,8 @@ class Agent:
                 )
                 
                 if user_message:
+                    # Clean any accidental agent prefixes
+                    user_message = self.clean_agent_prefix(user_message)
                     # Get prefixed version for chat history
                     prefixed_message = self.prefix_message(user_message, tool_loop_data)
                     if not (tool_loop_data and not tool_loop_data.active):
@@ -271,6 +287,8 @@ class Agent:
 
             # Get content from response - this should always be present
             content = response['content']  # Will raise KeyError if missing
+            # Clean any accidental agent prefixes from the content
+            content = self.clean_agent_prefix(content)
             # Add prefixed version to chat history but return original
             prefixed_message = self.prefix_message(content, tool_loop_data)
             if not (tool_loop_data and not tool_loop_data.active):
