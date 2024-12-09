@@ -9,6 +9,7 @@ from utils import log_performance, convert_messages_to_string
 from llms.api_queue import enqueue_api_call
 from .chat_history import ChatHistory
 from .tool_helpers import process_tool_calls
+from .agent_types import ActivationMode
 
 
 class Agent:
@@ -26,6 +27,7 @@ class Agent:
         default_tool_choice: ToolChoice = ToolChoice.AUTO,
         default_temperature: float = 0.7,
         default_tools: Optional[Set[ToolName]] = None,
+        activation_mode: ActivationMode = ActivationMode.CONTINUOUS
     ):
         """Initialize the agent with chat history and model configuration.
 
@@ -38,13 +40,13 @@ class Agent:
             default_temperature: Default temperature for API calls
             default_tools: Default set of tools available to this agent
         """
-        # Import here to avoid circular imports
-        from .chat_agent import ChatAgent
-        from .tool_agent import ToolAgent
         
         self.chat_history = chat_history
         self.model = model
         self.agent_name = agent_name
+        self.activation_mode = activation_mode  # Active by default in continuous mode
+        self.active = activation_mode == ActivationMode.CONTINUOUS  # Active by default in continuous mode
+
         self.default_system_prompt_parts = default_system_prompt_parts
         self.default_tool_choice = default_tool_choice
         self.default_temperature = default_temperature
@@ -57,10 +59,6 @@ class Agent:
             kwargs=dict(default_system_prompt_parts.kwargs)
         )
         self.current_tools = set(self.default_tools)
-        self.active = False  # Base activation state
-        self.activation_mode = "as_needed"  # Default to as_needed mode
-        self.bound_tool_agent: Optional[ToolAgent] = None  # Reference to bound tool agent, if this is a chat agent
-        self.bound_chat_agent: Optional[ChatAgent] = None  # Reference to bound chat agent, if this is a tool agent
         self.temporary_context: Dict[str, TemporaryContextValue] = {}  # Store temporarily active context parts
         
     def update_temporary_context(self, new_context: List[ContextPart], expiration: int = 5) -> None:
@@ -126,6 +124,11 @@ class Agent:
             system_prompt_parts = self.current_system_prompt_parts
         
         system_prompt_parts.kwargs["agent_name"] = self.agent_name
+        
+        # Add activation mode prompt part
+        activation_mode_part = "activation_mode_continuous" if self.activation_mode == ActivationMode.CONTINUOUS else "activation_mode_as_needed"
+        if activation_mode_part not in system_prompt_parts.parts:
+            system_prompt_parts.parts[activation_mode_part] = SystemPromptPartInfo(toggled=True, index=len(system_prompt_parts.parts))
         
         # Handle tool loop parts
         if tool_loop_data:
@@ -308,12 +311,21 @@ class Agent:
             content = self.clean_agent_prefix(content)
             # Add prefixed version to chat history but return original
             prefixed_message = self.prefix_message(content, tool_loop_data)
+            
+            # Handle deactivation in as-needed mode for text-only responses
+            if self.activation_mode == ActivationMode.AS_NEEDED:
+                if 'tool_call_results' not in response:
+                    self.active = False
+            
             if not (tool_loop_data and not tool_loop_data.active):
                 self.chat_history.add_message("assistant", prefixed_message, name=self.agent_name)
             return content
             
         except Exception as e:
             logger.error(f"Error in get_response: {str(e)}")
+            # Deactivate on errors in as-needed mode to prevent infinite error loops
+            if self.activation_mode == ActivationMode.AS_NEEDED:
+                self.active = False
             if DEBUG_ENABLED:
                 raise
             return "I encountered an error while processing your request."
@@ -334,30 +346,3 @@ class Agent:
             active_tools.update(context_value.context.tools)
         
         return active_tools
-
-    @staticmethod
-    def bind_agents(chat_agent: Any, tool_agent: Any) -> None:
-        """Bind a chat agent and tool agent together.
-        
-        This creates a bidirectional reference between the agents, allowing them
-        to coordinate on operations.
-        
-        Args:
-            chat_agent: The chat agent to bind
-            tool_agent: The tool agent to bind
-            
-        Raises:
-            TypeError: If either agent is not of the correct type
-        """
-        # Import here to avoid circular imports
-        from .chat_agent import ChatAgent
-        from .tool_agent import ToolAgent
-        
-        if not isinstance(chat_agent, ChatAgent):
-            raise TypeError("chat_agent must be an instance of ChatAgent")
-        if not isinstance(tool_agent, ToolAgent):
-            raise TypeError("tool_agent must be an instance of ToolAgent")
-            
-        chat_agent.bound_tool_agent = tool_agent
-        tool_agent.bound_chat_agent = chat_agent
-        tool_agent.agent_name = chat_agent.agent_name

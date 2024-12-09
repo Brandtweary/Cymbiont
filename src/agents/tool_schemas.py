@@ -83,7 +83,7 @@ TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "toggle_prompt_part",
-            "description": "Toggle a system prompt part on or off manually. Note that prompt parts will get automatically toggled on temporarily by relevant keywords.",
+            "description": "Toggle a system prompt part on or off manually. Note that prompt parts will get automatically toggled on by the system when relevant.",
             "parameters": {
                 "type": "object",
                 "properties": {

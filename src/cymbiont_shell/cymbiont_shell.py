@@ -6,19 +6,19 @@ from prompt_toolkit.formatted_text.base import StyleAndTextTuples
 from typing import Tuple, Optional
 from agents import agent
 from agents.tool_helpers import register_tools
-from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED, TOOL_AGENT_ACTIVATION_MODE, console_handler
+from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED, AGENT_ACTIVATION_MODE, console_handler
 from cymbiont_logger.token_logger import token_logger
 from agents.chat_history import ChatHistory, setup_chat_history_handler
 from cymbiont_logger.logger_types import LogLevel
 from agents.agent import Agent, DEFAULT_SYSTEM_PROMPT_PARTS
 from agents.chat_agent import ChatAgent
-from agents.tool_agent import ToolAgent
 from agents.tool_helpers import format_all_tool_schemas
 from llms.system_prompt_parts import SYSTEM_MESSAGE_PARTS
 from llms.keyword_router import KeywordRouter
 from .command_completer import CommandCompleter
 from .command_metadata import create_commands
 from .log_aware_session import LogAwareSession
+from agents.agent_types import ActivationMode
 
 
 class CymbiontShell:
@@ -29,17 +29,12 @@ class CymbiontShell:
         
         # Initialize agents
         register_tools()
-        self.tool_agent = ToolAgent(
-            self.chat_history,
-            activation_mode=TOOL_AGENT_ACTIVATION_MODE
-        )
         self.chat_agent = ChatAgent(
             self.chat_history,
             agent_name=AGENT_NAME,
+            activation_mode=ActivationMode.CONTINUOUS if AGENT_ACTIVATION_MODE == "continuous" else ActivationMode.AS_NEEDED
         )
-        Agent.bind_agents(self.chat_agent, self.tool_agent)
-        self.tool_agent_task: Optional[asyncio.Task] = None
-        
+        self.chat_agent_task: Optional[asyncio.Task] = None
         
         # Connect chat history to logger
         setup_chat_history_handler(logger, self.chat_history)
@@ -170,53 +165,12 @@ class CymbiontShell:
                 logger.info(f"{args}: {cmd_data.callable.__doc__ or 'No help available'}\n")
             else:
                 logger.info(f"No help available for '{args}'\n")
-    
-    async def handle_chat(self, text: str) -> None:
-        """Handle chat messages"""
-        try:
-            # Use show_tokens to handle nested token tracking
-            with token_logger.show_tokens():
-                # Record user message
-                self.chat_history.add_message("user", text, name=USER_NAME)
-                
-                # Update temporary context based on user input
-                self.keyword_router.toggle_context(text, self.chat_agent)
-                
-                # Activate tool agent
-                self.tool_agent.active = True
-                
-                # Wait for any ongoing summarization
-                await self.chat_history.wait_for_summary()
-                
-                response = await self.chat_agent.get_response(token_budget=20000)
-                
-                if response:
-                    print(f"\x1b[38;2;0;255;255m{AGENT_NAME}\x1b[0m> {response}")
-        
-        except Exception as e:
-            logger.error(f"Chat response failed: {str(e)}")
-            if DEBUG_ENABLED:
-                raise
 
-    async def start_tool_agent(self) -> None:
-        """Start the tool agent background task."""
-        if self.tool_agent_task is None or self.tool_agent_task.done():
-            self.tool_agent_task = asyncio.create_task(self.run_tool_agent())
-
-    async def stop_tool_agent(self) -> None:
-        """Stop the tool agent background task."""
-        if self.tool_agent_task and not self.tool_agent_task.done():
-            self.tool_agent_task.cancel()
-            try:
-                await self.tool_agent_task
-            except asyncio.CancelledError:
-                pass
-
-    async def run_tool_agent(self) -> None:
-        """Background task that runs the tool agent based on its activation mode."""
+    async def run_chat_agent(self) -> None:
+        """Background task that runs the chat agent based on its activation mode."""
         while True:
             try:
-                if not self.tool_agent.active:
+                if not self.chat_agent.active:
                     await asyncio.sleep(0.1)  # Short sleep when inactive
                     continue
 
@@ -224,19 +178,54 @@ class CymbiontShell:
                     # Wait for any ongoing summarization
                     await self.chat_history.wait_for_summary()
                     
-                    response = await self.tool_agent.get_response(
+                    response = await self.chat_agent.get_response(
                         token_budget=20000
                     )
 
                 if response:
-                    logger.log(LogLevel.TOOL, f"{self.tool_agent.agent_name}: {response}")
+                    print(f"\x1b[38;2;0;255;255m{AGENT_NAME}\x1b[0m> {response}")
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in tool agent loop: {str(e)}")
+                logger.error(f"Error in chat agent loop: {str(e)}")
                 if DEBUG_ENABLED:
                     raise
+
+    async def start_chat_agent(self) -> None:
+        """Start the chat agent background task."""
+        if self.chat_agent_task is None or self.chat_agent_task.done():
+            self.chat_agent_task = asyncio.create_task(self.run_chat_agent())
+
+    async def stop_chat_agent(self) -> None:
+        """Stop the chat agent background task."""
+        if self.chat_agent_task and not self.chat_agent_task.done():
+            self.chat_agent_task.cancel()
+            try:
+                await self.chat_agent_task
+            except asyncio.CancelledError:
+                pass
+
+    async def handle_input(self, text: str) -> bool:
+        """Handle user input, returns True if shell should exit"""
+        # Parse command and arguments
+        parts = text.strip().split(maxsplit=1)
+        command = parts[0].lower()
+        args = parts[1] if len(parts) > 1 else ''
+        
+        # Execute command or treat as chat
+        if command in self.commands:
+            success, should_exit = await self.execute_command(command, args)
+            return should_exit
+        else:
+            # Record user message and update context
+            self.chat_history.add_message("user", text, name=USER_NAME)
+            self.keyword_router.toggle_context(text, self.chat_agent)
+            
+            # Activate chat agent
+            self.chat_agent.active = True
+            
+            return False
 
     async def execute_command(self, command: str, args: str, name: str = '') -> Tuple[bool, bool]:
         """Execute a shell command
@@ -280,27 +269,11 @@ class CymbiontShell:
                 raise
             return (False, False)
 
-    async def handle_input(self, text: str) -> bool:
-        """Handle user input, returns True if shell should exit"""
-        # Parse command and arguments
-        parts = text.strip().split(maxsplit=1)
-        command = parts[0].lower()
-        args = parts[1] if len(parts) > 1 else ''
-        
-        # Execute command or treat as chat
-        if command in self.commands:
-            success, should_exit = await self.execute_command(command, args)
-            return should_exit
-        else:
-            # Handle as chat message
-            await self.handle_chat(text)
-            return False
-
     async def run(self) -> None:
         """Run the shell"""
         try:
-            # Start the tool agent
-            #await self.start_tool_agent()
+            # Start the chat agent
+            await self.start_chat_agent()
 
             while True:
                 try:
@@ -321,8 +294,8 @@ class CymbiontShell:
                 except EOFError:
                     break
         finally:
-            # Stop the tool agent
-            await self.stop_tool_agent()
+            # Stop the chat agent
+            await self.stop_chat_agent()
 
     async def do_print_total_tokens(self, args: str) -> None:
         """Print the total token count"""

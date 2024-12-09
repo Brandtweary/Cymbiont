@@ -75,18 +75,18 @@ DELETE_LOGS = config["app"]["delete_logs"]
 TOKEN_LOGGING = config["app"]["token_logging"]
 TOOL_ENABLED = config["app"]["tool"]
 
-# Tool agent config
-VALID_TOOL_AGENT_ACTIVATION_MODES = {"continuous", "as_needed"}
-TOOL_AGENT_ACTIVATION_MODE = config.get("tool_agent", {}).get("tool_agent_activation_mode", "continuous")
-if TOOL_AGENT_ACTIVATION_MODE not in VALID_TOOL_AGENT_ACTIVATION_MODES:
-    raise ValueError(
-        f"Invalid tool agent activation mode: {TOOL_AGENT_ACTIVATION_MODE}. "
-        f"Must be one of: {', '.join(VALID_TOOL_AGENT_ACTIVATION_MODES)}"
-    )
-
 # Shell config
 USER_NAME = config["shell"]["user_name"]
 AGENT_NAME = config["shell"]["agent_name"]
+
+# Agent activation mode config
+VALID_AGENT_ACTIVATION_MODES = {"continuous", "as_needed"}
+AGENT_ACTIVATION_MODE = config["shell"].get("agent_activation_mode", "continuous")
+if AGENT_ACTIVATION_MODE not in VALID_AGENT_ACTIVATION_MODES:
+    raise ValueError(
+        f"Invalid agent activation mode: {AGENT_ACTIVATION_MODE}. "
+        f"Must be one of: {', '.join(VALID_AGENT_ACTIVATION_MODES)}"
+    )
 
 # Initialize logging
 logger, console_filter, console_handler = setup_logging(
