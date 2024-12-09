@@ -21,6 +21,7 @@ class ChatAgent(Agent):
             activation_mode=activation_mode,
             default_tools={
                 ToolName.TOGGLE_PROMPT_PART,
+                ToolName.TOGGLE_TOOL,
                 ToolName.MEDITATE
             }
         )

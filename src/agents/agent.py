@@ -76,15 +76,19 @@ class Agent:
             new_context: New context parts to add
             expiration: Number of turns before a context part expires (default: 5)
         """
-        # First untoggle any parts from contexts that will be removed
+        # First untoggle any parts and tools from contexts that will be removed
         for name in list(self.temporary_context.keys()):
             context_value = self.temporary_context[name]
             context_value.expiration -= 1
             if context_value.expiration <= 0:
-                # Untoggle any parts this context had toggled on
-                for part_name in context_value.toggled_parts:
+                # Untoggle any parts this context had temporarily toggled
+                for part_name in context_value.temporary_parts:
                     if part_name in self.current_system_prompt_parts.parts:
                         self.current_system_prompt_parts.parts[part_name].toggled = False
+                # Remove any tools this context had temporarily added
+                for tool in context_value.temporary_tools:
+                    if tool in self.current_tools:
+                        self.current_tools.remove(tool)
                 del self.temporary_context[name]
         
         # Add or update context parts
@@ -97,20 +101,25 @@ class Agent:
             else:
                 # For new context, use base expiration
                 new_expiration = expiration
-            
-            # Create new context value with empty toggled_parts
+        
+            # Create new context value with empty temporary sets
             context_value = TemporaryContextValue(
                 context=context,
                 expiration=new_expiration
             )
-            
+        
             # Always evaluate which parts should be toggled for this context
             for part_name in context.system_prompt_parts:
                 if part_name in self.current_system_prompt_parts.parts:
                     part_info = self.current_system_prompt_parts.parts[part_name]
                     part_info.toggled = True
-                    context_value.toggled_parts.add(part_name)
-            
+                    context_value.temporary_parts.add(part_name)
+                
+            # Always evaluate which tools should be added for this context
+            for tool in context.tools:
+                self.current_tools.add(tool)
+                context_value.temporary_tools.add(tool)
+        
             self.temporary_context[context.name] = context_value
 
     def setup_system_prompt_parts(
@@ -264,8 +273,8 @@ class Agent:
             # Convert tool choice enum to literal for backward compatibility
             current_tool_choice = (tool_choice or self.default_tool_choice).to_literal()
 
-            # Use default tools if none provided, accounting for temporary context
-            current_tools = tools if tools is not None else self.get_temporary_tools()
+            # Use default tools if none provided
+            current_tools = tools if tools is not None else self.current_tools
 
             response = await enqueue_api_call(
                 model=self.model,
@@ -330,19 +339,3 @@ class Agent:
                 raise
             return "I encountered an error while processing your request."
 
-    def get_temporary_tools(self) -> Set[ToolName]:
-        """Get current tools accounting for temporary context.
-        
-        This method iterates over the temporary context parts and returns a set of
-        tools that should be active, adding any tools specified in the context parts.
-        
-        Returns:
-            Set of tools that should be active
-        """
-        active_tools = set(self.current_tools)
-        
-        # Add tools from temporary context parts
-        for context_value in self.temporary_context.values():
-            active_tools.update(context_value.context.tools)
-        
-        return active_tools

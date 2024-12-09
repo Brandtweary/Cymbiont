@@ -30,7 +30,8 @@ def get_tool_function_map() -> Dict[str, Callable]:
                             process_toggle_prompt_part,
                             process_introduce_self,
                             process_shell_loop,
-                            process_meditate
+                            process_meditate,
+                            process_toggle_tool
                             )
     import inspect
     from . import agent_tools
@@ -43,7 +44,8 @@ def get_tool_function_map() -> Dict[str, Callable]:
         ToolName.TOGGLE_PROMPT_PART.value: process_toggle_prompt_part,
         ToolName.INTRODUCE_SELF.value: process_introduce_self,
         ToolName.SHELL_LOOP.value: process_shell_loop,
-        ToolName.MEDITATE.value: process_meditate
+        ToolName.MEDITATE.value: process_meditate,
+        ToolName.TOGGLE_TOOL.value: process_toggle_tool
     }
 
     # Get all functions from agent_tools module
@@ -280,57 +282,71 @@ def create_tool_loop_data(
 def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     """Format a single tool schema, handling any dynamic content based on runtime state.
     
-    Some schemas require specific kwargs for initial formatting in CymbiontShell.__init__:
-    - toggle_prompt_part: Requires 'system_prompt_parts' for available prompt parts
-    - execute_shell_command: Requires 'command_metadata' for available shell commands
-    
-    These kwargs should be provided when calling format_all_tool_schemas in CymbiontShell.__init__.
-    Other dynamic formatting (like toggle_prompt_part's current system_prompt_parts) happens at runtime.
-    
     Args:
         schema: The base schema to format
         **kwargs: Dynamic parameters for initial schema formatting:
             - system_prompt_parts: Required for toggle_prompt_part schema
             - command_metadata: Required for execute_shell_command schema
+            - tools: Required for toggle_tool schema, contains currently enabled tools
     """
     schema = deepcopy(schema)
     schema_name = schema.get("function", {}).get("name")
     
-    if schema_name == "toggle_prompt_part":
-        if "system_prompt_parts" not in kwargs:
-            logger.warning("Missing 'system_prompt_parts' kwarg required for toggle_prompt_part schema. "
-                         "This should be added to the format_all_tool_schemas call in CymbiontShell.__init__")
-            return schema
-            
-        system_prompt_parts = kwargs["system_prompt_parts"]
-        assert isinstance(system_prompt_parts, SystemPromptPartsData), "system_prompt_parts must be SystemPromptPartsData"
-        
-        # Mark toggled-off parts with an asterisk
-        marked_parts = []
-        for part_name, part_info in system_prompt_parts.parts.items():
-            if not part_info.toggled:
-                marked_parts.append(f"{part_name}*")
-            else:
-                marked_parts.append(part_name)
+    match schema_name:
+        case "toggle_prompt_part":
+            if "system_prompt_parts" not in kwargs:
+                logger.warning("Missing 'system_prompt_parts' kwarg required for toggle_prompt_part schema. "
+                             "This should be added to the format_all_tool_schemas call in CymbiontShell.__init__")
+                return schema
                 
-        schema["function"]["parameters"]["properties"]["part_name"]["enum"] = marked_parts
-    
-    elif schema_name == "execute_shell_command":  
-        if "command_metadata" not in kwargs:
-            logger.warning("Missing 'command_metadata' kwarg required for execute_shell_command schema. "
-                         "This should be added to the format_all_tool_schemas call in CymbiontShell.__init__")
-            return schema
+            system_prompt_parts = kwargs["system_prompt_parts"]
+            assert isinstance(system_prompt_parts, SystemPromptPartsData), "system_prompt_parts must be SystemPromptPartsData"
             
-        # Mark commands that take args with an asterisk
-        marked_commands = []
-        for cmd, cmd_data in kwargs["command_metadata"].items():
-            if cmd_data.takes_args:
-                marked_commands.append(f"{cmd}*")
-            else:
-                marked_commands.append(cmd)
+            # Mark toggled-on parts with an asterisk
+            marked_parts = []
+            for part_name, part_info in system_prompt_parts.parts.items():
+                if part_info.toggled:
+                    marked_parts.append(f"{part_name}*")
+                else:
+                    marked_parts.append(part_name)
+                    
+            schema["function"]["parameters"]["properties"]["part_name"]["enum"] = marked_parts
+            
+        case "execute_shell_command":  
+            if "command_metadata" not in kwargs:
+                logger.warning("Missing 'command_metadata' kwarg required for execute_shell_command schema. "
+                             "This should be added to the format_all_tool_schemas call in CymbiontShell.__init__")
+                return schema
                 
-        schema["function"]["parameters"]["properties"]["command"]["enum"] = marked_commands
-    
+            # Mark commands that take args with an asterisk
+            marked_commands = []
+            for cmd, cmd_data in kwargs["command_metadata"].items():
+                if cmd_data.takes_args:
+                    marked_commands.append(f"{cmd}*")
+                else:
+                    marked_commands.append(cmd)
+                    
+            schema["function"]["parameters"]["properties"]["command"]["enum"] = marked_commands
+            
+        case "toggle_tool":
+            if "tools" not in kwargs:
+                logger.warning("Missing 'tools' kwarg required for toggle_tool schema. "
+                             "This should be added to the format_all_tool_schemas call in CymbiontShell.__init__")
+                return schema
+                
+            tools = kwargs["tools"]
+            # Create list of all tool names (except toggle_tool itself), marking enabled ones with asterisk
+            marked_tools = []
+            for tool_name in ToolName:
+                if tool_name == ToolName.TOGGLE_TOOL:
+                    continue
+                if tool_name in tools:
+                    marked_tools.append(f"{tool_name.value}*")
+                else:
+                    marked_tools.append(tool_name.value)
+                    
+            schema["function"]["parameters"]["properties"]["tool_name"]["enum"] = marked_tools
+            
     return schema
 
 def format_all_tool_schemas(**kwargs) -> None:
@@ -340,6 +356,7 @@ def format_all_tool_schemas(**kwargs) -> None:
         **kwargs: Dynamic parameters that may be required by different schemas:
             - system_prompt_parts: Required for toggle_prompt_part schema
             - command_metadata: Required for execute_shell_command schema
+            - tools: Required for toggle_tool schema
     """
     # Format each schema
     for tool_name, schema in TOOL_SCHEMAS.items():

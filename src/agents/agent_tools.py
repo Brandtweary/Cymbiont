@@ -153,8 +153,8 @@ async def process_toggle_prompt_part(
     
     # Remove this part from any temporary contexts since it's being explicitly controlled
     for context_value in list(agent.temporary_context.values()):
-        if clean_part_name in context_value.toggled_parts:
-            context_value.toggled_parts.remove(clean_part_name)
+        if clean_part_name in context_value.temporary_parts:
+            context_value.temporary_parts.remove(clean_part_name)
     
     # Get current state
     state = "on" if part_info.toggled else "off"
@@ -326,6 +326,51 @@ async def process_shell_loop(
         return None
 
     return None
+
+async def process_toggle_tool(
+    tool_name: str,
+    agent: Agent,
+) -> str:
+    """Process the toggle_tool tool call.
+    
+    Args:
+        tool_name: Name of the tool to toggle (may include trailing asterisk)
+        agent: Agent instance to toggle the tool for
+        
+    Returns:
+        Response message indicating what was done
+    """
+    # Strip any trailing asterisks from tool name
+    clean_tool_name = tool_name.rstrip('*')
+    
+    try:
+        # Convert string to ToolName enum
+        tool_enum = ToolName(clean_tool_name)
+    except ValueError:
+        logger.error(f"Unknown tool '{clean_tool_name}'")
+        if DEBUG_ENABLED:
+            raise
+        return ""
+    
+    # Don't allow toggling toggle_tool itself
+    if tool_enum == ToolName.TOGGLE_TOOL:
+        return "The toggle_tool cannot be toggled."
+    
+    # Toggle the tool in agent's current tools
+    if tool_enum in agent.current_tools:
+        agent.current_tools.remove(tool_enum)
+    else:
+        agent.current_tools.add(tool_enum)
+    
+    # Remove this tool from temporary management in any contexts
+    for context_value in list(agent.temporary_context.values()):
+        if tool_enum in context_value.temporary_tools:
+            context_value.temporary_tools.remove(tool_enum)
+    
+    # Get current state
+    state = "on" if tool_enum in agent.current_tools else "off"
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: toggle_tool - Toggled tool '{clean_tool_name}' {state}")
+    return f"I've turned {clean_tool_name} {state}."
 
 async def process_meditate(agent: Agent, wait_time: int = 0) -> None:
     """Process the meditate tool call.

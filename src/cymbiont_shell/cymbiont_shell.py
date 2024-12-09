@@ -60,7 +60,8 @@ class CymbiontShell:
         # Format tool schemas with dynamic content
         format_all_tool_schemas(
             command_metadata=self.commands,
-            system_prompt_parts=DEFAULT_SYSTEM_PROMPT_PARTS
+            system_prompt_parts=DEFAULT_SYSTEM_PROMPT_PARTS,
+            tools=self.chat_agent.default_tools
         )
         
         # Initialize command completer

@@ -89,7 +89,7 @@ TOOL_SCHEMAS = {
                 "properties": {
                     "part_name": {
                         "type": "string",
-                        "description": "Name of the system prompt part to toggle. Parts marked with * are currently toggled off.",
+                        "description": "Name of the system prompt part to toggle. Parts marked with * are currently toggled on.",
                         "enum": []  # Placeholder for available prompt parts
                     }
                 },
@@ -136,6 +136,24 @@ TOOL_SCHEMAS = {
                     }
                 },
                 "required": []
+            }
+        }
+    },
+    ToolName.TOGGLE_TOOL: {
+        "type": "function",
+        "function": {
+            "name": "toggle_tool",
+            "description": "Toggle the availability of a specified tool on or off.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tool_name": {
+                        "type": "string",
+                        "description": "The name of the tool to toggle. Tools marked with * are currently toggled on.",
+                        "enum": []  # Placeholder for available tools
+                    },
+                },
+                "required": ["tool_name"]
             }
         }
     }

@@ -32,12 +32,15 @@ def get_formatted_tool_schemas(
         if tool not in TOOL_SCHEMAS:
             continue
             
-        schema = TOOL_SCHEMAS[tool].copy()
-        # Only format toggle_prompt_part if system_prompt_parts is provided
+        schema = TOOL_SCHEMAS[tool]  # No need to copy here since format_tool_schema will copy
+        # Format toggle_prompt_part if system_prompt_parts is provided
         if tool == ToolName.TOGGLE_PROMPT_PART:
             if system_prompt_parts is None:
                 continue
             schema = format_tool_schema(schema, system_prompt_parts=system_prompt_parts)
+        # Format toggle_tool with current tools set
+        elif tool == ToolName.TOGGLE_TOOL:
+            schema = format_tool_schema(schema, tools=tools)
                 
         formatted_tools.append(schema)
         

@@ -71,6 +71,7 @@ class ToolName(Enum):
     INTRODUCE_SELF = "introduce_self"
     SHELL_LOOP = "shell_loop"
     MEDITATE = "meditate"
+    TOGGLE_TOOL = "toggle_tool"
 
 class ToolChoice(Enum):
     """Tool choice options for API calls."""
@@ -93,10 +94,11 @@ class ContextPart:
 
 @dataclass
 class TemporaryContextValue:
-    """Holds the state for a temporary context including its expiration and which parts it has toggled on"""
+    """Holds the state for a temporary context including its expiration and which parts/tools it is temporarily managing"""
     context: ContextPart
     expiration: int
-    toggled_parts: Set[str] = field(default_factory=set)  # Parts that this context has toggled on
+    temporary_parts: Set[str] = field(default_factory=set)  # Parts that this context is temporarily managing
+    temporary_tools: Set[ToolName] = field(default_factory=set)  # Tools that this context is temporarily managing
 
 @dataclass
 class ToolLoopData:
