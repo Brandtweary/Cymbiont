@@ -332,7 +332,7 @@ async def process_meditate(agent: Agent, wait_time: int = 0) -> None:
     
     In continuous mode, sets the agent to inactive for the specified wait time.
     If wait_time is 0 in continuous mode, the agent remains active (dummy tool call).
-    In as_needed mode, simply sets active to false (wait time is ignored).
+    In chat mode, simply sets active to false (wait time is ignored).
     
     Args:
         agent: The agent instance to meditate
@@ -346,5 +346,5 @@ async def process_meditate(agent: Agent, wait_time: int = 0) -> None:
             await asyncio.sleep(wait_time)
             agent.active = True
         # If wait_time is 0, do nothing (remain active)
-    else:  # as_needed mode
+    else:  # chat mode
         agent.active = False

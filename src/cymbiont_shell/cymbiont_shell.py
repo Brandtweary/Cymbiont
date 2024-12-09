@@ -32,7 +32,7 @@ class CymbiontShell:
         self.chat_agent = ChatAgent(
             self.chat_history,
             agent_name=AGENT_NAME,
-            activation_mode=ActivationMode.CONTINUOUS if AGENT_ACTIVATION_MODE == "continuous" else ActivationMode.AS_NEEDED
+            activation_mode=ActivationMode.CONTINUOUS if AGENT_ACTIVATION_MODE == "continuous" else ActivationMode.CHAT
         )
         self.chat_agent_task: Optional[asyncio.Task] = None
         

@@ -122,13 +122,13 @@ Text: {text}
 ''',
         required_params=[]
     ),
-    "activation_mode_as_needed": SystemMessagePart(
-        header="As-Needed Activation Mode",
-        content='''You are running in as-needed activation mode. In this mode:
+    "activation_mode_chat": SystemMessagePart(
+        header="Chat Activation Mode",
+        content='''You are running in chat activation mode. In this mode:
 
 1. You activate when receiving user input
 2. You stay active as long as you're making tool calls
-3. You automatically deactivate after giving a text-only response or using the meditate tool
+3. You automatically deactivate after giving a text-only response or using the meditate tool (but please only use meditate when no response is needed)
 
 Remember, since a text-only response will deactivate a tool loop, if you need to troubleshoot a tool result, try using other tools first before you check-in with the user.
 ''',

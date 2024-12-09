@@ -126,7 +126,7 @@ class Agent:
         system_prompt_parts.kwargs["agent_name"] = self.agent_name
         
         # Add activation mode prompt part
-        activation_mode_part = "activation_mode_continuous" if self.activation_mode == ActivationMode.CONTINUOUS else "activation_mode_as_needed"
+        activation_mode_part = "activation_mode_continuous" if self.activation_mode == ActivationMode.CONTINUOUS else "activation_mode_chat"
         if activation_mode_part not in system_prompt_parts.parts:
             system_prompt_parts.parts[activation_mode_part] = SystemPromptPartInfo(toggled=True, index=len(system_prompt_parts.parts))
         
@@ -312,8 +312,8 @@ class Agent:
             # Add prefixed version to chat history but return original
             prefixed_message = self.prefix_message(content, tool_loop_data)
             
-            # Handle deactivation in as-needed mode for text-only responses
-            if self.activation_mode == ActivationMode.AS_NEEDED:
+            # Handle deactivation chat mode for text-only responses
+            if self.activation_mode == ActivationMode.CHAT:
                 if 'tool_call_results' not in response:
                     self.active = False
             
@@ -323,8 +323,8 @@ class Agent:
             
         except Exception as e:
             logger.error(f"Error in get_response: {str(e)}")
-            # Deactivate on errors in as-needed mode to prevent infinite error loops
-            if self.activation_mode == ActivationMode.AS_NEEDED:
+            # Deactivate on errors in chat mode to prevent infinite error loops
+            if self.activation_mode == ActivationMode.CHAT:
                 self.active = False
             if DEBUG_ENABLED:
                 raise

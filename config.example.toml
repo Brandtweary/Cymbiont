@@ -19,7 +19,7 @@ file_reset = false  # move processed documents back to input_documents on startu
 [shell]
 user_name = "user" 
 agent_name = "chat_agent" 
-agent_activation_mode = "as_needed" # Options: "continuous" or "as_needed"
+agent_activation_mode = "chat" # Options: "continuous" or "chat"
 
 [environment]
 manage_venv = true  # let Cymbiont manage the Python environment

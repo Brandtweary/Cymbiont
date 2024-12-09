@@ -80,7 +80,7 @@ USER_NAME = config["shell"]["user_name"]
 AGENT_NAME = config["shell"]["agent_name"]
 
 # Agent activation mode config
-VALID_AGENT_ACTIVATION_MODES = {"continuous", "as_needed"}
+VALID_AGENT_ACTIVATION_MODES = {"continuous", "chat"}
 AGENT_ACTIVATION_MODE = config["shell"].get("agent_activation_mode", "continuous")
 if AGENT_ACTIVATION_MODE not in VALID_AGENT_ACTIVATION_MODES:
     raise ValueError(
