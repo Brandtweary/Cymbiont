@@ -4,7 +4,7 @@ from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED
 from cymbiont_logger.logger_types import LogLevel
 from llms.model_configuration import CHAT_AGENT_MODEL
 from llms.prompt_helpers import get_system_message, DEFAULT_SYSTEM_PROMPT_PARTS
-from llms.llm_types import SystemPromptPartInfo, SystemPromptPartsData, ChatMessage, ToolName, ToolChoice, ToolLoopData, ContextPart
+from llms.llm_types import SystemPromptPartInfo, SystemPromptPartsData, ChatMessage, ToolName, ToolChoice, ToolLoopData, ContextPart, TemporaryContextValue
 from utils import log_performance, convert_messages_to_string
 from llms.api_queue import enqueue_api_call
 from .chat_history import ChatHistory
@@ -61,14 +61,13 @@ class Agent:
         self.activation_mode = "as_needed"  # Default to as_needed mode
         self.bound_tool_agent: Optional[ToolAgent] = None  # Reference to bound tool agent, if this is a chat agent
         self.bound_chat_agent: Optional[ChatAgent] = None  # Reference to bound chat agent, if this is a tool agent
-        self.temporary_context: Dict[str, ContextPart] = {}  # Store temporarily active context parts
-        self.context_expiration: Dict[str, int] = {}  # Track expiration counters for context parts
+        self.temporary_context: Dict[str, TemporaryContextValue] = {}  # Store temporarily active context parts
         
     def update_temporary_context(self, new_context: List[ContextPart], expiration: int = 5) -> None:
         """Update temporary context and expiration counters.
         
         This method updates the temporary context with new context parts and manages
-        their expiration counters. Each time this is called, existing counters are
+        their expiration. Each time this is called, existing counters are
         decremented and expired parts are removed.
         
         When a context part is added again while already active, its expiration is
@@ -79,54 +78,42 @@ class Agent:
             new_context: New context parts to add
             expiration: Number of turns before a context part expires (default: 5)
         """
-        # Decrement existing counters
-        for name in list(self.context_expiration.keys()):
-            self.context_expiration[name] -= 1
-            if self.context_expiration[name] <= 0:
-                del self.context_expiration[name]
-                # Remove expired parts from temporary context
-                self.temporary_context.pop(name, None)
+        # First untoggle any parts from contexts that will be removed
+        for name in list(self.temporary_context.keys()):
+            context_value = self.temporary_context[name]
+            context_value.expiration -= 1
+            if context_value.expiration <= 0:
+                # Untoggle any parts this context had toggled on
+                for part_name in context_value.toggled_parts:
+                    if part_name in self.current_system_prompt_parts.parts:
+                        self.current_system_prompt_parts.parts[part_name].toggled = False
+                del self.temporary_context[name]
         
-        # Add or update context parts with expiration counters
+        # Add or update context parts
         for context in new_context:
-            if context.name in self.context_expiration:
-                # For repeated context, increase geometrically
-                current_expiration = self.context_expiration[context.name]
-                new_expiration = int((current_expiration + expiration) * 1.5)
-                self.context_expiration[context.name] = new_expiration
+            # Create new context value (either fresh or with updated expiration)
+            if context.name in self.temporary_context:
+                # For repeated context, increase expiration geometrically
+                current_value = self.temporary_context[context.name]
+                new_expiration = int((current_value.expiration + expiration) * 1.5)
             else:
                 # For new context, use base expiration
-                self.context_expiration[context.name] = expiration
+                new_expiration = expiration
             
-            self.temporary_context[context.name] = context
-
-    def get_temporary_system_prompt_parts(self, system_prompt_parts: SystemPromptPartsData) -> SystemPromptPartsData:
-        """Get a copy of system prompt parts with temporary context applied.
-        
-        This method creates a copy of the input SystemPromptPartsData and toggles on
-        any additional parts from the temporary context. It will not modify the input
-        SystemPromptPartsData or toggle off any currently active parts.
-        
-        Args:
-            system_prompt_parts: The SystemPromptPartsData to base the temporary version on
+            # Create new context value with empty toggled_parts
+            context_value = TemporaryContextValue(
+                context=context,
+                expiration=new_expiration
+            )
             
-        Returns:
-            A new SystemPromptPartsData with temporary context applied
-        """
-        # Create a deep copy of the input
-        temp_parts = SystemPromptPartsData(
-            parts={name: SystemPromptPartInfo(**info.__dict__) 
-                  for name, info in system_prompt_parts.parts.items()},
-            kwargs=dict(system_prompt_parts.kwargs)
-        )
-        
-        # Toggle on any parts from temporary context that exist
-        for context in self.temporary_context.values():
+            # Always evaluate which parts should be toggled for this context
             for part_name in context.system_prompt_parts:
-                if part_name in temp_parts.parts:
-                    temp_parts.parts[part_name].toggled = True
-        
-        return temp_parts
+                if part_name in self.current_system_prompt_parts.parts:
+                    part_info = self.current_system_prompt_parts.parts[part_name]
+                    part_info.toggled = True
+                    context_value.toggled_parts.add(part_name)
+            
+            self.temporary_context[context.name] = context_value
 
     def setup_system_prompt_parts(
         self,
@@ -265,8 +252,6 @@ class Agent:
                     tool_loop_data,
                     summary
                 )
-                # Then apply temporary context modifications
-                system_prompt_parts = self.get_temporary_system_prompt_parts(system_prompt_parts)
                 system_content = get_system_message(system_prompt_parts=system_prompt_parts)
                 messages_to_send = messages
 
@@ -345,8 +330,8 @@ class Agent:
         active_tools = set(self.current_tools)
         
         # Add tools from temporary context parts
-        for context in self.temporary_context.values():
-            active_tools.update(context.tools)
+        for context_value in self.temporary_context.values():
+            active_tools.update(context_value.context.tools)
         
         return active_tools
 

@@ -151,6 +151,11 @@ async def process_toggle_prompt_part(
     part_info = agent.current_system_prompt_parts.parts[clean_part_name]
     part_info.toggled = not part_info.toggled
     
+    # Remove this part from any temporary contexts since it's being explicitly controlled
+    for context_value in list(agent.temporary_context.values()):
+        if clean_part_name in context_value.toggled_parts:
+            context_value.toggled_parts.remove(clean_part_name)
+    
     # Get current state
     state = "on" if part_info.toggled else "off"
     logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: toggle_prompt_part - Toggled prompt part '{clean_part_name}' {state}")

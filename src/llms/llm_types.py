@@ -92,6 +92,13 @@ class ContextPart:
     key_phrases: List[str] = field(default_factory=list)  # Optional list of phrases to match
 
 @dataclass
+class TemporaryContextValue:
+    """Holds the state for a temporary context including its expiration and which parts it has toggled on"""
+    context: ContextPart
+    expiration: int
+    toggled_parts: Set[str] = field(default_factory=set)  # Parts that this context has toggled on
+
+@dataclass
 class ToolLoopData:
     """Data for managing tool loops."""
     loop_type: str

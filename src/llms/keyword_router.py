@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 from .llm_types import ContextPart, ToolName
 from shared_resources import logger
 from nltk.stem import PorterStemmer
@@ -9,7 +9,12 @@ from agents.agent import Agent
 class KeywordRouter:
     """Routes user input to relevant context parts based on keyword matching"""
     
-    def __init__(self):
+    def __init__(self, shell_commands: Optional[list[str]] = None) -> None:
+        """Initialize the keyword router
+        
+        Args:
+            shell_commands: Optional list of shell command names to add to shell_command_docs keywords
+        """
         self.context_parts: Dict[str, ContextPart] = {}
         self.stemmer = PorterStemmer()
         
@@ -19,9 +24,9 @@ class KeywordRouter:
         except LookupError:
             nltk.download('wordnet')
             nltk.download('averaged_perceptron_tagger')
-        
+            
         # Initialize with default context parts
-        self._initialize_default_contexts()
+        self._initialize_default_contexts(shell_commands)
     
     def _clean_word(self, word: str) -> str:
         """Remove punctuation and convert to lowercase"""
@@ -31,34 +36,43 @@ class KeywordRouter:
         """Convert a word to its stem form"""
         return self.stemmer.stem(self._clean_word(word))
         
-    def _initialize_default_contexts(self):
+    def _initialize_default_contexts(self, shell_commands: Optional[list[str]] = None):
         """Initialize the default context parts based on system prompt parts"""
+        # Get base keywords for shell_command_docs
+        shell_keywords = ["command", "argument", "parameter", "shell", "execute"]
+        shell_phrases = []
+        
+        if shell_commands:
+            shell_keywords.extend(shell_commands)
+            # Convert snake_case commands to natural phrases
+            shell_phrases.extend(cmd.replace('_', ' ') for cmd in shell_commands)
+            
         default_contexts = [
             ContextPart(
                 name="chat_agent_base_prompt",
-                keywords=["identity", "purpose", "autonomous", "cybernetic"],
-                key_phrases=["chat agent"],
+                keywords=["identity", "purpose"],
+                key_phrases=["chat agent", "cybernetic organism"],
                 system_prompt_parts=["chat_agent_base_prompt"],
                 tools=[]
             ),
             ContextPart(
                 name="cymbiont_agent_overview",
-                keywords=["consciousness", "symbiotic", "autonomy"],
+                keywords=["consciousness", "autonomy", "sovereignty", "symbiotic"],
                 key_phrases=["free will"],
                 system_prompt_parts=["cymbiont_agent_overview"],
                 tools=[]
             ),
             ContextPart(
                 name="biographical",
-                keywords=["biography", "origin", "introduction", "introduce"],
+                keywords=["biography", "origin", "introduction", "introduce"],  # word lemmatization is not perfect
                 key_phrases=["tell me about yourself"],
                 system_prompt_parts=["biographical"],
                 tools=[]
             ),
             ContextPart(
                 name="shell_command_docs",
-                keywords=["command", "argument", "parameter", "shell", "execute"],
-                key_phrases=[],
+                keywords=shell_keywords,
+                key_phrases=shell_phrases,
                 system_prompt_parts=["shell_command_docs"],
                 tools=[ToolName.EXECUTE_SHELL_COMMAND]
             ),

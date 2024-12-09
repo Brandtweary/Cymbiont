@@ -40,8 +40,6 @@ class CymbiontShell:
         Agent.bind_agents(self.chat_agent, self.tool_agent)
         self.tool_agent_task: Optional[asyncio.Task] = None
         
-        # Initialize keyword router
-        self.keyword_router = KeywordRouter()
         
         # Connect chat history to logger
         setup_chat_history_handler(logger, self.chat_history)
@@ -53,6 +51,9 @@ class CymbiontShell:
             do_hello_world=self.do_hello_world,
             do_print_total_tokens=self.do_print_total_tokens
         )
+        
+        # Initialize keyword router with command names
+        self.keyword_router = KeywordRouter(shell_commands=list(self.commands.keys()))
         
         # Generate command documentation and format shell_command_docs part
         shell_doc = self.generate_command_documentation()
