@@ -302,8 +302,18 @@ def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
                          "This should be added to the format_all_tool_schemas call in CymbiontShell.__init__")
             return schema
             
-        part_names = list(kwargs["system_prompt_parts"].parts.keys())
-        schema["function"]["parameters"]["properties"]["part_name"]["enum"] = part_names
+        system_prompt_parts = kwargs["system_prompt_parts"]
+        assert isinstance(system_prompt_parts, SystemPromptPartsData), "system_prompt_parts must be SystemPromptPartsData"
+        
+        # Mark toggled-off parts with an asterisk
+        marked_parts = []
+        for part_name, part_info in system_prompt_parts.parts.items():
+            if not part_info.toggled:
+                marked_parts.append(f"{part_name}*")
+            else:
+                marked_parts.append(part_name)
+                
+        schema["function"]["parameters"]["properties"]["part_name"]["enum"] = marked_parts
     
     elif schema_name == "execute_shell_command":  
         if "command_metadata" not in kwargs:

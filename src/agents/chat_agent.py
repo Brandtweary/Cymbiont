@@ -18,7 +18,6 @@ class ChatAgent(Agent):
             agent_name=agent_name,
             model=model,
             default_tools={
-                ToolName.EXECUTE_SHELL_COMMAND,
                 ToolName.TOGGLE_PROMPT_PART,
                 ToolName.MEDITATE
             }

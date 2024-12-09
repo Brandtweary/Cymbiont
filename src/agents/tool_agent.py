@@ -19,7 +19,7 @@ class ToolAgent(Agent):
                 parts={
                     "tool_agent_base_prompt": SystemPromptPartInfo(toggled=True, index=0),
                     "cymbiont_agent_overview": SystemPromptPartInfo(toggled=False, index=1),
-                    "shell_command_info": SystemPromptPartInfo(toggled=True, index=2),
+                    "shell_command_docs": SystemPromptPartInfo(toggled=True, index=2),
                 }
             ),
             default_tool_choice=ToolChoice.REQUIRED,

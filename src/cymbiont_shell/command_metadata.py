@@ -13,6 +13,7 @@ from .test_commands import (
     do_test_parsing,
     do_test_progressive_summarization,
     do_test_agent_tools,
+    do_test_keyword_router,
     do_run_all_tests,
 )
 
@@ -94,6 +95,11 @@ def create_commands(
         ),
         'test_agent_tools': CommandData(
             callable=do_test_agent_tools,
+            takes_args=False,
+            needs_shell=True  # Needs shell to update test results
+        ),
+        'test_keyword_router': CommandData(
+            callable=do_test_keyword_router,
             takes_args=False,
             needs_shell=True  # Needs shell to update test results
         ),

@@ -133,27 +133,30 @@ async def process_toggle_prompt_part(
     
 ) -> str:
     """Process the toggle_prompt_part tool call."""
-    if not system_prompt_parts:
-        logger.error("No system prompt parts available")
+    # Strip any trailing asterisks from part name
+    clean_part_name = part_name.rstrip('*')
+    
+    # Check if part exists in agent's current system prompt parts
+    if clean_part_name not in agent.current_system_prompt_parts.parts:
+        logger.error(f"Unknown prompt part '{clean_part_name}'")
         if DEBUG_ENABLED:
             raise
         return ""
     
-    if part_name not in system_prompt_parts.parts:
-        logger.error(f"Unknown prompt part '{part_name}'")
-        if DEBUG_ENABLED:
-            raise
-        return ""
+    # Log warning if part doesn't exist in temporary system prompt parts
+    if system_prompt_parts and clean_part_name not in system_prompt_parts.parts:
+        logger.warning(f"Prompt part '{clean_part_name}' not found in temporary system prompt parts")
     
-    # Toggle the part
-    part_info = system_prompt_parts.parts[part_name]
+    # Toggle the part in agent's current system prompt parts
+    part_info = agent.current_system_prompt_parts.parts[clean_part_name]
     part_info.toggled = not part_info.toggled
     
     # Get current state
     state = "on" if part_info.toggled else "off"
-    logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: toggle_prompt_part - Toggled prompt part '{part_name}' {state}")
-    return f"I've turned {part_name} {state}."
-    
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: toggle_prompt_part - Toggled prompt part '{clean_part_name}' {state}")
+    return f"I've turned {clean_part_name} {state}."
+
+
 async def process_execute_shell_command(
     command: str,
     agent: Agent,
@@ -284,11 +287,11 @@ async def process_shell_loop(
     # Ensure system_prompt_parts is not None (should never happen due to create_tool_loop_data logic)
     assert tool_loop_data.system_prompt_parts is not None, "System prompt parts unexpectedly None after create_tool_loop_data"
 
-    # Add shell_command_info part if it doesn't exist and ensure it's toggled on
-    if 'shell_command_info' not in tool_loop_data.system_prompt_parts.parts:
-        tool_loop_data.system_prompt_parts.parts['shell_command_info'] = SystemPromptPartInfo(toggled=True, index=len(tool_loop_data.system_prompt_parts.parts))
+    # Add shell_command_docs part if it doesn't exist and ensure it's toggled on
+    if 'shell_command_docs' not in tool_loop_data.system_prompt_parts.parts:
+        tool_loop_data.system_prompt_parts.parts['shell_command_docs'] = SystemPromptPartInfo(toggled=True, index=len(tool_loop_data.system_prompt_parts.parts))
     else:
-        tool_loop_data.system_prompt_parts.parts['shell_command_info'].toggled = True
+        tool_loop_data.system_prompt_parts.parts['shell_command_docs'].toggled = True
 
     logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: shell_loop - now entering shell loop")
 

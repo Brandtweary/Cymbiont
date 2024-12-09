@@ -83,13 +83,13 @@ TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "toggle_prompt_part",
-            "description": "Toggle a system prompt part on or off. The prompt parts will be assembled in order based on their index.",
+            "description": "Toggle a system prompt part on or off manually. Note that prompt parts will get automatically toggled on temporarily by relevant keywords.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "part_name": {
                         "type": "string",
-                        "description": "Name of the system prompt part to toggle",
+                        "description": "Name of the system prompt part to toggle. Parts marked with * are currently toggled off.",
                         "enum": []  # Placeholder for available prompt parts
                     }
                 },
@@ -113,7 +113,7 @@ TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "shell_loop",
-            "description": "Enter a shell loop where you can chain together shell commands. Automatically toggles shell_command_info on.",
+            "description": "Enter a shell loop where you can chain together shell commands. Automatically toggles shell_command_docs on.",
             "parameters": {
                 "type": "object",
                 "properties": {},

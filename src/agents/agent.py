@@ -4,7 +4,7 @@ from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED
 from cymbiont_logger.logger_types import LogLevel
 from llms.model_configuration import CHAT_AGENT_MODEL
 from llms.prompt_helpers import get_system_message, DEFAULT_SYSTEM_PROMPT_PARTS
-from llms.llm_types import SystemPromptPartInfo, SystemPromptPartsData, ChatMessage, ToolName, ToolChoice, ToolLoopData
+from llms.llm_types import SystemPromptPartInfo, SystemPromptPartsData, ChatMessage, ToolName, ToolChoice, ToolLoopData, ContextPart
 from utils import log_performance, convert_messages_to_string
 from llms.api_queue import enqueue_api_call
 from .chat_history import ChatHistory
@@ -49,45 +49,84 @@ class Agent:
         self.default_tool_choice = default_tool_choice
         self.default_temperature = default_temperature
         self.default_tools = default_tools or set()
+        
+        # Create mutable copies of defaults for runtime modification
+        self.current_system_prompt_parts = SystemPromptPartsData(
+            parts={name: SystemPromptPartInfo(**info.__dict__) 
+                  for name, info in default_system_prompt_parts.parts.items()},
+            kwargs=dict(default_system_prompt_parts.kwargs)
+        )
+        self.current_tools = set(self.default_tools)
         self.active = False  # Base activation state
         self.activation_mode = "as_needed"  # Default to as_needed mode
         self.bound_tool_agent: Optional[ToolAgent] = None  # Reference to bound tool agent, if this is a chat agent
         self.bound_chat_agent: Optional[ChatAgent] = None  # Reference to bound chat agent, if this is a tool agent
-
-    @staticmethod
-    def bind_agents(chat_agent: Any, tool_agent: Any) -> None:
-        """Bind a chat agent and tool agent together.
+        self.temporary_context: Dict[str, ContextPart] = {}  # Store temporarily active context parts
+        self.context_expiration: Dict[str, int] = {}  # Track expiration counters for context parts
         
-        This creates a bidirectional reference between the agents, allowing them
-        to coordinate on operations.
+    def update_temporary_context(self, new_context: List[ContextPart], expiration: int = 5) -> None:
+        """Update temporary context and expiration counters.
+        
+        This method updates the temporary context with new context parts and manages
+        their expiration counters. Each time this is called, existing counters are
+        decremented and expired parts are removed.
+        
+        When a context part is added again while already active, its expiration is
+        increased geometrically: (current + expiration) * 1.5. This ensures that
+        frequently relevant context persists longer in the conversation.
         
         Args:
-            chat_agent: The chat agent to bind
-            tool_agent: The tool agent to bind
-            
-        Raises:
-            TypeError: If either agent is not of the correct type
+            new_context: New context parts to add
+            expiration: Number of turns before a context part expires (default: 5)
         """
-        # Import here to avoid circular imports
-        from .chat_agent import ChatAgent
-        from .tool_agent import ToolAgent
+        # Decrement existing counters
+        for name in list(self.context_expiration.keys()):
+            self.context_expiration[name] -= 1
+            if self.context_expiration[name] <= 0:
+                del self.context_expiration[name]
+                # Remove expired parts from temporary context
+                self.temporary_context.pop(name, None)
         
-        if not isinstance(chat_agent, ChatAgent):
-            raise TypeError("chat_agent must be an instance of ChatAgent")
-        if not isinstance(tool_agent, ToolAgent):
-            raise TypeError("tool_agent must be an instance of ToolAgent")
+        # Add or update context parts with expiration counters
+        for context in new_context:
+            if context.name in self.context_expiration:
+                # For repeated context, increase geometrically
+                current_expiration = self.context_expiration[context.name]
+                new_expiration = int((current_expiration + expiration) * 1.5)
+                self.context_expiration[context.name] = new_expiration
+            else:
+                # For new context, use base expiration
+                self.context_expiration[context.name] = expiration
             
-        chat_agent.bound_tool_agent = tool_agent
-        tool_agent.bound_chat_agent = chat_agent
-        tool_agent.agent_name = chat_agent.agent_name
+            self.temporary_context[context.name] = context
 
-    def setup_unique_prompt_parts(
-        self,
-        system_prompt_parts: SystemPromptPartsData
-    ) -> SystemPromptPartsData:
-        """Add unique prompt parts for this agent type."""
-        # Base agent has no unique parts to add
-        return system_prompt_parts
+    def get_temporary_system_prompt_parts(self, system_prompt_parts: SystemPromptPartsData) -> SystemPromptPartsData:
+        """Get a copy of system prompt parts with temporary context applied.
+        
+        This method creates a copy of the input SystemPromptPartsData and toggles on
+        any additional parts from the temporary context. It will not modify the input
+        SystemPromptPartsData or toggle off any currently active parts.
+        
+        Args:
+            system_prompt_parts: The SystemPromptPartsData to base the temporary version on
+            
+        Returns:
+            A new SystemPromptPartsData with temporary context applied
+        """
+        # Create a deep copy of the input
+        temp_parts = SystemPromptPartsData(
+            parts={name: SystemPromptPartInfo(**info.__dict__) 
+                  for name, info in system_prompt_parts.parts.items()},
+            kwargs=dict(system_prompt_parts.kwargs)
+        )
+        
+        # Toggle on any parts from temporary context that exist
+        for context in self.temporary_context.values():
+            for part_name in context.system_prompt_parts:
+                if part_name in temp_parts.parts:
+                    temp_parts.parts[part_name].toggled = True
+        
+        return temp_parts
 
     def setup_system_prompt_parts(
         self,
@@ -97,7 +136,7 @@ class Agent:
     ) -> SystemPromptPartsData:
         """Helper method to set up system prompt parts with tool loop and summary handling."""
         if not system_prompt_parts:
-            system_prompt_parts = self.default_system_prompt_parts
+            system_prompt_parts = self.current_system_prompt_parts
         
         system_prompt_parts.kwargs["agent_name"] = self.agent_name
         
@@ -121,6 +160,14 @@ class Agent:
             
         # Let subclasses add their unique prompt parts
         return self.setup_unique_prompt_parts(system_prompt_parts)
+
+    def setup_unique_prompt_parts(
+        self,
+        system_prompt_parts: SystemPromptPartsData
+    ) -> SystemPromptPartsData:
+        """Add unique prompt parts for this agent type."""
+        # Base agent has no unique parts to add
+        return system_prompt_parts
 
     def handle_token_usage(
         self,
@@ -202,39 +249,24 @@ class Agent:
         tool_choice: Optional[ToolChoice] = None,
         temperature: Optional[float] = None
     ) -> str:
-        """
-        Sends a message to the OpenAI chat agent with conversation history.
-
-        Args:
-            tools: A set of ToolName enums representing the tools available to the agent.
-                  If None, uses default_tools.
-            tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
-            token_budget: Maximum number of tokens allowed for the tool loop. Default is 20000.
-            mock: If True, uses mock_messages instead of normal message setup.
-            mock_messages: List of mock messages to use when mock=True.
-            system_prompt_parts: Optional SystemPromptPartsData instance with prompt parts.
-                           If not provided, will use default_system_prompt_parts.
-            tool_choice: Tool choice setting for API calls. If None, uses default_tool_choice.
-            temperature: Temperature for API calls. If None, uses default_temperature.
-
-        Returns:
-            str: The assistant's response.
-        """
         try:
             # Handle system prompt parts first, before any other logic
             if system_prompt_parts is None:
-                system_prompt_parts = self.default_system_prompt_parts
+                system_prompt_parts = self.current_system_prompt_parts
 
             if mock and mock_messages:
                 messages_to_send = mock_messages
                 system_content = "mock system message"
             else:
                 messages, summary = self.chat_history.get_recent_messages()
+                # First set up basic prompt parts
                 system_prompt_parts = self.setup_system_prompt_parts(
                     system_prompt_parts,
                     tool_loop_data,
                     summary
                 )
+                # Then apply temporary context modifications
+                system_prompt_parts = self.get_temporary_system_prompt_parts(system_prompt_parts)
                 system_content = get_system_message(system_prompt_parts=system_prompt_parts)
                 messages_to_send = messages
 
@@ -244,8 +276,8 @@ class Agent:
             # Convert tool choice enum to literal for backward compatibility
             current_tool_choice = (tool_choice or self.default_tool_choice).to_literal()
 
-            # Use default tools if none provided
-            current_tools = tools if tools is not None else self.default_tools
+            # Use default tools if none provided, accounting for temporary context
+            current_tools = tools if tools is not None else self.get_temporary_tools()
 
             response = await enqueue_api_call(
                 model=self.model,
@@ -300,3 +332,47 @@ class Agent:
             if DEBUG_ENABLED:
                 raise
             return "I encountered an error while processing your request."
+
+    def get_temporary_tools(self) -> Set[ToolName]:
+        """Get current tools accounting for temporary context.
+        
+        This method iterates over the temporary context parts and returns a set of
+        tools that should be active, adding any tools specified in the context parts.
+        
+        Returns:
+            Set of tools that should be active
+        """
+        active_tools = set(self.current_tools)
+        
+        # Add tools from temporary context parts
+        for context in self.temporary_context.values():
+            active_tools.update(context.tools)
+        
+        return active_tools
+
+    @staticmethod
+    def bind_agents(chat_agent: Any, tool_agent: Any) -> None:
+        """Bind a chat agent and tool agent together.
+        
+        This creates a bidirectional reference between the agents, allowing them
+        to coordinate on operations.
+        
+        Args:
+            chat_agent: The chat agent to bind
+            tool_agent: The tool agent to bind
+            
+        Raises:
+            TypeError: If either agent is not of the correct type
+        """
+        # Import here to avoid circular imports
+        from .chat_agent import ChatAgent
+        from .tool_agent import ToolAgent
+        
+        if not isinstance(chat_agent, ChatAgent):
+            raise TypeError("chat_agent must be an instance of ChatAgent")
+        if not isinstance(tool_agent, ToolAgent):
+            raise TypeError("tool_agent must be an instance of ToolAgent")
+            
+        chat_agent.bound_tool_agent = tool_agent
+        tool_agent.bound_chat_agent = chat_agent
+        tool_agent.agent_name = chat_agent.agent_name

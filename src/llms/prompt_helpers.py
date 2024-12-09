@@ -9,7 +9,7 @@ DEFAULT_SYSTEM_PROMPT_PARTS = SystemPromptPartsData(parts={
     "chat_agent_base_prompt": SystemPromptPartInfo(toggled=True, index=0),
     "cymbiont_agent_overview": SystemPromptPartInfo(toggled=False, index=1),
     "biographical": SystemPromptPartInfo(toggled=False, index=2),
-    "shell_command_info": SystemPromptPartInfo(toggled=False, index=3),
+    "shell_command_docs": SystemPromptPartInfo(toggled=False, index=3),
     "response_guidelines": SystemPromptPartInfo(toggled=True, index=4)
 })
 
@@ -101,12 +101,7 @@ def get_system_message(
             logger.warning(f"Missing required parameters for {part}")
             continue
         
-        # Get the header
-        header_text = f"-- {part_info.header} --"
-        if not info.toggled:
-            header_text += " (toggled off)"
-            
-        # Only format and include content if the part is toggled on
+        # Only include and format content if the part is toggled on
         if info.toggled:
             try:
                 # Check for and escape any JSON-like objects
@@ -119,12 +114,10 @@ def get_system_message(
                 # Strip any extra newlines from the end of the content
                 formatted_content = formatted_content.rstrip()
                 # Join header and content with single newline
-                message_parts.append(f"{header_text}\n{formatted_content}")
+                message_parts.append(f"-- {part_info.header} --\n{formatted_content}")
             except Exception as e:
                 logger.error(f"Failed to format {part}: {e}")
                 if DEBUG_ENABLED:
                     raise
-        else:
-            message_parts.append(header_text)
             
     return "\n\n".join(message_parts)

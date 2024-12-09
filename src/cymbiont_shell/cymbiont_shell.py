@@ -15,6 +15,7 @@ from agents.chat_agent import ChatAgent
 from agents.tool_agent import ToolAgent
 from agents.tool_helpers import format_all_tool_schemas
 from llms.system_prompt_parts import SYSTEM_MESSAGE_PARTS
+from llms.keyword_router import KeywordRouter
 from .command_completer import CommandCompleter
 from .command_metadata import create_commands
 from .log_aware_session import LogAwareSession
@@ -39,6 +40,9 @@ class CymbiontShell:
         Agent.bind_agents(self.chat_agent, self.tool_agent)
         self.tool_agent_task: Optional[asyncio.Task] = None
         
+        # Initialize keyword router
+        self.keyword_router = KeywordRouter()
+        
         # Connect chat history to logger
         setup_chat_history_handler(logger, self.chat_history)
         
@@ -50,10 +54,10 @@ class CymbiontShell:
             do_print_total_tokens=self.do_print_total_tokens
         )
         
-        # Generate command documentation and format shell_command_info part
+        # Generate command documentation and format shell_command_docs part
         shell_doc = self.generate_command_documentation()
-        SYSTEM_MESSAGE_PARTS['shell_command_info'].content = \
-            SYSTEM_MESSAGE_PARTS['shell_command_info'].content.format(
+        SYSTEM_MESSAGE_PARTS['shell_command_docs'].content = \
+            SYSTEM_MESSAGE_PARTS['shell_command_docs'].content.format(
                 shell_command_documentation=shell_doc
             )
         
@@ -173,6 +177,9 @@ class CymbiontShell:
             with token_logger.show_tokens():
                 # Record user message
                 self.chat_history.add_message("user", text, name=USER_NAME)
+                
+                # Update temporary context based on user input
+                self.keyword_router.toggle_context(text, self.chat_agent)
                 
                 # Activate tool agent
                 self.tool_agent.active = True

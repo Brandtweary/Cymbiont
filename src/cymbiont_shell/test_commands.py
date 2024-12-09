@@ -5,6 +5,7 @@ from tests.test_logger import run_logger_test
 from tests.test_parsing import run_text_parsing_test
 from tests.test_progressive_summarization import run_progressive_summarization_test
 from tests.test_agent_tools import run_agent_tool_tests
+from tests.test_keyword_router import run_keyword_router_test
 
 
 async def do_test_api_queue(shell, args: str) -> None:
@@ -94,9 +95,25 @@ async def do_test_agent_tools(shell, args: str) -> None:
         shell.test_failures = 1
 
 
+async def do_test_keyword_router(shell, args: str) -> None:
+    """Run keyword router tests."""
+    try:
+        # Run the test and count assertions
+        run_keyword_router_test()
+        # Since our test uses assertions, if we get here, all tests passed
+        shell.test_successes += 1
+        shell.test_failures = 0
+        logger.info("✓ All keyword router tests passed")
+    except AssertionError as e:
+        shell.test_failures += 1
+        logger.error(f"✗ Keyword router test failed: {str(e)}")
+    except Exception as e:
+        shell.test_failures += 1
+        logger.error(f"✗ Semantic router test failed with error: {str(e)}")
+
+
 async def do_run_all_tests(shell, args: str) -> None:
     """Run all tests
-
     Usage: run_all_tests [-v | --verbose]
         -verbose flag to show all logs
     """

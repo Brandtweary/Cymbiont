@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Optional, Literal, Set
 from cymbiont_logger.process_log import ProcessLog
 from datetime import datetime
 import asyncio
+import numpy as np
 
 MessageRole = Literal["user", "assistant", "system"]
 
@@ -80,6 +81,15 @@ class ToolChoice(Enum):
     def to_literal(self) -> Literal["auto", "required", "none"]:
         """Convert enum value to literal type expected by API."""
         return self.value  # type: ignore
+
+@dataclass(frozen=True)
+class ContextPart:
+    """A context part represents a collection of system prompt parts and tools that are semantically related"""
+    name: str
+    keywords: List[str]  # List of keywords that trigger this context
+    system_prompt_parts: List[str]
+    tools: List[ToolName]
+    key_phrases: List[str] = field(default_factory=list)  # Optional list of phrases to match
 
 @dataclass
 class ToolLoopData:
