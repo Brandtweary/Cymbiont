@@ -1,10 +1,31 @@
 from typing import Dict, List, Optional
 from .llm_types import ContextPart, ToolName
-from shared_resources import logger
+from shared_resources import logger, PROJECT_ROOT
 from nltk.stem import PorterStemmer
 import nltk
 import string
 from agents.agent import Agent
+import os
+from dotenv import load_dotenv, set_key
+
+def _initialize_nltk():
+    """Initialize NLTK data if not already downloaded"""
+    load_dotenv()  # Ensure we have latest env vars
+    if os.getenv('NLTK_DOWNLOADED') != 'true':
+        try:
+            nltk.data.find('corpora/wordnet')
+        except LookupError:
+            logger.info("Downloading required NLTK data...")
+            nltk.download('wordnet')
+            nltk.download('averaged_perceptron_tagger')
+            logger.info("NLTK data download complete")
+        
+        # Mark as downloaded in .env
+        env_path = PROJECT_ROOT / '.env'
+        set_key(str(env_path), 'NLTK_DOWNLOADED', 'true')
+
+# Initialize NLTK on module import
+_initialize_nltk()
 
 class KeywordRouter:
     """Routes user input to relevant context parts based on keyword matching"""
@@ -17,13 +38,6 @@ class KeywordRouter:
         """
         self.context_parts: Dict[str, ContextPart] = {}
         self.stemmer = PorterStemmer()
-        
-        # Download required NLTK data if not already present
-        try:
-            nltk.data.find('corpora/wordnet')
-        except LookupError:
-            nltk.download('wordnet')
-            nltk.download('averaged_perceptron_tagger')
             
         # Initialize with default context parts
         self._initialize_default_contexts(shell_commands)
