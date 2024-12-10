@@ -62,11 +62,6 @@ My name comes from the ancient Trojan hero, known for his sense of duty and prof
 ''',
         required_params=["agent_name"]
     ),
-    "tool_loop": SystemMessagePart(
-        header="Tool Loop Context",
-        content='''{loop_message}''',
-        required_params=["loop_message"]
-    ),
     "progressive_summary": SystemMessagePart(
         header="Progressive Summary",
         content='''{summary}''',

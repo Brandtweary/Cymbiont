@@ -180,11 +180,8 @@ class CymbiontShell:
                     # Wait for any ongoing summarization
                     await self.chat_history.wait_for_summary()
                     
-                    # Patch stdout to handle print statements properly with prompt toolkit
                     with patch_stdout(raw=True):
-                        _ = await self.chat_agent.get_response(
-                            token_budget=20000
-                        )  # we are now printing the response in get_response
+                        _ = await self.chat_agent.get_response()  # prints the response
 
             except asyncio.CancelledError:
                 break

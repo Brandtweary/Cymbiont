@@ -2,24 +2,6 @@ from llms.llm_types import ToolName
 
 
 TOOL_SCHEMAS = {
-    ToolName.CONTEMPLATE_LOOP: {
-        "type": "function",
-        "function": {
-            "name": "contemplate_loop",
-            "description": "Enter a tool loop to ponder a given question.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "question": {
-                        "type": "string",
-                        "description": "The question to ponder during the contemplation loop."
-                    }
-                },
-                "required": ["question"]
-            }
-        }
-    },
-
     ToolName.MESSAGE_SELF: {
         "type": "function",
         "function": {
@@ -34,23 +16,6 @@ TOOL_SCHEMAS = {
                     }
                 },
                 "required": ["message"]
-            }
-        }
-    },
-    ToolName.EXIT_LOOP: {
-        "type": "function",
-        "function": {
-            "name": "exit_loop",
-            "description": "Exits the current tool loop and returns a final message to the conversation partner.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "exit_message": {
-                        "type": "string",
-                        "description": "The final message to return to the conversation partner."
-                    }
-                },
-                "required": ["exit_message"]
             }
         }
     },
@@ -94,30 +59,6 @@ TOOL_SCHEMAS = {
                     }
                 },
                 "required": ["part_name"]
-            }
-        }
-    },
-    ToolName.INTRODUCE_SELF: {
-        "type": "function",
-        "function": {
-            "name": "introduce_self",
-            "description": "Introduce yourself to the user in a natural way, considering the current conversation context.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        }
-    },
-    ToolName.SHELL_LOOP: {
-        "type": "function",
-        "function": {
-            "name": "shell_loop",
-            "description": "Enter a shell loop where you can chain together shell commands. Automatically toggles shell_command_docs on.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
             }
         }
     },

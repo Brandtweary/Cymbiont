@@ -63,13 +63,9 @@ class SystemPromptPartsData:
         self.kwargs.update(kwargs)
 
 class ToolName(Enum):
-    CONTEMPLATE_LOOP = "contemplate_loop"
-    EXIT_LOOP = "exit_loop"
     MESSAGE_SELF = "message_self"
     EXECUTE_SHELL_COMMAND = "execute_shell_command"
     TOGGLE_PROMPT_PART = "toggle_prompt_part"
-    INTRODUCE_SELF = "introduce_self"
-    SHELL_LOOP = "shell_loop"
     MEDITATE = "meditate"
     TOGGLE_TOOL = "toggle_tool"
 
@@ -99,16 +95,6 @@ class TemporaryContextValue:
     expiration: int
     temporary_parts: Set[str] = field(default_factory=set)  # Parts that this context is temporarily managing
     temporary_tools: Set[ToolName] = field(default_factory=set)  # Tools that this context is temporarily managing
-
-@dataclass
-class ToolLoopData:
-    """Data for managing tool loops."""
-    loop_type: str
-    loop_message: str
-    active: bool = True
-    available_tools: Set[ToolName] = field(default_factory=set)
-    loop_tokens: int = 0
-    system_prompt_parts: Optional[SystemPromptPartsData] = None
 
 @dataclass
 class APICall:

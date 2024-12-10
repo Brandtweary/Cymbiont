@@ -3,15 +3,13 @@ from typing import Any, List, Optional, Set, Dict, Tuple, Union, Callable
 from functools import lru_cache
 import inspect
 from shared_resources import logger
-from llms.llm_types import SystemPromptPartsData, ChatMessage, ToolName, ToolLoopData
+from llms.llm_types import SystemPromptPartsData, ChatMessage, ToolName
 from .tool_schemas import TOOL_SCHEMAS
 from copy import deepcopy
 
 
 # Common arguments that can be passed to any tool processing function
 COMMON_TOOL_ARGS = {
-    'tool_loop_data',        
-    'token_budget',          
     'mock',                  
     'mock_messages',        
     'system_prompt_parts',
@@ -23,13 +21,9 @@ def get_tool_function_map() -> Dict[str, Callable]:
     """Get the mapping of tool names to their processing functions.
     Lazily imports the functions when first accessed."""
     from .agent_tools import (
-                            process_contemplate_loop, 
-                            process_exit_loop, 
                             process_message_self,
                             process_execute_shell_command,
                             process_toggle_prompt_part,
-                            process_introduce_self,
-                            process_shell_loop,
                             process_meditate,
                             process_toggle_tool
                             )
@@ -37,13 +31,9 @@ def get_tool_function_map() -> Dict[str, Callable]:
     from . import agent_tools
 
     tool_map = {
-        ToolName.CONTEMPLATE_LOOP.value: process_contemplate_loop,
-        ToolName.EXIT_LOOP.value: process_exit_loop,
         ToolName.MESSAGE_SELF.value: process_message_self,
         ToolName.EXECUTE_SHELL_COMMAND.value: process_execute_shell_command,
         ToolName.TOGGLE_PROMPT_PART.value: process_toggle_prompt_part,
-        ToolName.INTRODUCE_SELF.value: process_introduce_self,
-        ToolName.SHELL_LOOP.value: process_shell_loop,
         ToolName.MEDITATE.value: process_meditate,
         ToolName.TOGGLE_TOOL.value: process_toggle_tool
     }
@@ -52,10 +42,9 @@ def get_tool_function_map() -> Dict[str, Callable]:
     all_functions = {name: obj for name, obj in inspect.getmembers(agent_tools, inspect.isfunction)}
     mapped_functions = set(tool_map.values())
     
-    # Check for unmapped functions (excluding create_tool_loop_data)
+    # Check for unmapped functions
     unmapped = [name for name, func in all_functions.items() 
                 if func not in mapped_functions 
-                and name != 'create_tool_loop_data'
                 and name.startswith('process_')]
     
     if unmapped:
@@ -130,8 +119,6 @@ async def process_tool_calls(
     available_tools: Optional[Set[ToolName]],
     agent: Any,  # Avoiding circular import but should be an Agent instance
     system_prompt_parts: SystemPromptPartsData,
-    tool_loop_data: Optional[ToolLoopData] = None,
-    token_budget: int = 20000,
     mock: bool = False,
     mock_messages: Optional[List[ChatMessage]] = None
 ) -> Optional[str]:
@@ -143,8 +130,6 @@ async def process_tool_calls(
         available_tools: A set of ToolName enums representing the tools available to the agent.
         agent: The Agent instance.
         system_prompt_parts: SystemPromptPartsData instance with prompt parts.
-        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop.
-        token_budget: Maximum number of tokens allowed for the tool loop.
         mock: If True, uses mock_messages instead of normal message setup.
         mock_messages: List of mock messages to use when mock=True.
 
@@ -168,8 +153,6 @@ async def process_tool_calls(
             # Get common args for this function
             common_args = get_common_args_for_function(
                 tool_map[tool_name],
-                tool_loop_data=tool_loop_data,
-                token_budget=token_budget,
                 mock=mock,
                 mock_messages=mock_messages,
                 system_prompt_parts=system_prompt_parts,
@@ -236,48 +219,6 @@ def register_tools() -> None:
         extra_params = func_params - required_params - optional_params - COMMON_TOOL_ARGS
         if extra_params:
             logger.warning(f"Tool function {tool_name} has extra parameters: {extra_params}")
-
-def create_tool_loop_data(
-    loop_type: str,
-    loop_message: str,
-    system_prompt_parts: SystemPromptPartsData,
-    tools: Optional[Set[ToolName]] = None,
-    new_system_prompt: bool = False
-) -> ToolLoopData:
-    """Create a ToolLoopData instance with required tools and settings.
-    
-    Args:
-        loop_type: Type of the loop (e.g., "CONTEMPLATION")
-        loop_message: Message describing the loop's purpose
-        system_prompt_parts: The system prompt parts to use
-        tools: Optional set of additional tools to include
-        new_system_prompt: If True, creates a copy of system prompt parts. If False, uses the provided parts directly.
-    """
-    # Always include these tools in any loop
-    required_tools = {
-        ToolName.EXIT_LOOP,
-        ToolName.MESSAGE_SELF,
-        ToolName.TOGGLE_PROMPT_PART
-    }
-
-    # Combine with provided tools if any
-    final_tools = required_tools | (tools or set())
-
-    # Handle system prompt parts
-    if new_system_prompt:
-        # Create a deep copy of the provided parts
-        from copy import deepcopy
-        final_prompt_parts = deepcopy(system_prompt_parts)
-    else:
-        # Use the provided parts directly
-        final_prompt_parts = system_prompt_parts
-
-    return ToolLoopData(
-        loop_type=loop_type,
-        loop_message=loop_message,
-        system_prompt_parts=final_prompt_parts,
-        available_tools=final_tools
-    )
 
 def format_tool_schema(schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     """Format a single tool schema, handling any dynamic content based on runtime state.
