@@ -22,6 +22,7 @@ class ChatAgent(Agent):
             default_tools={
                 ToolName.TOGGLE_PROMPT_PART,
                 ToolName.TOGGLE_TOOL,
+                ToolName.MESSAGE_SELF,
                 ToolName.MEDITATE
             }
         )

@@ -19,6 +19,7 @@ from .command_completer import CommandCompleter
 from .command_metadata import create_commands
 from .log_aware_session import LogAwareSession
 from agents.agent_types import ActivationMode
+from prompt_toolkit.patch_stdout import patch_stdout
 
 
 class CymbiontShell:
@@ -179,12 +180,11 @@ class CymbiontShell:
                     # Wait for any ongoing summarization
                     await self.chat_history.wait_for_summary()
                     
-                    response = await self.chat_agent.get_response(
-                        token_budget=20000
-                    )
-
-                if response:
-                    print(f"\x1b[38;2;0;255;255m{AGENT_NAME}\x1b[0m> {response}")
+                    # Patch stdout to handle print statements properly with prompt toolkit
+                    with patch_stdout(raw=True):
+                        _ = await self.chat_agent.get_response(
+                            token_budget=20000
+                        )  # we are now printing the response in get_response
 
             except asyncio.CancelledError:
                 break

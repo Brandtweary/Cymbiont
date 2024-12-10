@@ -237,7 +237,7 @@ class ChatHistoryHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         if (self.chat_history is not None 
-            and record.levelno not in (LogLevel.PROMPT, LogLevel.RESPONSE)
+            and record.levelno not in (LogLevel.PROMPT, LogLevel.RESPONSE, LogLevel.REASONING_TEXT)
             and (record.levelno in (LogLevel.SHELL, LogLevel.TOOL)  # Always include SHELL and TOOL messages
                 or (self.console_filter is None or self.console_filter.filter(record)))
         ):

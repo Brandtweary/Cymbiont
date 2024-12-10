@@ -108,7 +108,6 @@ async def process_exit_loop(
 
 async def process_message_self(
     message: str,
-    tool_loop_data: Optional[ToolLoopData],
     agent: Agent
 ) -> Optional[str]:
     """
@@ -116,21 +115,15 @@ async def process_message_self(
     
     Args:
         message: The message to record
-        tool_loop_data: An optional ToolLoopData instance to manage the state within the tool loop
         agent: The Agent instance
     """
-    if not tool_loop_data or not tool_loop_data.active:
-        logger.warning(f"{agent.agent_name} used tool: message_self - no effect, agent not inside tool loop")
-        return None
-
-    logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: message_self - recording message")
-    return message
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} recorded personal message: {message}")
+    return ''
 
 async def process_toggle_prompt_part(
     part_name: str,
     agent: Agent,
-    system_prompt_parts: Optional[SystemPromptPartsData] = None,
-    
+    system_prompt_parts: Optional[SystemPromptPartsData] = None
 ) -> str:
     """Process the toggle_prompt_part tool call."""
     # Strip any trailing asterisks from part name

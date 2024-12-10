@@ -47,6 +47,9 @@ Command Execution Guidelines:
     "response_guidelines": SystemMessagePart(
         header="Response Guidelines",
         content='''Do not prefix your name in front of your responses. The prefix is applied automatically.
+Before making a tool call, check the system logs carefully to see if you have already performed the same tool call (it will have a TOOL log associated with it). In this setup you are free to make multiple tool calls in a row, which means there is a risk of making redundant calls.
+If you see that you already made the tool call, do not repeat it.
+Instead, just give a text response to finish the tool loop, perhaps a brief synopsis or follow-up. Your final response should be directed at the conversation partner, not the system.
 ''',
         required_params=[]
     ),
@@ -117,8 +120,8 @@ Text: {text}
 2. You should proactively use tools when they would be helpful
 3. You can respond multiple times to the same input if you have more to add
 4. When you have nothing more to do, use the meditate tool to indicate you're entering a waiting state
-   - You can let the wait time default to 0 seconds, which means you'll be reactivated immediately
-   - If you don't need to remain active and alert (perhaps because the user is not responding), you can set a higher wait time to conserve system resources
+   - You can let the wait time default to 0 seconds during normal operation
+   - If you don't need to remain active and alert (perhaps because the user is not responding), you can set a higher wait time to conserve system resources (e.g. 10 seconds)
 ''',
         required_params=[]
     ),
@@ -128,9 +131,11 @@ Text: {text}
 
 1. You activate when receiving user input
 2. You stay active as long as you're making tool calls
-3. You automatically deactivate after giving a text-only response or using the meditate tool (but please only use meditate when no response is needed)
+3. You automatically deactivate after giving a text-only response
 
-Remember, since a text-only response will deactivate a tool loop, if you need to troubleshoot a tool result, try using other tools first before you check-in with the user.
+Remember, since a text-only response will deactivate a tool loop, if you need to troubleshoot a tool result, try using other tools first before you check-in with the user. You can always send text responses in parallel with tool calls in order to provide interim responses.
+
+Don't use the meditate tool to end a tool loop during a conversation. Instead, give a text response.
 ''',
         required_params=[]
     ),

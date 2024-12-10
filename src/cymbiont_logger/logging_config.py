@@ -63,6 +63,7 @@ class ColoredFormatter(logging.Formatter):
         self.BRIGHT_RED = "\033[91m"  # Critical
         self.WHITE = "\033[97m"       # Benchmark
         self.MAGENTA = "\033[35m"     # Prompt/Response
+        self.CYAN = "\033[38;2;0;255;255m"  # Cyan for agent name in reasoning text
         self.RESET = "\033[0m"
         # RGB colors
         self.ORANGE = "\033[38;2;255;165;0m"  # Tool logs (RGB: 255,165,0)
@@ -85,6 +86,13 @@ class ColoredFormatter(logging.Formatter):
             color = self.ORANGE
         elif record.levelno in (LogLevel.PROMPT, LogLevel.RESPONSE):
             color = self.MAGENTA
+        elif record.levelno == LogLevel.REASONING_TEXT:
+            # Special handling for reasoning text - color agent name in cyan
+            if '>' in record.msg:
+                agent_name, message = record.msg.split('>', 1)
+                record.msg = f"{self.CYAN}{agent_name}>{self.WHITE}{message}"
+                return super().format(record)
+            color = self.WHITE
             
         # Format the message with color
         record.msg = f"{color}{prefix}{record.msg}{self.RESET}"

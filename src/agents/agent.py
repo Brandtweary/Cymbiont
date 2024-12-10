@@ -1,6 +1,6 @@
 import asyncio
 from typing import Any, Dict, List, Optional, Set, Tuple, Literal, Union, Callable
-from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED
+from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED, get_shell
 from cymbiont_logger.logger_types import LogLevel
 from llms.model_configuration import CHAT_AGENT_MODEL
 from llms.prompt_helpers import get_system_message, DEFAULT_SYSTEM_PROMPT_PARTS
@@ -240,7 +240,6 @@ class Agent:
     async def get_response(
         self,
         tools: Optional[Set[ToolName]] = None,
-        tool_loop_data: Optional[ToolLoopData] = None,
         token_budget: int = 20000,
         mock: bool = False,
         mock_messages: Optional[List[ChatMessage]] = None,
@@ -261,7 +260,7 @@ class Agent:
                 # First set up basic prompt parts
                 system_prompt_parts = self.setup_system_prompt_parts(
                     system_prompt_parts,
-                    tool_loop_data,
+                    None,  # No more tool_loop_data
                     summary
                 )
                 system_content = get_system_message(system_prompt_parts=system_prompt_parts)
@@ -288,17 +287,39 @@ class Agent:
             )
 
             # Handle token usage and check budget
-            error_message = self.handle_token_usage(response, tool_loop_data, token_budget)
+            error_message = self.handle_token_usage(response, None, token_budget)
             if error_message:
                 return error_message
 
+            # Get content from response - this should always be present
+            content = response['content']  # Will raise KeyError if missing
+            # Clean any accidental agent prefixes from the content
+            content = self.clean_agent_prefix(content)
+            
+            # Add to chat history
+            prefixed_message = self.prefix_message(content, None)
+            self.chat_history.add_message("assistant", prefixed_message, name=self.agent_name)
+            
+            # If there's both content and tool calls, log as reasoning text
+            if 'tool_call_results' in response:
+                logger.log(LogLevel.REASONING_TEXT, f"{self.agent_name}> {content}")
+            else:
+                # Otherwise print response as normal
+                print(f"\x1b[38;2;0;255;255m{self.agent_name}\x1b[0m> {content}")
+
+            # Handle deactivation chat mode for text-only responses
+            if self.activation_mode == ActivationMode.CHAT:
+                if 'tool_call_results' not in response:
+                    self.active = False
+
+            # Process tool calls after text response if present
             if 'tool_call_results' in response:
                 user_message = await process_tool_calls(
                     tool_call_results=response['tool_call_results'],
                     available_tools=tools,
                     agent=self,
                     system_prompt_parts=system_prompt_parts,
-                    tool_loop_data=tool_loop_data,
+                    tool_loop_data=None,
                     token_budget=token_budget,
                     mock=mock,
                     mock_messages=mock_messages
@@ -308,28 +329,14 @@ class Agent:
                     # Clean any accidental agent prefixes
                     user_message = self.clean_agent_prefix(user_message)
                     # Get prefixed version for chat history
-                    prefixed_message = self.prefix_message(user_message, tool_loop_data)
-                    if not (tool_loop_data and not tool_loop_data.active):
-                        self.chat_history.add_message("assistant", prefixed_message, name=self.agent_name)
+                    prefixed_message = self.prefix_message(user_message, None)
+                    self.chat_history.add_message("assistant", prefixed_message, name=self.agent_name)
+                    print(f"\x1b[38;2;0;255;255m{self.agent_name}\x1b[0m> {user_message}")
                     # Return original message as per ChatAgent behavior
                     return user_message
 
-            # Get content from response - this should always be present
-            content = response['content']  # Will raise KeyError if missing
-            # Clean any accidental agent prefixes from the content
-            content = self.clean_agent_prefix(content)
-            # Add prefixed version to chat history but return original
-            prefixed_message = self.prefix_message(content, tool_loop_data)
-            
-            # Handle deactivation chat mode for text-only responses
-            if self.activation_mode == ActivationMode.CHAT:
-                if 'tool_call_results' not in response:
-                    self.active = False
-            
-            if not (tool_loop_data and not tool_loop_data.active):
-                self.chat_history.add_message("assistant", prefixed_message, name=self.agent_name)
             return content
-            
+        
         except Exception as e:
             logger.error(f"Error in get_response: {str(e)}")
             # Deactivate on errors in chat mode to prevent infinite error loops
@@ -338,4 +345,3 @@ class Agent:
             if DEBUG_ENABLED:
                 raise
             return "I encountered an error while processing your request."
-

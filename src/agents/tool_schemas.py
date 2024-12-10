@@ -24,13 +24,13 @@ TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "message_self",
-            "description": "Send a message to self within the tool loop.",
+            "description": "Record a message to yourself. Useful for thinking through a problem before responding.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "message": {
                         "type": "string",
-                        "description": "The message to send to self."
+                        "description": "The message to record."
                     }
                 },
                 "required": ["message"]
@@ -131,7 +131,7 @@ TOOL_SCHEMAS = {
                 "properties": {
                     "wait_time": {
                         "type": "integer",
-                        "description": "Optional number of seconds to wait. Only has an effect in continuous mode.",
+                        "description": "Optional number of seconds to wait.",
                         "default": 0
                     }
                 },
