@@ -18,6 +18,7 @@ async def process_message_self(
         agent: The Agent instance
     """
     logger.log(LogLevel.TOOL, f"{agent.agent_name} recorded personal message: {message}")
+    get_shell().keyword_router.toggle_context(message, agent) # permits agent to potentially toggle their own context organically
     return ''
 
 async def process_toggle_prompt_part(

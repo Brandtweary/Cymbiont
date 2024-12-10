@@ -181,7 +181,8 @@ class CymbiontShell:
                     await self.chat_history.wait_for_summary()
                     
                     with patch_stdout(raw=True):
-                        _ = await self.chat_agent.get_response()  # prints the response
+                        response = await self.chat_agent.get_response()
+                        self.keyword_router.toggle_context(response, self.chat_agent)  # permits agent to potentially toggle their own context organically
 
             except asyncio.CancelledError:
                 break

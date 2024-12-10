@@ -227,11 +227,12 @@ class Agent:
             self.chat_history.add_message("assistant", content, name=self.agent_name)
             
             # If there's both content and tool calls, log as reasoning text
-            if 'tool_call_results' in response:
-                logger.log(LogLevel.REASONING_TEXT, f"{self.agent_name}> {content}") # this is necessary to print the reasoning text before tool call processing - direct print statements are added to buffer
-            else:
-                # Otherwise print response as normal
-                print(f"\x1b[38;2;0;255;255m{self.agent_name}\x1b[0m> {content}")
+            if content:
+                if 'tool_call_results' in response:
+                    logger.log(LogLevel.REASONING_TEXT, f"{self.agent_name}> {content}") # this is necessary to print the reasoning text before tool call processing - direct print statements are added to buffer
+                else:
+                    # Otherwise print response as normal
+                    print(f"\x1b[38;2;0;255;255m{self.agent_name}\x1b[0m> {content}")
 
             # Handle deactivation chat mode for text-only responses
             if self.activation_mode == ActivationMode.CHAT:
