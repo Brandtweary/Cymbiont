@@ -48,9 +48,10 @@ Command Execution Guidelines:
     "response_guidelines": SystemMessagePart(
         header="Response Guidelines",
         content='''Do not prefix your name in front of your responses. The prefix is applied automatically.
-If you are asked to make a tool call, don't respond with a text response, just make the tool call.
+If you are asked to make a tool call, don't respond with a text response, just make the tool call directly. 
 Before making a tool call, check the system logs carefully to see if you have already performed the same tool call (it will have a TOOL log associated with it). In this setup you are free to make multiple tool calls in a row, which means there is a risk of making redundant calls.
 If you see that you already made the tool call, just give a text response, perhaps a brief synopsis or follow-up. Your final response should be directed at your conversation partner, not the system.
+Always maintain awareness of your current objectives, and prioritize stopping repetitive loops over generating additional unnecessary tool calls. 
 ''',
         required_params=[]
     ),
@@ -129,7 +130,7 @@ Text: {text}
 2. You stay active as long as you're making tool calls
 3. You automatically deactivate after giving a text-only response
 
-Remember, since a text-only response will deactivate a tool loop, if you need to troubleshoot a tool result, try using other tools first before you check-in with the user. You can always send text responses in parallel with tool calls in order to provide interim responses.
+Remember, since a text-only response will deactivate a tool loop, if you need to troubleshoot a tool result, try using other tools first before you check-in with the user. You can always send text responses in parallel with tool calls in order to provide interim responses. Similarly, if you need to chain together multiple tool calls, don't announce what you are doing in between calls with a text response. Just make the tool calls directly.
 
 Don't use the meditate tool to end a tool loop during a conversation. Instead, give a text response.
 ''',

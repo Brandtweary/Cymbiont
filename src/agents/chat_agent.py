@@ -24,6 +24,7 @@ class ChatAgent(Agent):
                 ToolName.TOGGLE_TOOL,
                 ToolName.MESSAGE_SELF,
                 ToolName.ADD_TASK,
+                ToolName.ADD_TASK_DEPENDENCY,
                 ToolName.MEDITATE
             }
         )

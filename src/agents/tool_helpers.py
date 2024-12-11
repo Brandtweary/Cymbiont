@@ -26,7 +26,8 @@ def get_tool_function_map() -> Dict[str, Callable]:
                             process_toggle_prompt_part,
                             process_meditate,
                             process_toggle_tool,
-                            process_add_task
+                            process_add_task,
+                            process_add_task_dependency
                             )
     import inspect
     from . import agent_tools
@@ -37,7 +38,8 @@ def get_tool_function_map() -> Dict[str, Callable]:
         ToolName.TOGGLE_PROMPT_PART.value: process_toggle_prompt_part,
         ToolName.MEDITATE.value: process_meditate,
         ToolName.TOGGLE_TOOL.value: process_toggle_tool,
-        ToolName.ADD_TASK.value: process_add_task
+        ToolName.ADD_TASK.value: process_add_task,
+        ToolName.ADD_TASK_DEPENDENCY.value: process_add_task_dependency
     }
 
     # Get all functions from agent_tools module

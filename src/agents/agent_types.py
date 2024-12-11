@@ -15,7 +15,6 @@ class ActivationMode(Enum):
 class TaskStatus(Enum):
     READY = "ready"
     IN_PROGRESS = "in-progress"
-    AWAITING_REQUIREMENT = "awaiting requirement"
     TENTATIVE = "tentative"
     POSTPONED = "postponed"
     ONGOING = "ongoing"
@@ -24,7 +23,7 @@ class TaskStatus(Enum):
 class Task:
     """A task with its description and metadata."""
     description: str
-    display_index: int  # Numeric index for storage
+    display_index: Optional[int] = None  # Numeric index for storage
     status: TaskStatus = TaskStatus.READY
     metadata_tags: Optional[List[str]] = None
     subtasks: Optional[List["Task"]] = None  # List of subtasks

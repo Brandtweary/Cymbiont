@@ -137,11 +137,39 @@ TOOL_SCHEMAS = {
                     },
                     "status": {
                         "type": "string",
-                        "enum": ["ready", "in-progress", "awaiting requirement", "tentative", "postponed", "ongoing"],
+                        "enum": ["ready", "in-progress", "tentative", "postponed", "ongoing"],
                         "description": "Optional task status. Defaults to 'ready'."
                     }
                 },
                 "required": ["description"]
+            }
+        }
+    },
+    ToolName.ADD_TASK_DEPENDENCY: {
+        "type": "function",
+        "function": {
+            "name": "add_task_dependency",
+            "description": "Add a dependency between two tasks, making one task block another. The blocking task will appear as a subtask of the blocked task.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "blocked_task_index": {
+                        "type": "string",
+                        "description": "Index of the task that is blocked (A-Z)",
+                        "pattern": "^[A-Z]$"
+                    },
+                    "blocking_task_index": {
+                        "type": "string",
+                        "description": "Index of the task that is blocking (A-Z)",
+                        "pattern": "^[A-Z]$"
+                    },
+                    "insertion_index": {
+                        "type": "integer",
+                        "description": "Optional 1-based index for where to insert the blocking task in the blocked task's subtask list",
+                        "minimum": 1
+                    }
+                },
+                "required": ["blocked_task_index", "blocking_task_index"]
             }
         }
     }

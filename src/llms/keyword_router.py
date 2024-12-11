@@ -78,7 +78,7 @@ class KeywordRouter:
             ),
             ContextPart(
                 name="biographical",
-                keywords=["biography", "origin", "introduction", "introduce"],  # word lemmatization is not perfect
+                keywords=["biography", "introduction", "introduce"],  # word lemmatization is not perfect
                 key_phrases=["tell me about yourself"],
                 system_prompt_parts=["biographical"],
                 tools=[]

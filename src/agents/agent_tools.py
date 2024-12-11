@@ -176,3 +176,29 @@ async def process_add_task(
         metadata_tags=metadata_tags,
         status=task_status
     )
+
+async def process_add_task_dependency(
+    agent: Agent,
+    blocked_task_index: str,
+    blocking_task_index: str,
+    insertion_index: Optional[int] = None
+) -> None:
+    """Process the add_task_dependency tool call.
+    
+    Args:
+        agent: The agent instance
+        blocked_task_index: Index of the task that is blocked (A-Z)
+        blocking_task_index: Index of the task that is blocking (A-Z)
+        insertion_index: Optional 1-based index for where to insert in subtask list
+    """
+    logger.log(
+        LogLevel.TOOL,
+        f"{agent.agent_name} used tool: add_task_dependency - Task {blocked_task_index} is blocked by task {blocking_task_index}"
+    )
+    
+    # Add the dependency
+    agent.taskpad.add_task_dependency(
+        blocked_task_index=blocked_task_index,
+        blocking_task_index=blocking_task_index,
+        insertion_index=insertion_index
+    )
