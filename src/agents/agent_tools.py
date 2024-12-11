@@ -2,9 +2,10 @@ from shared_resources import logger, get_shell, DEBUG_ENABLED
 from cymbiont_logger.logger_types import LogLevel
 from .agent import Agent
 from llms.llm_types import SystemPromptPartsData, ToolName
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 import asyncio
-
+from .agent_types import TaskStatus
+from enum import Enum
 
 async def process_message_self(
     message: str,
@@ -150,3 +151,28 @@ async def process_meditate(agent: Agent, wait_time: int = 0) -> None:
         # If wait_time is 0, do nothing (remain active)
     else:  # chat mode
         agent.active = False
+
+async def process_add_task(
+    agent: Agent,
+    description: str,
+    parent_task_index: Optional[str] = None,
+    insertion_index: Optional[Union[str, int]] = None,
+    metadata_tags: Optional[List[str]] = None,
+    status: Optional[str] = None
+) -> None:
+    """Process the add_task tool call."""
+    # Convert status string to TaskStatus enum if provided
+    task_status = TaskStatus(status) if status else TaskStatus.READY
+    logger.log(
+        LogLevel.TOOL,
+        f"{agent.agent_name} used tool: add_task - {description}"
+    )
+    
+    # Add the task
+    agent.taskpad.add_task(
+        description=description,
+        parent_task_index=parent_task_index,
+        insertion_index=insertion_index,
+        metadata_tags=metadata_tags,
+        status=task_status
+    )

@@ -68,6 +68,7 @@ class ToolName(Enum):
     TOGGLE_PROMPT_PART = "toggle_prompt_part"
     MEDITATE = "meditate"
     TOGGLE_TOOL = "toggle_tool"
+    ADD_TASK = "add_task"
 
 class ToolChoice(Enum):
     """Tool choice options for API calls."""

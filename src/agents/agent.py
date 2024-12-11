@@ -10,6 +10,7 @@ from llms.api_queue import enqueue_api_call
 from .chat_history import ChatHistory
 from .tool_helpers import process_tool_calls
 from .agent_types import ActivationMode
+from .taskpad import Taskpad
 
 
 class Agent:
@@ -60,6 +61,7 @@ class Agent:
         )
         self.current_tools = set(self.default_tools)
         self.temporary_context: Dict[str, TemporaryContextValue] = {}  # Store temporarily active context parts
+        self.taskpad = Taskpad()
         
     def update_temporary_context(self, new_context: List[ContextPart], expiration: int = 5) -> None:
         """Update temporary context and expiration counters.
@@ -130,8 +132,12 @@ class Agent:
         """Helper method to set up system prompt parts with summary handling."""
         if not system_prompt_parts:
             system_prompt_parts = self.current_system_prompt_parts
-        
+
         system_prompt_parts.kwargs["agent_name"] = self.agent_name
+        
+        # Add taskpad content if taskpad part is enabled
+        if "taskpad" in system_prompt_parts.parts:
+            system_prompt_parts.kwargs["taskpad"] = self.taskpad.format_taskpad()
         
         # Add activation mode prompt part
         activation_mode_part = "activation_mode_continuous" if self.activation_mode == ActivationMode.CONTINUOUS else "activation_mode_chat"
@@ -144,16 +150,7 @@ class Agent:
             system_prompt_parts.parts["progressive_summary"] = SystemPromptPartInfo(toggled=True, index=len(system_prompt_parts.parts))
         elif system_prompt_parts and "progressive_summary" in system_prompt_parts.parts:
             del system_prompt_parts.parts["progressive_summary"]
-            
-        # Let subclasses add their unique prompt parts
-        return self.setup_unique_prompt_parts(system_prompt_parts)
-
-    def setup_unique_prompt_parts(
-        self,
-        system_prompt_parts: SystemPromptPartsData
-    ) -> SystemPromptPartsData:
-        """Add unique prompt parts for this agent type."""
-        # Base agent has no unique parts to add
+        
         return system_prompt_parts
 
     def clean_agent_prefix(self, message: str) -> str:

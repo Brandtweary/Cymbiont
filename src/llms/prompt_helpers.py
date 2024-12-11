@@ -10,7 +10,8 @@ DEFAULT_SYSTEM_PROMPT_PARTS = SystemPromptPartsData(parts={
     "cymbiont_agent_overview": SystemPromptPartInfo(toggled=False, index=1),
     "biographical": SystemPromptPartInfo(toggled=False, index=2),
     "shell_command_docs": SystemPromptPartInfo(toggled=False, index=3),
-    "response_guidelines": SystemPromptPartInfo(toggled=True, index=4)
+    "taskpad": SystemPromptPartInfo(toggled=True, index=4),
+    "response_guidelines": SystemPromptPartInfo(toggled=True, index=5)
 })
 
 

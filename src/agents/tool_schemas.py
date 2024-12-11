@@ -97,5 +97,52 @@ TOOL_SCHEMAS = {
                 "required": ["tool_name"]
             }
         }
+    },
+    ToolName.ADD_TASK: {
+        "type": "function",
+        "function": {
+            "name": "add_task",
+            "description": "Add a task to the taskpad. Tasks can be added as top-level tasks or as subtasks under an existing task.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the task"
+                    },
+                    "parent_task_index": {
+                        "type": "string",
+                        "description": "Optional index of the parent task (A-Z). Only provide this if adding a subtask to an existing task.",
+                        "pattern": "^[A-Z]$"
+                    },
+                    "insertion_index": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "pattern": "^([A-Z]|[1-9][0-9]*)$"
+                            },
+                            {
+                                "type": "integer",
+                                "minimum": 1
+                            }
+                        ],
+                        "description": "Optional insertion index. For top-level tasks, must be A-Z. For subtasks, must be a number (1-based)."
+                    },
+                    "metadata_tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Optional list of metadata tags to associate with the task"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["ready", "in-progress", "awaiting requirement", "tentative", "postponed", "ongoing"],
+                        "description": "Optional task status. Defaults to 'ready'."
+                    }
+                },
+                "required": ["description"]
+            }
+        }
     }
 }

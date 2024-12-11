@@ -23,6 +23,7 @@ class ChatAgent(Agent):
                 ToolName.TOGGLE_PROMPT_PART,
                 ToolName.TOGGLE_TOOL,
                 ToolName.MESSAGE_SELF,
+                ToolName.ADD_TASK,
                 ToolName.MEDITATE
             }
         )
