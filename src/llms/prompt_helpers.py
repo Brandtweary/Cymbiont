@@ -11,7 +11,8 @@ DEFAULT_SYSTEM_PROMPT_PARTS = SystemPromptPartsData(parts={
     "biographical": SystemPromptPartInfo(toggled=False, index=2),
     "shell_command_docs": SystemPromptPartInfo(toggled=False, index=3),
     "taskpad": SystemPromptPartInfo(toggled=True, index=4),
-    "response_guidelines": SystemPromptPartInfo(toggled=True, index=5)
+    "previous_tool_call": SystemPromptPartInfo(toggled=True, index=5),
+    "response_guidelines": SystemPromptPartInfo(toggled=True, index=6)
 })
 
 

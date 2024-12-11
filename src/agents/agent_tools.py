@@ -20,8 +20,7 @@ async def process_message_self(
     """
     logger.log(LogLevel.TOOL, f"{agent.agent_name} recorded personal message: {message}")
     get_shell().keyword_router.toggle_context(message, agent) # permits agent to potentially toggle their own context organically
-    return ''
-
+    return '(recorded personal note)'  # this is actually necessary for the LLM to track tool usage properly
 async def process_toggle_prompt_part(
     part_name: str,
     agent: Agent,
@@ -159,7 +158,7 @@ async def process_add_task(
     insertion_index: Optional[Union[str, int]] = None,
     metadata_tags: Optional[List[str]] = None,
     status: Optional[str] = None
-) -> None:
+) -> str:
     """Process the add_task tool call."""
     # Convert status string to TaskStatus enum if provided
     task_status = TaskStatus(status) if status else TaskStatus.READY
@@ -176,13 +175,14 @@ async def process_add_task(
         metadata_tags=metadata_tags,
         status=task_status
     )
+    return "I have added the following task: " + description
 
 async def process_add_task_dependency(
     agent: Agent,
     blocked_task_index: str,
     blocking_task_index: str,
     insertion_index: Optional[int] = None
-) -> None:
+) -> str:
     """Process the add_task_dependency tool call.
     
     Args:
@@ -202,3 +202,4 @@ async def process_add_task_dependency(
         blocking_task_index=blocking_task_index,
         insertion_index=insertion_index
     )
+    return "I have added a dependency between tasks " + blocked_task_index + " and " + blocking_task_index

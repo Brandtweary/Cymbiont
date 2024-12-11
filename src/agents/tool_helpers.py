@@ -168,6 +168,10 @@ async def process_tool_calls(
             if validated_args is not None:
                 kwargs.update(validated_args)
             
+            # Update agent's previous_tool_call attribute
+            tool_args_str = ", ".join(f"{k}={v}" for k, v in validated_args.items()) if validated_args else ""
+            agent.previous_tool_call = f"{tool_name}({tool_args_str})"
+            
             # Call the tool processing function
             result = await tool_map[tool_name](**kwargs)
             if result:

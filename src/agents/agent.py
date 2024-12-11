@@ -52,6 +52,7 @@ class Agent:
         self.default_tool_choice = default_tool_choice
         self.default_temperature = default_temperature
         self.default_tools = default_tools or set()
+        self.previous_tool_call = ""  # Stores the last tool call as "tool name with args"
         
         # Create mutable copies of defaults for runtime modification
         self.current_system_prompt_parts = SystemPromptPartsData(
@@ -150,6 +151,11 @@ class Agent:
             system_prompt_parts.parts["progressive_summary"] = SystemPromptPartInfo(toggled=True, index=len(system_prompt_parts.parts))
         elif system_prompt_parts and "progressive_summary" in system_prompt_parts.parts:
             del system_prompt_parts.parts["progressive_summary"]
+        
+        # Handle previous tool call if present
+        if "previous_tool_call" in system_prompt_parts.parts:
+            system_prompt_parts.kwargs["previous_tool_call"] = self.previous_tool_call
+            system_prompt_parts.parts["previous_tool_call"].toggled = bool(self.previous_tool_call)
         
         return system_prompt_parts
 
