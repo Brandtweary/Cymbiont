@@ -235,7 +235,8 @@ async def process_edit_task(
     subtask_index: Optional[int] = None,
     new_description: Optional[str] = None,
     new_metadata_tags: Optional[List[str]] = None,
-    new_status: Optional[str] = None
+    new_status: Optional[str] = None,
+    delete_task: bool = False
 ) -> str:
     """Process the edit_task tool call."""
     # Convert status string to TaskStatus enum if provided
@@ -256,9 +257,12 @@ async def process_edit_task(
         subtask_index=subtask_index,
         new_description=new_description,
         new_metadata_tags=new_metadata_tags,
-        new_status=task_status
+        new_status=task_status,
+        delete_task=delete_task
     )
     
+    if delete_task:
+        return f"I have deleted {task_desc}"
     return f"I have updated {task_desc}"
 
 async def process_fold_task(

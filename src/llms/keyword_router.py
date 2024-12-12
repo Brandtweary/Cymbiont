@@ -52,10 +52,7 @@ class KeywordRouter:
         
     def _initialize_default_contexts(self, shell_commands: Optional[list[str]] = None):
         """Initialize the default context parts based on system prompt parts"""
-        # Get base keywords for shell_command_docs
-        shell_keywords = ["command", "argument", "parameter", "shell", "execute"]
         shell_phrases = []
-        
         # Filter out 'help' from exact matching to avoid false positives
         exact_commands = [cmd for cmd in (shell_commands or []) if cmd != 'help']
         
@@ -87,8 +84,8 @@ class KeywordRouter:
             ),
             ContextPart(
                 name="shell_command_docs",
-                keywords=shell_keywords,  # Only base keywords get lemmatized
-                key_phrases=[],
+                keywords=["command", "argument", "shell", "execute"], 
+                key_phrases=["can you run"],
                 system_prompt_parts=["shell_command_docs"],
                 tools=[ToolName.EXECUTE_SHELL_COMMAND],
                 exact_keywords=exact_commands or [],  # Shell commands stay exact
@@ -100,6 +97,13 @@ class KeywordRouter:
                 key_phrases=["response guidelines", "response format"],
                 system_prompt_parts=["response_guidelines"],
                 tools=[]
+            ),
+            ContextPart(
+                name="taskpad",
+                keywords=["taskpad", "task", "objective", "todo"],
+                key_phrases=[],
+                system_prompt_parts=["taskpad"],
+                tools=[ToolName.ADD_TASK, ToolName.ADD_TASK_DEPENDENCY, ToolName.COMPLETE_TASK, ToolName.EDIT_TASK, ToolName.FOLD_TASK, ToolName.UNFOLD_TASK]
             )
         ]
         

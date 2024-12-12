@@ -200,7 +200,7 @@ TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "edit_task",
-            "description": "Edit a task's properties, such as its description, status, or metadata tags.",
+            "description": "Edit a task's properties, such as its description, status, or metadata tags. Can also delete a task.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -229,7 +229,11 @@ TOOL_SCHEMAS = {
                         "type": "string",
                         "enum": ["ready", "in-progress", "tentative", "postponed", "ongoing", "completed"],
                         "description": "Optional new status for the task"
-                    }
+                    },
+                    "delete_task": {
+                        "type": "boolean",
+                        "description": "If true, delete the task instead of editing it",
+                        "default": False}
                 },
                 "required": ["display_index"]
             }
@@ -239,7 +243,7 @@ TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "fold_task",
-            "description": "Hide a task's subtasks in the display.",
+            "description": "Hide a task's subtasks in the taskpad.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -257,7 +261,7 @@ TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "unfold_task",
-            "description": "Show a task's subtasks in the display.",
+            "description": "Show a task's subtasks in the taskpad.",
             "parameters": {
                 "type": "object",
                 "properties": {

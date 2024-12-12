@@ -54,3 +54,17 @@ class Task:
             self.subtasks.insert(min(insertion_index, len(self.subtasks)), subtask)
         else:
             self.subtasks.append(subtask)
+
+    def remove_subtask(self, subtask: "Task") -> bool:
+        """Remove a subtask from this task.
+        
+        Args:
+            subtask: The task to remove from subtasks
+            
+        Returns:
+            bool: True if subtask was found and removed, False otherwise
+        """
+        if self.subtasks and subtask in self.subtasks:
+            self.subtasks.remove(subtask)
+            return True
+        return False

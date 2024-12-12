@@ -14,21 +14,18 @@ class ChatAgent(Agent):
     """
     
     def __init__(self, chat_history: ChatHistory, agent_name: str = AGENT_NAME, model: str = CHAT_AGENT_MODEL, activation_mode: ActivationMode = ActivationMode.CONTINUOUS):
+        default_tools = {
+            ToolName.TOGGLE_PROMPT_PART,
+            ToolName.TOGGLE_TOOL,
+            ToolName.MESSAGE_SELF,
+        }
+        if activation_mode == ActivationMode.CONTINUOUS:
+            default_tools.add(ToolName.MEDITATE)
+        
         super().__init__(
             chat_history=chat_history,
             agent_name=agent_name,
             model=model,
             activation_mode=activation_mode,
-            default_tools={
-                ToolName.TOGGLE_PROMPT_PART,
-                ToolName.TOGGLE_TOOL,
-                ToolName.MESSAGE_SELF,
-                ToolName.ADD_TASK,
-                ToolName.ADD_TASK_DEPENDENCY,
-                ToolName.COMPLETE_TASK,
-                ToolName.EDIT_TASK,
-                ToolName.FOLD_TASK,
-                ToolName.UNFOLD_TASK,
-                ToolName.MEDITATE
-            }
+            default_tools=default_tools
         )

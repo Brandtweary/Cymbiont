@@ -300,7 +300,8 @@ class Taskpad:
         subtask_index: Optional[int] = None,
         new_description: Optional[str] = None,
         new_metadata_tags: Optional[List[str]] = None,
-        new_status: Optional[TaskStatus] = None
+        new_status: Optional[TaskStatus] = None,
+        delete_task: bool = False
     ) -> None:
         """Edit a task's properties.
         
@@ -310,12 +311,14 @@ class Taskpad:
             new_description: Optional new description for the task
             new_metadata_tags: Optional new metadata tags for the task
             new_status: Optional new status for the task
+            delete_task: If True, delete the task instead of editing it
         """
         # Convert display index to numeric (0-based)
         task_idx = ord(display_index.upper()) - ord('A')
         
         # Find the task with this display index
         target_task = None
+        parent_task = None
         for task in self.top_level_tasks.values():
             if task.display_index == task_idx:
                 target_task = task
@@ -324,14 +327,31 @@ class Taskpad:
         if target_task is None:
             logger.warning(f"No task found with index {display_index}")
             return
-            
+        
         if subtask_index is not None:
             # Convert to 0-based index
             idx = subtask_index - 1
             if not target_task.subtasks or idx >= len(target_task.subtasks):
                 logger.warning(f"No subtask found at index {subtask_index} for task {display_index}")
                 return
+            parent_task = target_task
             target_task = target_task.subtasks[idx]
+
+        if delete_task:
+            if subtask_index is not None:
+                assert parent_task is not None, "Parent task cannot be None if subtask_index was valid"
+                if not parent_task.remove_subtask(target_task):
+                    logger.warning(f"Failed to remove subtask {subtask_index} from task {display_index}")
+            else:
+                # Remove top-level task
+                task_id = None
+                for tid, task in self.top_level_tasks.items():
+                    if task == target_task:
+                        task_id = tid
+                        break
+                if task_id:
+                    del self.top_level_tasks[task_id]
+            return
         
         # Update task properties if new values provided
         if new_description is not None:

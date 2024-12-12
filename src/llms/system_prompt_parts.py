@@ -128,8 +128,6 @@ Text: {text}
 3. You automatically deactivate after giving a text-only response
 
 Remember, since a text-only response will deactivate a tool loop, if you need to troubleshoot a tool result, try using other tools first before you check-in with the user. Similarly, if you need to chain together multiple tool calls, don't announce what you are doing in between calls. Just make the tool calls directly.
-
-Don't use the meditate tool to end a tool loop during a conversation. Instead, give a text response.
 ''',
         required_params=[]
     ),
@@ -140,7 +138,10 @@ Don't use the meditate tool to end a tool loop during a conversation. Instead, g
     ),
     "taskpad": SystemMessagePart(
         header="Taskpad",
-        content="{taskpad}",
+        content='''{taskpad}
+        
+You can automatically toggle on your task management tools by using the word 'task' in a sentence.
+''',
         required_params=["taskpad"]
     ),
 }
