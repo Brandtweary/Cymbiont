@@ -18,9 +18,10 @@ async def process_message_self(
         message: The message to record
         agent: The Agent instance
     """
-    logger.log(LogLevel.TOOL, f"{agent.agent_name} recorded personal message: {message}")
-    get_shell().keyword_router.toggle_context(message, agent) # permits agent to potentially toggle their own context organically
-    return '(recorded personal note)'  # this is actually necessary for the LLM to track tool usage properly
+    logger.log(LogLevel.TOOL, f"{agent.agent_name} recorded personal message")
+    agent.chat_history.add_message("assistant", f"[SELF-ONLY] {message}", agent.agent_name)
+    get_shell().keyword_router.toggle_context(message, agent) # permits agent to toggle their own context organically
+    return ''
 
 async def process_toggle_prompt_part(
     part_name: str,

@@ -6,7 +6,7 @@ TOOL_SCHEMAS = {
         "type": "function",
         "function": {
             "name": "message_self",
-            "description": "Record a message to yourself. Useful for thinking through a problem before responding.",
+            "description": "Record a message to yourself. It will be automatically prefixed with [SELF-ONLY].",
             "parameters": {
                 "type": "object",
                 "properties": {
