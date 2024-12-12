@@ -259,3 +259,29 @@ async def process_edit_task(
     )
     
     return f"I have updated {task_desc}"
+
+async def process_fold_task(
+    agent: Agent,
+    display_index: str
+) -> str:
+    """Process the fold_task tool call."""
+    logger.log(
+        LogLevel.TOOL,
+        f"{agent.agent_name} used tool: fold_task - task {display_index}"
+    )
+    
+    agent.taskpad.fold_task(display_index)
+    return f"I have folded task {display_index}"
+
+async def process_unfold_task(
+    agent: Agent,
+    display_index: str
+) -> str:
+    """Process the unfold_task tool call."""
+    logger.log(
+        LogLevel.TOOL,
+        f"{agent.agent_name} used tool: unfold_task - task {display_index}"
+    )
+    
+    agent.taskpad.unfold_task(display_index)
+    return f"I have unfolded task {display_index}"

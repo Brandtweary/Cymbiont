@@ -29,6 +29,7 @@ class Task:
     metadata_tags: Optional[List[str]] = None
     subtasks: Optional[List["Task"]] = None  # List of subtasks
     top_level: bool = False  # Whether this is a top-level task
+    folded: bool = False  # Whether subtasks are hidden in display
 
     def __post_init__(self):
         """Initialize optional fields."""

@@ -234,5 +234,41 @@ TOOL_SCHEMAS = {
                 "required": ["display_index"]
             }
         }
+    },
+    ToolName.FOLD_TASK: {
+        "type": "function",
+        "function": {
+            "name": "fold_task",
+            "description": "Hide a task's subtasks in the display.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "display_index": {
+                        "type": "string",
+                        "description": "Index of the task to fold (A-Z)",
+                        "pattern": "^[A-Z]$"
+                    }
+                },
+                "required": ["display_index"]
+            }
+        }
+    },
+    ToolName.UNFOLD_TASK: {
+        "type": "function",
+        "function": {
+            "name": "unfold_task",
+            "description": "Show a task's subtasks in the display.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "display_index": {
+                        "type": "string",
+                        "description": "Index of the task to unfold (A-Z)",
+                        "pattern": "^[A-Z]$"
+                    }
+                },
+                "required": ["display_index"]
+            }
+        }
     }
 }

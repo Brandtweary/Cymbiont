@@ -72,6 +72,8 @@ class ToolName(Enum):
     ADD_TASK_DEPENDENCY = "add_task_dependency"
     COMPLETE_TASK = "complete_task"
     EDIT_TASK = "edit_task"
+    FOLD_TASK = "fold_task"
+    UNFOLD_TASK = "unfold_task"
 
 class ToolChoice(Enum):
     """Tool choice options for API calls."""

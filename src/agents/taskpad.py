@@ -136,27 +136,32 @@ class Taskpad:
             """
             subtask_lines = []
             if task.subtasks:
-                for i, subtask in enumerate(task.subtasks, 1):
-                    subtask_tags = f" [{', '.join(subtask.metadata_tags or [])}]" if subtask.metadata_tags else ""
-                    subtask_status = f" ({subtask.status.value})" if subtask.status != TaskStatus.READY else ""
+                if task.folded:
                     indent = "    " * indent_level
-                    
-                    # Add checkbox or checkmark based on completion status
-                    status_indicator = "✓" if subtask.status == TaskStatus.COMPLETED else "☐"
+                    num_subtasks = len(task.subtasks)
+                    subtask_lines.append(f"{indent}({num_subtasks} subtask{'s' if num_subtasks != 1 else ''} folded)")
+                else:
+                    for i, subtask in enumerate(task.subtasks, 1):
+                        subtask_tags = f" [{', '.join(subtask.metadata_tags or [])}]" if subtask.metadata_tags else ""
+                        subtask_status = f" ({subtask.status.value})" if subtask.status != TaskStatus.READY else ""
+                        indent = "    " * indent_level
+                        
+                        # Add checkbox or checkmark based on completion status
+                        status_indicator = "✓" if subtask.status == TaskStatus.COMPLETED else "☐"
 
-                    # Check if this subtask is a top-level task
-                    if subtask.top_level:
-                        # Add alphabetic index and [blocking] tag if it has a display index
-                        display_idx = ""
-                        if subtask.display_index is not None:
-                            display_idx = f"{chr(ord('A') + min(subtask.display_index, 25))}) "
-                        subtask_tags = f" [blocking{', ' + ', '.join(subtask.metadata_tags) if subtask.metadata_tags else ''}]"
-                        subtask_lines.append(f"{indent}{status_indicator} {i}. {display_idx}{subtask.description}{subtask_tags}{subtask_status}")
-                    else:
-                        subtask_lines.append(f"{indent}{status_indicator} {i}. {subtask.description}{subtask_tags}{subtask_status}")
-                    
-                    # Recursively format any nested subtasks
-                    subtask_lines.extend(format_subtasks(subtask, indent_level + 1))
+                        # Check if this subtask is a top-level task
+                        if subtask.top_level:
+                            # Add alphabetic index and [blocking] tag if it has a display index
+                            display_idx = ""
+                            if subtask.display_index is not None:
+                                display_idx = f"{chr(ord('A') + min(subtask.display_index, 25))}) "
+                            subtask_tags = f" [blocking{', ' + ', '.join(subtask.metadata_tags) if subtask.metadata_tags else ''}]"
+                            subtask_lines.append(f"{indent}{status_indicator} {i}. {display_idx}{subtask.description}{subtask_tags}{subtask_status}")
+                        else:
+                            subtask_lines.append(f"{indent}{status_indicator} {i}. {subtask.description}{subtask_tags}{subtask_status}")
+                        
+                        # Recursively format any nested subtasks
+                        subtask_lines.extend(format_subtasks(subtask, indent_level + 1))
             return subtask_lines
             
         # Sort tasks by display index (all top-level tasks should have display indices)
@@ -338,3 +343,37 @@ class Taskpad:
             # If this is a top-level task being marked as completed, handle it
             if new_status == TaskStatus.COMPLETED and subtask_index is None:
                 self.complete_task(display_index)
+
+    def fold_task(self, display_index: str) -> None:
+        """Fold a task to hide its subtasks in display.
+        
+        Args:
+            display_index: Index of the task (A-Z)
+        """
+        # Convert display index to numeric (0-based)
+        task_idx = ord(display_index.upper()) - ord('A')
+        
+        # Find the task with this display index
+        for task in self.top_level_tasks.values():
+            if task.display_index == task_idx:
+                task.folded = True
+                return
+                
+        logger.warning(f"No task found with index {display_index}")
+        
+    def unfold_task(self, display_index: str) -> None:
+        """Unfold a task to show its subtasks in display.
+        
+        Args:
+            display_index: Index of the task (A-Z)
+        """
+        # Convert display index to numeric (0-based)
+        task_idx = ord(display_index.upper()) - ord('A')
+        
+        # Find the task with this display index
+        for task in self.top_level_tasks.values():
+            if task.display_index == task_idx:
+                task.folded = False
+                return
+                
+        logger.warning(f"No task found with index {display_index}")

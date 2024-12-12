@@ -29,7 +29,9 @@ def get_tool_function_map() -> Dict[str, Callable]:
                             process_add_task,
                             process_add_task_dependency,
                             process_complete_task,
-                            process_edit_task
+                            process_edit_task,
+                            process_fold_task,
+                            process_unfold_task
                             )
     import inspect
     from . import agent_tools
@@ -43,7 +45,9 @@ def get_tool_function_map() -> Dict[str, Callable]:
         ToolName.ADD_TASK.value: process_add_task,
         ToolName.ADD_TASK_DEPENDENCY.value: process_add_task_dependency,
         ToolName.COMPLETE_TASK.value: process_complete_task,
-        ToolName.EDIT_TASK.value: process_edit_task
+        ToolName.EDIT_TASK.value: process_edit_task,
+        ToolName.FOLD_TASK.value: process_fold_task,
+        ToolName.UNFOLD_TASK.value: process_unfold_task
     }
 
     # Get all functions from agent_tools module
