@@ -89,6 +89,8 @@ class ContextPart:
     system_prompt_parts: List[str]
     tools: List[ToolName]
     key_phrases: List[str] = field(default_factory=list)  # Optional list of phrases to match
+    exact_keywords: List[str] = field(default_factory=list)
+    exact_key_phrases: List[str] = field(default_factory=list)
 
 @dataclass
 class TemporaryContextValue:

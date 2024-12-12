@@ -56,10 +56,12 @@ class KeywordRouter:
         shell_keywords = ["command", "argument", "parameter", "shell", "execute"]
         shell_phrases = []
         
+        # Filter out 'help' from exact matching to avoid false positives
+        exact_commands = [cmd for cmd in (shell_commands or []) if cmd != 'help']
+        
         if shell_commands:
-            shell_keywords.extend(shell_commands)
-            # Convert snake_case commands to natural phrases
-            shell_phrases.extend(cmd.replace('_', ' ') for cmd in shell_commands)
+            # Convert snake_case commands to natural phrases for exact matching
+            shell_phrases.extend(cmd.replace('_', ' ') for cmd in exact_commands)
             
         default_contexts = [
             ContextPart(
@@ -85,10 +87,12 @@ class KeywordRouter:
             ),
             ContextPart(
                 name="shell_command_docs",
-                keywords=shell_keywords,
-                key_phrases=shell_phrases,
+                keywords=shell_keywords,  # Only base keywords get lemmatized
+                key_phrases=[],
                 system_prompt_parts=["shell_command_docs"],
-                tools=[ToolName.EXECUTE_SHELL_COMMAND]
+                tools=[ToolName.EXECUTE_SHELL_COMMAND],
+                exact_keywords=exact_commands or [],  # Shell commands stay exact
+                exact_key_phrases=shell_phrases  # Natural phrases stay exact
             ),
             ContextPart(
                 name="response_guidelines",
@@ -117,31 +121,45 @@ class KeywordRouter:
         """
         # Clean and stem the full query for phrase matching
         stemmed_query = ' '.join(self._stem(word) for word in query.split())
+        query_lower = query.lower()
         
         # Split query into words and stem each for keyword matching
-        query_words = {word: self._stem(word) for word in query.lower().split()}
+        query_words = {word: self._stem(word) for word in query_lower.split()}
         query_stems = set(query_words.values())
         matches = []
         
-        for context_name, context in self.context_parts.items():
+        for context in self.context_parts.values():
             context_matched = False
             
-            # Check keywords
+            # Check stemmed keywords
             for keyword in context.keywords:
                 stemmed_keyword = self._stem(keyword)
                 if stemmed_keyword in query_stems:
                     context_matched = True
+                    break
             
-            # Check phrases
+            # Check stemmed key phrases
             for phrase in context.key_phrases:
-                # Stem each word in the phrase
                 stemmed_phrase = ' '.join(self._stem(word) for word in phrase.split())
                 if stemmed_phrase in stemmed_query:
                     context_matched = True
+                    break
+            
+            # Check exact keywords
+            for keyword in context.exact_keywords:
+                if keyword.lower() in query_lower:
+                    context_matched = True
+                    break
+            
+            # Check exact key phrases
+            for phrase in context.exact_key_phrases:
+                if phrase.lower() in query_lower:
+                    context_matched = True
+                    break
             
             if context_matched:
                 matches.append(context)
-            
+        
         return matches
     
     def toggle_context(self, query: str, agent: Agent) -> None:
