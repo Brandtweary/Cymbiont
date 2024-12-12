@@ -195,5 +195,44 @@ TOOL_SCHEMAS = {
                 "required": ["display_index"]
             }
         }
+    },
+    ToolName.EDIT_TASK: {
+        "type": "function",
+        "function": {
+            "name": "edit_task",
+            "description": "Edit a task's properties, such as its description, status, or metadata tags.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "display_index": {
+                        "type": "string",
+                        "description": "Index of the task to edit (A-Z)",
+                        "pattern": "^[A-Z]$"
+                    },
+                    "subtask_index": {
+                        "type": "integer",
+                        "description": "Optional 1-based index of the subtask to edit. If not provided, the main task will be edited.",
+                        "minimum": 1
+                    },
+                    "new_description": {
+                        "type": "string",
+                        "description": "Optional new description for the task"
+                    },
+                    "new_metadata_tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Optional new list of metadata tags for the task"
+                    },
+                    "new_status": {
+                        "type": "string",
+                        "enum": ["ready", "in-progress", "tentative", "postponed", "ongoing", "completed"],
+                        "description": "Optional new status for the task"
+                    }
+                },
+                "required": ["display_index"]
+            }
+        }
     }
 }

@@ -288,3 +288,53 @@ class Taskpad:
         ):
             if task.display_index > start_index:  # type: ignore  # We filtered for non-None above
                 task.display_index -= 1
+
+    def edit_task(
+        self,
+        display_index: str,
+        subtask_index: Optional[int] = None,
+        new_description: Optional[str] = None,
+        new_metadata_tags: Optional[List[str]] = None,
+        new_status: Optional[TaskStatus] = None
+    ) -> None:
+        """Edit a task's properties.
+        
+        Args:
+            display_index: Index of the task (A-Z)
+            subtask_index: Optional 1-based index of subtask to edit
+            new_description: Optional new description for the task
+            new_metadata_tags: Optional new metadata tags for the task
+            new_status: Optional new status for the task
+        """
+        # Convert display index to numeric (0-based)
+        task_idx = ord(display_index.upper()) - ord('A')
+        
+        # Find the task with this display index
+        target_task = None
+        for task in self.top_level_tasks.values():
+            if task.display_index == task_idx:
+                target_task = task
+                break
+                
+        if target_task is None:
+            logger.warning(f"No task found with index {display_index}")
+            return
+            
+        if subtask_index is not None:
+            # Convert to 0-based index
+            idx = subtask_index - 1
+            if not target_task.subtasks or idx >= len(target_task.subtasks):
+                logger.warning(f"No subtask found at index {subtask_index} for task {display_index}")
+                return
+            target_task = target_task.subtasks[idx]
+        
+        # Update task properties if new values provided
+        if new_description is not None:
+            target_task.description = new_description
+        if new_metadata_tags is not None:
+            target_task.metadata_tags = new_metadata_tags
+        if new_status is not None:
+            target_task.status = new_status
+            # If this is a top-level task being marked as completed, handle it
+            if new_status == TaskStatus.COMPLETED and subtask_index is None:
+                self.complete_task(display_index)

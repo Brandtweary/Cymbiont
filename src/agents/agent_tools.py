@@ -21,6 +21,7 @@ async def process_message_self(
     logger.log(LogLevel.TOOL, f"{agent.agent_name} recorded personal message: {message}")
     get_shell().keyword_router.toggle_context(message, agent) # permits agent to potentially toggle their own context organically
     return '(recorded personal note)'  # this is actually necessary for the LLM to track tool usage properly
+
 async def process_toggle_prompt_part(
     part_name: str,
     agent: Agent,
@@ -83,7 +84,7 @@ async def process_execute_shell_command(
         return f"I have executed the command: {formatted_cmd} with args {formatted_args}"
     else:
         return f"I have executed the command: {formatted_cmd}"
-    
+
 async def process_toggle_tool(
     tool_name: str,
     agent: Agent,
@@ -226,3 +227,35 @@ async def process_complete_task(
     )
     
     return f"I have marked {task_desc} as completed"
+
+async def process_edit_task(
+    agent: Agent,
+    display_index: str,
+    subtask_index: Optional[int] = None,
+    new_description: Optional[str] = None,
+    new_metadata_tags: Optional[List[str]] = None,
+    new_status: Optional[str] = None
+) -> str:
+    """Process the edit_task tool call."""
+    # Convert status string to TaskStatus enum if provided
+    task_status = TaskStatus(new_status) if new_status else None
+    
+    task_desc = f"task {display_index}"
+    if subtask_index is not None:
+        task_desc += f" subtask {subtask_index}"
+        
+    logger.log(
+        LogLevel.TOOL,
+        f"{agent.agent_name} used tool: edit_task - {task_desc}"
+    )
+    
+    # Edit the task
+    agent.taskpad.edit_task(
+        display_index=display_index,
+        subtask_index=subtask_index,
+        new_description=new_description,
+        new_metadata_tags=new_metadata_tags,
+        new_status=task_status
+    )
+    
+    return f"I have updated {task_desc}"
