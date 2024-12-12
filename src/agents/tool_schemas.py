@@ -172,5 +172,28 @@ TOOL_SCHEMAS = {
                 "required": ["blocked_task_index", "blocking_task_index"]
             }
         }
+    },
+    ToolName.COMPLETE_TASK: {
+        "type": "function",
+        "function": {
+            "name": "complete_task",
+            "description": "Mark a task or subtask as completed.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "display_index": {
+                        "type": "string",
+                        "description": "Index of the task to complete (A-Z)",
+                        "pattern": "^[A-Z]$"
+                    },
+                    "subtask_index": {
+                        "type": "integer",
+                        "description": "Optional 1-based index of the subtask to complete. If not provided, the main task will be completed.",
+                        "minimum": 1
+                    }
+                },
+                "required": ["display_index"]
+            }
+        }
     }
 }

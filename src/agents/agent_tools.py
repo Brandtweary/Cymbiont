@@ -203,3 +203,26 @@ async def process_add_task_dependency(
         insertion_index=insertion_index
     )
     return "I have added a dependency between tasks " + blocked_task_index + " and " + blocking_task_index
+
+async def process_complete_task(
+    agent: Agent,
+    display_index: str,
+    subtask_index: Optional[int] = None
+) -> str:
+    """Process the complete_task tool call."""
+    task_desc = f"task {display_index}"
+    if subtask_index is not None:
+        task_desc += f" subtask {subtask_index}"
+        
+    logger.log(
+        LogLevel.TOOL,
+        f"{agent.agent_name} used tool: complete_task - {task_desc}"
+    )
+    
+    # Complete the task
+    agent.taskpad.complete_task(
+        display_index=display_index,
+        subtask_index=subtask_index
+    )
+    
+    return f"I have marked {task_desc} as completed"

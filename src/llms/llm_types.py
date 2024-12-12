@@ -70,6 +70,7 @@ class ToolName(Enum):
     TOGGLE_TOOL = "toggle_tool"
     ADD_TASK = "add_task"
     ADD_TASK_DEPENDENCY = "add_task_dependency"
+    COMPLETE_TASK = "complete_task"
 
 class ToolChoice(Enum):
     """Tool choice options for API calls."""

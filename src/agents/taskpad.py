@@ -8,6 +8,7 @@ class Taskpad:
     
     def __init__(self):
         self.top_level_tasks: Dict[str, Task] = {}
+        self.completed_tasks: List[Task] = []
     
     @property
     def has_tasks(self) -> bool:
@@ -116,7 +117,8 @@ class Taskpad:
             description=description,
             display_index=display_index,
             metadata_tags=metadata_tags,
-            status=status
+            status=status,
+            top_level=True
         )
         self.top_level_tasks[str(uuid.uuid4())] = task
 
@@ -125,12 +127,11 @@ class Taskpad:
         if not self.has_tasks:
             return "No current tasks"
             
-        def format_subtasks(task: Task, top_level_tasks: Dict[str, Task], indent_level: int = 1) -> List[str]:
+        def format_subtasks(task: Task, indent_level: int = 1) -> List[str]:
             """Helper function to recursively format subtasks.
             
             Args:
                 task: The task to format subtasks for
-                top_level_tasks: Dict mapping task IDs to top-level Task objects
                 indent_level: Current indentation level
             """
             subtask_lines = []
@@ -139,28 +140,29 @@ class Taskpad:
                     subtask_tags = f" [{', '.join(subtask.metadata_tags or [])}]" if subtask.metadata_tags else ""
                     subtask_status = f" ({subtask.status.value})" if subtask.status != TaskStatus.READY else ""
                     indent = "    " * indent_level
+                    
+                    # Add checkbox or checkmark based on completion status
+                    status_indicator = "✓" if subtask.status == TaskStatus.COMPLETED else "☐"
 
-                    # Check if this subtask is actually a top-level task
-                    is_top_level = subtask.display_index is not None and any(
-                        t.display_index == subtask.display_index for t in top_level_tasks.values()
-                        if t.display_index is not None  # All top-level tasks should have display indices
-                    )
-                    if is_top_level:
-                        # Add alphabetic index and [blocking] tag
-                        display_idx = chr(ord('A') + min(subtask.display_index, 25))  # type: ignore  # We checked for non-None above
+                    # Check if this subtask is a top-level task
+                    if subtask.top_level:
+                        # Add alphabetic index and [blocking] tag if it has a display index
+                        display_idx = ""
+                        if subtask.display_index is not None:
+                            display_idx = f"{chr(ord('A') + min(subtask.display_index, 25))}) "
                         subtask_tags = f" [blocking{', ' + ', '.join(subtask.metadata_tags) if subtask.metadata_tags else ''}]"
-                        subtask_lines.append(f"{indent}{i}. {display_idx}) {subtask.description}{subtask_tags}{subtask_status}")
+                        subtask_lines.append(f"{indent}{status_indicator} {i}. {display_idx}{subtask.description}{subtask_tags}{subtask_status}")
                     else:
-                        subtask_lines.append(f"{indent}{i}. {subtask.description}{subtask_tags}{subtask_status}")
+                        subtask_lines.append(f"{indent}{status_indicator} {i}. {subtask.description}{subtask_tags}{subtask_status}")
                     
                     # Recursively format any nested subtasks
-                    subtask_lines.extend(format_subtasks(subtask, top_level_tasks, indent_level + 1))
+                    subtask_lines.extend(format_subtasks(subtask, indent_level + 1))
             return subtask_lines
             
         # Sort tasks by display index (all top-level tasks should have display indices)
         sorted_tasks = sorted(
             self.top_level_tasks.items(),
-            key=lambda x: x[1].display_index if x[1].display_index is not None else -1  # type: ignore  # All top-level tasks should have display indices
+            key=lambda x: x[1].display_index if x[1].display_index is not None else -1
         )
         
         task_lines = []
@@ -172,13 +174,16 @@ class Taskpad:
             tags_str = f" [{', '.join(task.metadata_tags or [])}]" if task.metadata_tags else ""
             status_str = f" ({task.status.value})" if task.status != TaskStatus.READY else ""
             
-            # Convert numeric index to A-Z for display (all top-level tasks should have display indices)
+            # Add checkbox or checkmark based on completion status
+            status_indicator = "✓" if task.status == TaskStatus.COMPLETED else "☐"
+            
+            # Convert numeric index to A-Z for display
             assert task.display_index is not None, "Top-level task must have display_index"
             display_idx = chr(ord('A') + min(task.display_index, 25))
-            task_lines.append(f"{display_idx}) {task.description}{tags_str}{status_str}")
+            task_lines.append(f"{status_indicator} {display_idx}) {task.description}{tags_str}{status_str}")
             
             # Add subtasks if present using recursive helper
-            task_lines.extend(format_subtasks(task, self.top_level_tasks))
+            task_lines.extend(format_subtasks(task))
         
         formatted_tasks = "\n".join(task_lines)
         if hidden_count > 0:
@@ -231,3 +236,55 @@ class Taskpad:
 
         # Add the blocking task as a subtask of the blocked task
         blocked_task.add_subtask(blocking_task, insertion_index)
+
+    def complete_task(self, display_index: str, subtask_index: Optional[int] = None) -> None:
+        """Mark a task as completed.
+        
+        Args:
+            display_index: Index of the task (A-Z)
+            subtask_index: Optional 1-based index of subtask to complete
+        """
+        # Convert display index to numeric (0-based)
+        task_idx = ord(display_index.upper()) - ord('A')
+        
+        # Find the task with this display index and its ID
+        target_task = None
+        target_task_id = None
+        for tid, task in self.top_level_tasks.items():
+            if task.display_index == task_idx:
+                target_task = task
+                target_task_id = tid
+                break
+                
+        if target_task is None:
+            logger.warning(f"No task found with index {display_index}")
+            return
+            
+        # At this point, we found a task so target_task_id must not be None
+        assert target_task_id is not None, "Task ID cannot be None for top-level task"
+            
+        if subtask_index is not None:
+            # Convert to 0-based index
+            idx = subtask_index - 1
+            if not target_task.subtasks or idx >= len(target_task.subtasks):
+                logger.warning(f"No subtask found at index {subtask_index} for task {display_index}")
+                return
+            target_task.subtasks[idx].status = TaskStatus.COMPLETED
+        else:
+            target_task.status = TaskStatus.COMPLETED
+            # Clear display index since it's no longer in the active list
+            target_task.display_index = None
+            # Move the task to completed_tasks and remove from top_level_tasks
+            self.completed_tasks.append(target_task)
+            del self.top_level_tasks[target_task_id]
+            # Adjust display indices for remaining tasks
+            self._cascade_tasks_down(task_idx)
+            
+    def _cascade_tasks_down(self, start_index: int) -> None:
+        """Move tasks after start_index down by one to fill the gap."""
+        for task in sorted(
+            [t for t in self.top_level_tasks.values() if t.display_index is not None],
+            key=lambda t: t.display_index  # type: ignore  # We filtered for non-None above
+        ):
+            if task.display_index > start_index:  # type: ignore  # We filtered for non-None above
+                task.display_index -= 1

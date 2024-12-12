@@ -18,6 +18,7 @@ class TaskStatus(Enum):
     TENTATIVE = "tentative"
     POSTPONED = "postponed"
     ONGOING = "ongoing"
+    COMPLETED = "completed"
 
 @dataclass
 class Task:
@@ -27,6 +28,7 @@ class Task:
     status: TaskStatus = TaskStatus.READY
     metadata_tags: Optional[List[str]] = None
     subtasks: Optional[List["Task"]] = None  # List of subtasks
+    top_level: bool = False  # Whether this is a top-level task
 
     def __post_init__(self):
         """Initialize optional fields."""
