@@ -17,6 +17,7 @@ class Paths(NamedTuple):
     logs_dir: Path
     inert_docs_dir: Path
     snapshots_dir: Path
+    agent_notes_dir: Path  # Directory for agent's daily notes
 
 # Get the project root (one level up from src)
 PROJECT_ROOT = Path(__file__).parent.parent

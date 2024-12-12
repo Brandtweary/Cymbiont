@@ -181,7 +181,8 @@ def get_paths(base_dir: Path) -> Paths:
             index_dir=base_dir / "indexes",
             logs_dir=base_dir / "logs",
             inert_docs_dir=base_dir / "inert_documents",
-            snapshots_dir=base_dir / "snapshots"
+            snapshots_dir=base_dir / "snapshots",
+            agent_notes_dir=base_dir / "agent_notes/daily_notes"
         )
     except Exception as e:
         logger.error(f"Failed to get paths for {base_dir}: {str(e)}")

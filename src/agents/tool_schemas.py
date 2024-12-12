@@ -19,6 +19,30 @@ TOOL_SCHEMAS = {
             }
         }
     },
+    ToolName.ADD_NOTE: {
+        "type": "function",
+        "function": {
+            "name": "add_note",
+            "description": "Add a note entry to your daily notes document.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "note_content": {
+                        "type": "string",
+                        "description": "The content of the note to add"
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": "Optional dictionary of metadata tags to include with the note",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": ["note_content"]
+            }
+        }
+    },
     ToolName.EXECUTE_SHELL_COMMAND: {
         "type": "function",
         "function": {
@@ -272,6 +296,22 @@ TOOL_SCHEMAS = {
                     }
                 },
                 "required": ["display_index"]
+            }
+        }
+    },
+    ToolName.READ_NOTES: {
+        "type": "function",
+        "function": {
+            "name": "read_notes",
+            "description": "Read notes from a specific date.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Optional date in YYYY-MM-DD format. Defaults to current date if not provided."
+                    }
+                }
             }
         }
     }

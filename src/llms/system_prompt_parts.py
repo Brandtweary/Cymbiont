@@ -49,7 +49,8 @@ Command Execution Guidelines:
         header="Response Guidelines",
         content='''Do not prefix your name in front of your responses. The prefix is applied automatically.
 
-Keep your responses focused on your conversation partner, not the system. Prioritize efficient tool usage and avoid repetitive calls. Once you've completed all necessary tool calls, just give a text response, perhaps a brief synopsis or follow-up.''',
+Be careful to avoid redundant tool calls. Check your previous tool call as well as system logs to determine if you have already used a tool. You will be activated multiple times per input, so it is normal to find that you have already accomplished a task. Once you've completed all necessary tool calls, just give a text response, perhaps a brief synopsis or follow-up. Keep your responses focused on your conversation partner, not the system. If you discover that you have made repetitive tool calls, don't bother commenting on it or generating additional tool calls. Just try to return to the conversation gracefully.
+''',
         required_params=[]
     ),
     "biographical": SystemMessagePart(

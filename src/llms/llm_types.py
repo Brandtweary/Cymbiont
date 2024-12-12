@@ -74,6 +74,8 @@ class ToolName(Enum):
     EDIT_TASK = "edit_task"
     FOLD_TASK = "fold_task"
     UNFOLD_TASK = "unfold_task"
+    ADD_NOTE = "add_note"
+    READ_NOTES = "read_notes"
 
 class ToolChoice(Enum):
     """Tool choice options for API calls."""

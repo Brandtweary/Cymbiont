@@ -102,7 +102,7 @@ class KeywordRouter:
                 name="taskpad",
                 keywords=["taskpad", "task", "objective", "todo"],
                 key_phrases=[],
-                system_prompt_parts=["taskpad"],
+                system_prompt_parts=[],  # taskpad is supposed to always be shown
                 tools=[ToolName.ADD_TASK, ToolName.ADD_TASK_DEPENDENCY, ToolName.COMPLETE_TASK, ToolName.EDIT_TASK, ToolName.FOLD_TASK, ToolName.UNFOLD_TASK]
             )
         ]

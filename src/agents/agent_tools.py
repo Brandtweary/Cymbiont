@@ -5,7 +5,7 @@ from llms.llm_types import SystemPromptPartsData, ToolName
 from typing import Optional, List, Dict, Any, Union
 import asyncio
 from .agent_types import TaskStatus
-from enum import Enum
+from .notetaking import add_note, read_notes
 
 async def process_message_self(
     message: str,
@@ -290,3 +290,49 @@ async def process_unfold_task(
     
     agent.taskpad.unfold_task(display_index)
     return f"I have unfolded task {display_index}"
+
+async def process_add_note(
+    note_content: str,
+    agent: Agent,
+    metadata: Optional[Dict[str, Any]] = None
+) -> Optional[str]:
+    """
+    Process the add_note tool call.
+    
+    Args:
+        note_content: The content of the note to add
+        agent: The Agent instance
+        metadata: Optional dictionary of metadata tags
+    """    
+    try:
+        add_note(note_content, metadata)
+        logger.log(LogLevel.TOOL, f"{agent.agent_name} added a note")
+        return "I have added a note"
+    except Exception as e:
+        error_msg = f"Failed to add note: {str(e)}"
+        logger.error(error_msg)
+        if DEBUG_ENABLED:
+            raise
+    return ''
+
+async def process_read_notes(
+    agent: Agent,
+    date: Optional[str] = None
+) -> str:
+    """
+    Process the read_notes tool call.
+    
+    Args:
+        agent: The Agent instance
+        date: Optional date string in YYYY-MM-DD format
+    """ 
+    try:
+        read_notes(date)
+        logger.log(LogLevel.TOOL, f"{agent.agent_name} read notes")
+        return "I have read notes"
+    except Exception as e:
+        error_msg = f"Failed to read notes: {str(e)}"
+        logger.error(error_msg)
+        if DEBUG_ENABLED:
+            raise
+        return ''
