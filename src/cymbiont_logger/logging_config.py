@@ -40,6 +40,8 @@ class ConsoleFilter(logging.Filter):
             return False  # Block all messages in quiet mode
         if record.levelno == LogLevel.SHELL:
             return False  # Never show SHELL messages in console
+        if record.levelno == LogLevel.BASH:
+            return True  # Always show bash output
         if record.levelno == logging.DEBUG:
             return self.debug
         if record.levelno == LogLevel.BENCHMARK:
@@ -69,6 +71,10 @@ class ColoredFormatter(logging.Formatter):
         self.ORANGE = "\033[38;2;255;165;0m"  # Tool logs (RGB: 255,165,0)
 
     def format(self, record: logging.LogRecord) -> str:
+        # Pass through bash output without color modification
+        if record.levelno == LogLevel.BASH:
+            return super().format(record)
+            
         # Select color based on log level
         color = self.GREEN  # default
         prefix = ""

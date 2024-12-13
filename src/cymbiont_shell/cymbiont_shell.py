@@ -20,6 +20,7 @@ from .command_metadata import create_commands
 from .log_aware_session import LogAwareSession
 from agents.agent_types import ActivationMode
 from prompt_toolkit.patch_stdout import patch_stdout
+from agents.bash_executor import BashExecutor
 
 
 class CymbiontShell:
@@ -27,6 +28,7 @@ class CymbiontShell:
         self.chat_history = ChatHistory()
         self.test_successes: int = 0
         self.test_failures: int = 0
+        self.bash_executor: Optional[BashExecutor] = None
         
         # Initialize agents
         register_tools()
@@ -45,7 +47,8 @@ class CymbiontShell:
             do_exit=self.do_exit,
             do_help=self.do_help,
             do_hello_world=self.do_hello_world,
-            do_print_total_tokens=self.do_print_total_tokens
+            do_print_total_tokens=self.do_print_total_tokens,
+            do_bash=self.do_bash
         )
         
         # Initialize keyword router with command names
@@ -304,3 +307,33 @@ class CymbiontShell:
         """A friendly greeting with emojis! 🤖"""
         logger.info("Hello World! 🤖 ⚡")
         return False
+
+    async def do_bash(self, args: str) -> None:
+        """Execute a command in bash.
+        Usage: bash <command>
+        """
+        if not args:
+            logger.error("No command provided. Usage: bash <command>")
+            return
+            
+        # Initialize bash executor if needed
+        if self.bash_executor is None:
+            try:
+                self.bash_executor = BashExecutor()
+            except Exception as e:
+                logger.error(f"Failed to initialize bash executor: {e}")
+                return
+                
+        try:
+            # Execute the command
+            output, return_code = self.bash_executor.execute(args)
+            
+            if output:
+                logger.log(LogLevel.BASH, output)
+            if return_code != 0:
+                logger.error(f"Command failed with return code {return_code}")
+                
+        except Exception as e:
+            logger.error(f"Failed to execute command: {e}")
+            # Reset executor on failure
+            self.bash_executor = None

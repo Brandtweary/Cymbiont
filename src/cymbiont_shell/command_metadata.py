@@ -21,7 +21,8 @@ def create_commands(
     do_exit: Callable,
     do_help: Callable,
     do_hello_world: Callable,
-    do_print_total_tokens: Callable
+    do_print_total_tokens: Callable,
+    do_bash: Callable
 ) -> Dict[str, CommandData]:
     """Create the command metadata mapping.
     
@@ -30,6 +31,7 @@ def create_commands(
         do_help: Help command function from shell
         do_hello_world: Hello world command function from shell
         do_print_total_tokens: Print tokens command function from shell
+        do_bash: Bash command execution function from shell
     
     Returns:
         Dict mapping command names to their CommandData
@@ -67,6 +69,11 @@ def create_commands(
             callable=do_revise_document,
             takes_args=True,
             arg_types=[CommandArgType.FILENAME, CommandArgType.TEXT]
+        ),
+        'bash': CommandData(
+            callable=do_bash,
+            takes_args=True,
+            arg_types=[CommandArgType.TEXT]
         ),
         'test_api_queue': CommandData(
             callable=do_test_api_queue,
