@@ -152,13 +152,14 @@ def setup_directories(base_dir: Path) -> Paths:
     try:
         paths = get_paths(base_dir)
         
-        # Create directories first
-        for dir_path in paths:
-            try:
-                dir_path.mkdir(parents=True, exist_ok=True)
-            except Exception as e:
-                logger.error(f"Failed to create directory {dir_path}: {str(e)}")
-                raise
+        # Create directories first - iterate over the actual Path objects
+        for dir_path in paths._asdict().values():
+            if isinstance(dir_path, Path):  # Skip base_dir since it might be a string
+                try:
+                    dir_path.mkdir(parents=True, exist_ok=True)
+                except Exception as e:
+                    logger.error(f"Failed to create directory {dir_path}: {str(e)}")
+                    raise
         
         # Reset files if needed
         if FILE_RESET:

@@ -6,7 +6,7 @@ import time
 import asyncio
 from shared_resources import logger, FILE_RESET, DATA_DIR, Paths
 from .tag_extraction import extract_tags
-from utils import log_performance, generate_id, load_index, save_index, get_paths
+from utils import log_performance, generate_id, load_index, save_index, setup_directories, get_paths
 from .knowledge_graph_types import Document, Chunk
 from cymbiont_logger.process_log import ProcessLog
 from knowledge_graph.text_parser import split_into_chunks
@@ -88,7 +88,10 @@ async def get_processed_chunks(paths: Paths, doc_index: Dict, doc_name: str | No
             # Process and move single document
             doc, chunks = parse_document(filepath, paths, doc_index)
             all_chunks.extend(chunks)
-            shutil.move(str(filepath), str(paths.processed_dir / filepath.name))
+            # Move file to processed directory
+            dest_path = paths.processed_dir / filepath.name
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(filepath), str(dest_path))
     else:
         # Process all unprocessed folders first
         folders = find_unprocessed_doc_folders(paths)
@@ -109,7 +112,10 @@ async def get_processed_chunks(paths: Paths, doc_index: Dict, doc_name: str | No
             logger.info(f"Processing document: {filepath.name}")
             doc, chunks = parse_document(filepath, paths, doc_index)
             all_chunks.extend(chunks)
-            shutil.move(str(filepath), str(paths.processed_dir / filepath.name))
+            # Move file to processed directory
+            dest_path = paths.processed_dir / filepath.name
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(filepath), str(dest_path))
     
     if not all_chunks:
         logger.warning("No chunks were created from any documents")
@@ -218,22 +224,12 @@ async def create_data_snapshot(
         paths = get_paths(DATA_DIR)
         snapshot_base = paths.snapshots_dir / f"{name}_snapshot"
         
-        # Set up directories in snapshot
-        snapshot_paths = Paths(
-            base_dir=snapshot_base,
-            docs_dir=snapshot_base / "input_documents",
-            processed_dir=snapshot_base / "processed_documents",
-            chunks_dir=snapshot_base / "chunks",
-            index_dir=snapshot_base / "indexes",
-            logs_dir=snapshot_base / "logs",
-            inert_docs_dir=snapshot_base / "inert_documents",
-            snapshots_dir=snapshot_base / "snapshots"
-        )
+        # Get paths and create directories without resetting
+        snapshot_paths = get_paths(snapshot_base)
+        for dir_path in snapshot_paths._asdict().values():
+            if isinstance(dir_path, Path):
+                dir_path.mkdir(parents=True, exist_ok=True)
         
-        # Create all directories except snapshots and logs
-        for dir_path in [p for p in snapshot_paths if p not in {snapshot_paths.snapshots_dir, snapshot_paths.logs_dir}]:
-            dir_path.mkdir(parents=True, exist_ok=True)
-
         # Copy input documents to snapshot's input directory
         if doc_name:
             src_path = paths.docs_dir / doc_name
@@ -243,14 +239,16 @@ async def create_data_snapshot(
                 # Copy entire folder
                 shutil.copytree(src_path, snapshot_paths.docs_dir / doc_name)
             elif src_path.suffix.lower() in ['.txt', '.md']:
-                shutil.copy2(src_path, snapshot_paths.docs_dir)
+                # Copy to specific destination path to preserve filename
+                shutil.copy2(src_path, snapshot_paths.docs_dir / doc_name)
         else:
             # Copy all documents and folders
             for src_path in paths.docs_dir.iterdir():
                 if src_path.is_dir():
                     shutil.copytree(src_path, snapshot_paths.docs_dir / src_path.name)
                 elif src_path.suffix.lower() in ['.txt', '.md']:
-                    shutil.copy2(src_path, snapshot_paths.docs_dir)
+                    # Copy to specific destination path to preserve filename
+                    shutil.copy2(src_path, snapshot_paths.docs_dir / src_path.name)
             
         await process_documents(snapshot_base, doc_name, mock, mock_content)
         return snapshot_base

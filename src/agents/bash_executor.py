@@ -28,7 +28,7 @@ PROTECTED_PATHS = {
     str(Path(__file__).parent.parent.parent / ".venv"),
     
     # Test files
-    str(Path(__file__).parent.parent.parent / "tests/protected_file.txt"),
+    str(Path(__file__).parent.parent.parent / "tests/bash_executor_test_files/protected_file.txt"),
 }
 
 class BashExecutor:

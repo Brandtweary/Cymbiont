@@ -1,6 +1,7 @@
 if __name__ == "__main__":
     import os
     import sys
+    import shutil
     from pathlib import Path
     
     # Get path to cymbiont.py
@@ -11,6 +12,7 @@ if __name__ == "__main__":
     os.execv(sys.executable, [sys.executable, str(cymbiont_path), '--test', 'bash_executor'])
 else:
     import os
+    import shutil
     from pathlib import Path
     from agents.agent_types import ShellAccessTier
     from agents.bash_executor import BashExecutor
@@ -19,8 +21,12 @@ else:
     async def test_access_tiers():
         """Test shell access tier restrictions."""
         project_root = Path(__file__).parent.parent
-        test_file = project_root / "tests" / "test_file.txt"
-        protected_test_file = project_root / "tests" / "protected_file.txt"
+        test_dir = project_root / "tests" / "bash_executor_test_files"
+        test_file = test_dir / "test_file.txt"
+        protected_test_file = test_dir / "protected_file.txt"
+        
+        # Create test directory
+        test_dir.mkdir(exist_ok=True)
         
         # Create protected test file
         with open(protected_test_file, "w") as f:
@@ -223,8 +229,8 @@ else:
                 os.remove(test_file)
             if os.path.exists(protected_test_file):
                 os.remove(protected_test_file)
-            if os.path.exists(f"{project_root}/test_dir"):
-                os.rmdir(f"{project_root}/test_dir")
+            if os.path.exists(test_dir):
+                shutil.rmtree(test_dir)
 
     async def test_kill_switches():
         """Test kill switch behavior for blocked commands."""

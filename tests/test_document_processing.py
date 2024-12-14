@@ -13,13 +13,15 @@ else:
     # Normal imports for when the module is imported properly
     import shutil
     from pathlib import Path
-    from shared_resources import logger
+    from shared_resources import DATA_DIR, logger
     from knowledge_graph.documents import process_documents, create_data_snapshot
-    from utils import get_paths, load_index, save_index
+    from utils import setup_directories, get_paths
+    from utils import load_index, save_index
 
 async def test_process_documents() -> None:
     """Test the document processing pipeline with a mock document."""
-    paths = get_paths(Path("data"))
+    # Use setup_directories instead of get_paths directly to ensure all dirs are created
+    paths = setup_directories(DATA_DIR)
     test_file = paths.docs_dir / "test.txt"
     test_content = "testing..."
 
@@ -81,7 +83,7 @@ async def test_process_documents() -> None:
 
 async def test_create_data_snapshot() -> None:
     """Test creating a data snapshot with a mock document."""
-    paths = get_paths(Path("data"))
+    paths = setup_directories(DATA_DIR)
     test_file = paths.docs_dir / "test.txt"
     test_content = "testing..."
     snapshot_name = "test"
@@ -98,7 +100,7 @@ async def test_create_data_snapshot() -> None:
             mock_content='{"tags": ["test tag"]}'
         )
 
-        # Get paths for the snapshot
+        # Get paths for the snapshot without resetting directories
         snapshot_paths = get_paths(snapshot_base)
 
         # Verify snapshot structure
