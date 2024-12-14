@@ -231,6 +231,10 @@ else:
                 os.remove(protected_test_file)
             if os.path.exists(test_dir):
                 shutil.rmtree(test_dir)
+            # Clean up test_dir in project root if it exists
+            project_test_dir = project_root / "test_dir"
+            if os.path.exists(project_test_dir):
+                shutil.rmtree(project_test_dir)
 
     async def test_kill_switches():
         """Test kill switch behavior for blocked commands."""
