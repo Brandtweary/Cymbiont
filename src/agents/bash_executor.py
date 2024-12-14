@@ -26,6 +26,9 @@ PROTECTED_PATHS = {
     
     # Virtual environment
     ".venv",
+    
+    # Test files
+    "tests/protected_file.txt",
 }
 
 class BashExecutor:
@@ -53,8 +56,10 @@ class BashExecutor:
             self.access_tier = access_tier
             
         self.project_root = str(Path(__file__).parent.parent.parent)
+        # Track current directory
+        self.current_dir = self.project_root
         self._start_bash()
-        self._apply_base_safeguards()
+        self._apply_base_safeguards()  # Important: Apply base safeguards at startup
 
     def _apply_base_safeguards(self) -> None:
         """Apply base security safeguards to bash environment."""
@@ -70,6 +75,22 @@ class BashExecutor:
             "unset BASH_ENV ENV",  # Disable startup files
             "PATH=/bin:/usr/bin",  # Restrict PATH
             "readonly PATH",  # Prevent PATH modification
+            "unset CDPATH",  # Disable CDPATH
+            "set +o history",  # Disable command history
+            "readonly SHELL",  # Prevent shell switching
+            "readonly HOME",  # Prevent home directory changes
+            "readonly USER",  # Prevent user changes
+            "readonly LOGNAME",  # Prevent login name changes
+            "set -o noclobber",  # Prevent accidental file overwrites
+            "umask 022",  # Set safe file creation mask
+            "set +o errexit",  # Prevent exit on error
+            "set +o nounset",  # Prevent error on undefined variables
+            "set +o pipefail",  # Prevent exit on pipe failure
+            "set +o xtrace",  # Prevent tracing
+            "set +o verbose",  # Prevent verbose mode
+            "unset SHELLOPTS",  # Disable shell options
+            "unset ENV",  # Disable environment file
+            "unset BASH_ENV",  # Disable bash environment file
             "unset CDPATH",  # Disable CDPATH
         ]
         
@@ -102,11 +123,19 @@ class BashExecutor:
         if not cmd_parts:
             return False, "Empty command"
 
-        # Block dangerous shell features
+        # Block dangerous shell features for all tiers except TIER_5
         dangerous_patterns = [
-            r'\$\(', r'`', r'eval\s', r'exec\s', r'source\s', r'\.\s',
-            r'set\s+[+-][^f]', r'shopt\s', r'enable\s',
-            r'sudo\s', r'su\s'  # Block privilege elevation
+            r'\$\(', r'`',                    # Command substitution
+            r'eval\s', r'exec\s',             # Command execution
+            r'source\s', r'\.\s',             # File sourcing
+            r'alias\s',                       # Alias creation
+            r'function\s.*\{',                # Function definition
+            r'.*\(\s*\)\s*\{',               # Alternative function def
+            r'set\s+[+-][^f]',               # Shell option changes
+            r'shopt\s', r'enable\s',          # Shell feature changes
+            r'export\s+.*=',                  # Environment modifications
+            r'PATH=', r'ENV=', r'BASH_ENV=',  # Path/env modifications
+            r'sudo\s', r'su\s'                # Privilege elevation
         ]
         
         for pattern in dangerous_patterns:
@@ -116,11 +145,36 @@ class BashExecutor:
         # Path-based restrictions
         if self.access_tier == ShellAccessTier.TIER_1_PROJECT_READ:
             cmd_name = cmd_parts[0]
+            
+            # Block navigation outside project
             if cmd_name == "cd":
                 if len(cmd_parts) > 1:
-                    target = os.path.abspath(os.path.join(os.getcwd(), cmd_parts[1]))
-                    if not target.startswith(self.project_root):
+                    target_path = cmd_parts[1]
+                    abs_target = os.path.normpath(os.path.join(self.current_dir, target_path))
+                    
+                    # Check if target path is within project root
+                    try:
+                        rel_path = os.path.relpath(abs_target, self.project_root)
+                        if rel_path.startswith('..'):
+                            return False, "Cannot navigate outside project directory"
+                        # Update current directory if validation passes
+                        self.current_dir = abs_target
+                    except ValueError:
                         return False, "Cannot navigate outside project directory"
+                        
+            # Block read operations outside project
+            read_commands = {'cat', 'less', 'head', 'tail', 'more', 'ls', 'find', 'grep'}
+            if cmd_name in read_commands and len(cmd_parts) > 1:
+                # Similar handling for read operations
+                target_path = cmd_parts[1]
+                abs_target = os.path.normpath(os.path.join(self.current_dir, target_path))
+                
+                try:
+                    rel_path = os.path.relpath(abs_target, self.project_root)
+                    if rel_path.startswith('..'):
+                        return False, "Cannot read files outside project directory"
+                except ValueError:
+                    return False, "Cannot read files outside project directory"
 
         # Write operation checks
         write_commands = {'touch', 'mkdir', 'rm', 'rmdir', 'mv', 'cp', 'write',
@@ -133,16 +187,25 @@ class BashExecutor:
                                   ShellAccessTier.TIER_2_SYSTEM_READ]:
                 return False, "Write operations not allowed in read-only mode"
                 
-            if self.access_tier == ShellAccessTier.TIER_3_PROJECT_RESTRICTED:
+            if self.access_tier in [ShellAccessTier.TIER_3_PROJECT_RESTRICTED,
+                                  ShellAccessTier.TIER_4_PROJECT_WRITE]:
                 # Check if operation affects protected paths
+                if self.access_tier == ShellAccessTier.TIER_3_PROJECT_RESTRICTED:
+                    for part in cmd_parts[1:]:
+                        if self._is_protected_path(part):
+                            return False, f"Cannot modify protected path: {part}"
+                
+                # For both TIER_3 and TIER_4, ensure writes stay within project
                 for part in cmd_parts[1:]:
-                    if self._is_protected_path(part):
-                        return False, f"Cannot modify protected path: {part}"
-            
-            # For TIER_4 and TIER_5, no additional write restrictions
-            if self.access_tier in [ShellAccessTier.TIER_4_PROJECT_WRITE, 
-                                  ShellAccessTier.TIER_5_UNRESTRICTED]:
-                return True, None
+                    if '>' in part or '>>' in part:
+                        continue  # Skip redirection operators
+                    abs_target = os.path.normpath(os.path.join(self.current_dir, part))
+                    try:
+                        rel_path = os.path.relpath(abs_target, self.project_root)
+                        if rel_path.startswith('..'):
+                            return False, "Cannot write to files outside project directory"
+                    except ValueError:
+                        return False, "Cannot write to files outside project directory"
 
         return True, None
 
