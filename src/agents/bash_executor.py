@@ -17,18 +17,18 @@ from .agent_types import ShellAccessTier
 # Security-critical paths that cannot be modified in restricted modes
 PROTECTED_PATHS = {
     # Core shell execution
-    "src/cymbiont_shell/cymbiont_shell.py",
-    "src/agents/bash_executor.py",
+    str(Path(__file__).parent.parent / "cymbiont_shell/cymbiont_shell.py"),
+    str(Path(__file__)),  # bash_executor.py
     
     # Core configuration
-    "config.toml",
-    "config.example.toml",
+    str(Path(__file__).parent.parent.parent / "config.toml"),
+    str(Path(__file__).parent.parent.parent / "config.example.toml"),
     
     # Virtual environment
-    ".venv",
+    str(Path(__file__).parent.parent.parent / ".venv"),
     
     # Test files
-    "tests/protected_file.txt",
+    str(Path(__file__).parent.parent.parent / "tests/protected_file.txt"),
 }
 
 class BashExecutor:
@@ -104,7 +104,7 @@ class BashExecutor:
         
         # Check against protected paths
         for protected in PROTECTED_PATHS:
-            protected_abs = os.path.join(self.project_root, protected)
+            protected_abs = protected
             if abs_path.startswith(protected_abs):
                 return True
         return False
@@ -157,10 +157,15 @@ class BashExecutor:
                         rel_path = os.path.relpath(abs_target, self.project_root)
                         if rel_path.startswith('..'):
                             return False, "Cannot navigate outside project directory"
-                        # Update current directory if validation passes
-                        self.current_dir = abs_target
                     except ValueError:
                         return False, "Cannot navigate outside project directory"
+                    
+                    # Only update current_dir if directory exists
+                    if not os.path.isdir(abs_target):
+                        return False, f"Directory does not exist: {target_path}"
+                    
+                    # Update current directory if validation passes
+                    self.current_dir = abs_target
                         
             # Block read operations outside project
             read_commands = {'cat', 'less', 'head', 'tail', 'more', 'ls', 'find', 'grep'}
@@ -401,4 +406,5 @@ class BashExecutor:
             
     def __del__(self):
         """Ensure process cleanup on object destruction."""
-        self.close()
+        if hasattr(self, 'master_fd') and hasattr(self, 'pid'):
+            self.close()

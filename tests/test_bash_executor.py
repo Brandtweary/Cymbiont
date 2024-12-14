@@ -226,6 +226,41 @@ else:
             if os.path.exists(f"{project_root}/test_dir"):
                 os.rmdir(f"{project_root}/test_dir")
 
+    async def test_kill_switches():
+        """Test kill switch behavior for blocked commands."""
+        project_root = Path(__file__).parent.parent
+        
+        # Create new executor for kill switch test
+        executor = BashExecutor(ShellAccessTier.TIER_1_PROJECT_READ)
+        
+        # Commands that will be blocked
+        blocked_commands = [
+            "touch /etc/test",  # Outside project
+            "rm -rf /",         # Outside project
+            "cd /etc",          # Outside project navigation
+            "cat /etc/passwd",  # Outside project read
+            "echo test > /tmp/test",  # Outside project write
+            "mkdir /var/test",  # Outside project
+            "cp /etc/hosts /tmp",  # Outside project
+            "mv /etc/hosts /tmp",  # Outside project
+            "chmod 777 /etc/hosts",  # Outside project
+        ]
+        
+        try:
+            # Test warning at 4 blocked commands
+            for i, cmd in enumerate(blocked_commands[:4], 1):
+                stdout, stderr = executor.execute(cmd)
+                assert stdout == "", f"Command {i} should have empty stdout"
+                assert "Security violation" in stderr, f"Command {i} should be blocked"
+            
+            # Test critical warning at 9 blocked commands
+            for i, cmd in enumerate(blocked_commands[4:], 5):
+                stdout, stderr = executor.execute(cmd)
+                assert stdout == "", f"Command {i} should have empty stdout"
+                assert "Security violation" in stderr, f"Command {i} should be blocked"
+        finally:
+            executor.close()
+
     async def run_bash_executor_tests() -> tuple[int, int]:
         """Execute all bash executor tests sequentially.
 
@@ -233,6 +268,7 @@ else:
             Tuple of (passed_tests, failed_tests)
         """
         tests = [
+            test_kill_switches,  # Run kill switch test first since it relies on blocked command count
             test_access_tiers,
         ]
         
