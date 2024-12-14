@@ -7,15 +7,145 @@ import select
 import signal
 import time
 import re
-from typing import Optional, Tuple
+import shlex
+import tomllib
+from pathlib import Path
+from typing import Optional, Tuple, List, Set
+
+from .agent_types import ShellAccessTier
+
+# Security-critical paths that cannot be modified in restricted modes
+PROTECTED_PATHS = {
+    # Core shell execution
+    "src/cymbiont_shell/cymbiont_shell.py",
+    "src/agents/bash_executor.py",
+    
+    # Core configuration
+    "config.toml",
+    "config.example.toml",
+    
+    # Virtual environment
+    ".venv",
+}
 
 class BashExecutor:
-    def __init__(self):
-        """Initialize a new bash process with PTY."""
+    def __init__(self, access_tier: Optional[ShellAccessTier] = None):
+        """Initialize a new bash process with PTY and security settings.
+        
+        Args:
+            access_tier: Override the security tier from config. If None, uses config value.
+        """
         self.master_fd: Optional[int] = None
         self.pid: Optional[int] = None
-        self._start_bash()
         
+        # Load security tier from config if not overridden
+        if access_tier is None:
+            config_path = Path(__file__).parent.parent.parent / "config.toml"
+            try:
+                with open(config_path, "rb") as f:
+                    config = tomllib.load(f)
+                tier_num = config.get("security", {}).get("shell_access_tier", 1)
+                self.access_tier = ShellAccessTier(tier_num)
+            except Exception as e:
+                # Default to most restrictive tier on any error
+                self.access_tier = ShellAccessTier.TIER_1_PROJECT_READ
+        else:
+            self.access_tier = access_tier
+            
+        self.project_root = str(Path(__file__).parent.parent.parent)
+        self._start_bash()
+        self._apply_base_safeguards()
+
+    def _apply_base_safeguards(self) -> None:
+        """Apply base security safeguards to bash environment."""
+        if self.access_tier == ShellAccessTier.TIER_5_UNRESTRICTED:
+            return  # No safeguards in unrestricted mode
+
+        # Disable dangerous shell features
+        safeguards = [
+            "set -f",  # Disable glob expansion
+            "set -p",  # Use privileged mode
+            "set -u",  # Error on undefined variables
+            "shopt -u expand_aliases",  # Disable alias expansion
+            "unset BASH_ENV ENV",  # Disable startup files
+            "PATH=/bin:/usr/bin",  # Restrict PATH
+            "readonly PATH",  # Prevent PATH modification
+            "unset CDPATH",  # Disable CDPATH
+        ]
+        
+        for cmd in safeguards:
+            self._execute_raw(cmd)
+
+    def _is_protected_path(self, path: str) -> bool:
+        """Check if a path is protected from modification."""
+        path = os.path.normpath(path)
+        abs_path = path if os.path.isabs(path) else os.path.join(self.project_root, path)
+        
+        # Check against protected paths
+        for protected in PROTECTED_PATHS:
+            protected_abs = os.path.join(self.project_root, protected)
+            if abs_path.startswith(protected_abs):
+                return True
+        return False
+
+    def _validate_command(self, command: str) -> Tuple[bool, Optional[str]]:
+        """Validate a command against security restrictions.
+        
+        Returns:
+            Tuple of (is_allowed, error_message)
+        """
+        if self.access_tier == ShellAccessTier.TIER_5_UNRESTRICTED:
+            return True, None
+
+        # Split command handling pipes and chains
+        cmd_parts = shlex.split(command)
+        if not cmd_parts:
+            return False, "Empty command"
+
+        # Block dangerous shell features
+        dangerous_patterns = [
+            r'\$\(', r'`', r'eval\s', r'exec\s', r'source\s', r'\.\s',
+            r'set\s+[+-][^f]', r'shopt\s', r'enable\s',
+            r'sudo\s', r'su\s'  # Block privilege elevation
+        ]
+        
+        for pattern in dangerous_patterns:
+            if re.search(pattern, command):
+                return False, f"Blocked dangerous shell feature: {pattern}"
+
+        # Path-based restrictions
+        if self.access_tier == ShellAccessTier.TIER_1_PROJECT_READ:
+            cmd_name = cmd_parts[0]
+            if cmd_name == "cd":
+                if len(cmd_parts) > 1:
+                    target = os.path.abspath(os.path.join(os.getcwd(), cmd_parts[1]))
+                    if not target.startswith(self.project_root):
+                        return False, "Cannot navigate outside project directory"
+
+        # Write operation checks
+        write_commands = {'touch', 'mkdir', 'rm', 'rmdir', 'mv', 'cp', 'write',
+                         'echo', 'tee', 'sed', 'awk', 'chmod', 'ln'}
+        
+        is_write_op = any(cmd in write_commands for cmd in cmd_parts)
+        
+        if is_write_op:
+            if self.access_tier in [ShellAccessTier.TIER_1_PROJECT_READ, 
+                                  ShellAccessTier.TIER_2_SYSTEM_READ]:
+                return False, "Write operations not allowed in read-only mode"
+                
+            if self.access_tier == ShellAccessTier.TIER_3_PROJECT_RESTRICTED:
+                # Check if operation affects protected paths
+                for part in cmd_parts[1:]:
+                    if self._is_protected_path(part):
+                        return False, f"Cannot modify protected path: {part}"
+            
+            # For TIER_4 and TIER_5, no additional write restrictions
+            if self.access_tier in [ShellAccessTier.TIER_4_PROJECT_WRITE, 
+                                  ShellAccessTier.TIER_5_UNRESTRICTED]:
+                return True, None
+
+        return True, None
+
     def _start_bash(self) -> None:
         """Start a new bash process with PTY."""
         # Fork a new process with PTY
@@ -98,7 +228,7 @@ class BashExecutor:
                 
         return partial
             
-    def execute(self, command: str, timeout: float = 0.1) -> Tuple[str, int]:
+    def _execute_raw(self, command: str, timeout: float = 0.1) -> Tuple[str, str]:
         """Execute a command in the bash process."""
         if self.master_fd is None:
             raise RuntimeError("Bash process not initialized")
@@ -150,7 +280,7 @@ class BashExecutor:
                     except:
                         pass
                 
-            return result, 0
+            return result, ""
             
         except Exception as e:
             # If anything goes wrong, try to reset the terminal
@@ -168,6 +298,22 @@ class BashExecutor:
                 pass
             raise
         
+    def execute(self, command: str, timeout: float = 30.0) -> Tuple[str, str]:
+        """Execute a command with security validation.
+        
+        Args:
+            command: Command to execute
+            timeout: Maximum execution time in seconds
+            
+        Returns:
+            Tuple of (stdout, stderr)
+        """
+        is_allowed, error = self._validate_command(command)
+        if not is_allowed:
+            return "", f"Security violation: {error}"
+            
+        return self._execute_raw(command, timeout)
+
     def close(self) -> None:
         """Clean up the bash process."""
         if self.pid is not None:

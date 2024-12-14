@@ -21,5 +21,14 @@ user_name = "user"
 agent_name = "chat_agent" 
 agent_activation_mode = "chat" # Options: "continuous" or "chat"
 
+[security]
+# Shell access tier (1-5):
+# 1: Project-restricted read-only
+# 2: System-wide read-only
+# 3: Project restricted write (protects security-critical files)
+# 4: Full project write
+# 5: Unrestricted
+shell_access_tier = 1
+
 [environment]
 manage_venv = true  # let Cymbiont manage the Python environment

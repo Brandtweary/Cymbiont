@@ -14,6 +14,7 @@ from .test_commands import (
     do_test_progressive_summarization,
     do_test_agent_tools,
     do_test_keyword_router,
+    do_test_bash_executor,
     do_run_all_tests,
 )
 
@@ -97,6 +98,11 @@ def create_commands(
         ),
         'test_progressive_summarization': CommandData(
             callable=do_test_progressive_summarization,
+            takes_args=False,
+            needs_shell=True  # Needs shell to update test results
+        ),
+        'test_bash_executor': CommandData(
+            callable=do_test_bash_executor,
             takes_args=False,
             needs_shell=True  # Needs shell to update test results
         ),

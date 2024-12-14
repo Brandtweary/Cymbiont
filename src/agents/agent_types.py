@@ -20,6 +20,21 @@ class TaskStatus(Enum):
     ONGOING = "ongoing"
     COMPLETED = "completed"
 
+class ShellAccessTier(Enum):
+    """Access tiers for shell command execution.
+    
+    TIER_1_PROJECT_READ: Read-only access within project directory only
+    TIER_2_SYSTEM_READ: Read-only access to entire filesystem
+    TIER_3_PROJECT_RESTRICTED: Read-only system access, write access except for security-critical files
+    TIER_4_PROJECT_WRITE: Read-only system access, full write access within project
+    TIER_5_UNRESTRICTED: Full system access with no restrictions
+    """
+    TIER_1_PROJECT_READ = 1
+    TIER_2_SYSTEM_READ = 2
+    TIER_3_PROJECT_RESTRICTED = 3
+    TIER_4_PROJECT_WRITE = 4
+    TIER_5_UNRESTRICTED = 5
+
 @dataclass
 class Task:
     """A task with its description and metadata."""

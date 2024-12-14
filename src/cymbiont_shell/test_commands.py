@@ -6,6 +6,7 @@ from tests.test_parsing import run_text_parsing_test
 from tests.test_progressive_summarization import run_progressive_summarization_test
 from tests.test_agent_tools import run_agent_tool_tests
 from tests.test_keyword_router import run_keyword_router_test
+from tests.test_bash_executor import run_bash_executor_tests
 
 
 async def do_test_api_queue(shell, args: str) -> None:
@@ -110,6 +111,22 @@ async def do_test_keyword_router(shell, args: str) -> None:
     except Exception as e:
         shell.test_failures += 1
         logger.error(f"✗ Semantic router test failed with error: {str(e)}")
+
+
+async def do_test_bash_executor(shell, args: str) -> None:
+    """Run bash executor tests."""
+    try:
+        passed, failed = await run_bash_executor_tests()
+        shell.test_successes = passed
+        shell.test_failures = failed
+        if failed == 0:
+            logger.info("✓ All bash executor tests passed")
+        else:
+            logger.error(f"✗ {failed} bash executor test(s) failed")
+    except Exception as e:
+        logger.error(f"✗ Bash executor tests failed: {str(e)}")
+        shell.test_successes = 0
+        shell.test_failures = 1
 
 
 async def do_run_all_tests(shell, args: str) -> None:
