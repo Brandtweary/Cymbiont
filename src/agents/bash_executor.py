@@ -31,6 +31,33 @@ PROTECTED_PATHS = {
     str(Path(__file__).parent.parent.parent / "tests/bash_executor_test_files/protected_file.txt"),
 }
 
+# Get paths for data directories
+paths = get_paths(DATA_DIR)
+AGENT_NOTES_DIR = str(paths.agent_notes_dir)
+
+# Restricted users for different access tiers
+PROJECT_READ = "cymbiont_project_read"                    # Tier 1: Project-only read access
+SYSTEM_READ = "cymbiont_system_read"                      # Tier 2: System-wide read access
+PROJECT_RESTRICTED_WRITE = "cymbiont_project_restr_write" # Tier 3: System read + agent_notes write
+PROJECT_WRITE_EXECUTE = "cymbiont_project_write_exec"     # Tier 4: Project read/write/execute
+
+def check_restricted_user_exists(username: str) -> bool:
+    """Check if a restricted user exists on the system."""
+    try:
+        pwd.getpwnam(username)
+        return True
+    except KeyError:
+        return False
+
+def get_setup_instructions() -> str:
+    """Get instructions for setting up restricted users."""
+    return (
+        "Enhanced security requires restricted users to be set up.\n"
+        "To enable this feature, run:\n"
+        "    sudo ./scripts/setup_restricted_user.sh\n"
+        "Or re-run bootstrap.sh and select 'y' when prompted for enhanced security."
+    )
+
 class BashExecutor:
     def __init__(self, access_tier: Optional[ShellAccessTier] = None):
         """Initialize a new bash process with PTY and security settings.
@@ -182,24 +209,27 @@ class BashExecutor:
                     return False, "Cannot read files outside project directory"
 
         # Write operation checks
-        write_commands = {'touch', 'mkdir', 'rm', 'rmdir', 'mv', 'cp', 'write',
-                         'echo', 'tee', 'sed', 'awk', 'chmod', 'ln'}
+        filesystem_write_commands = {'touch', 'mkdir', 'rm', 'rmdir', 'mv', 'cp', 'write',
+                                   'tee', 'sed', 'awk', 'chmod', 'ln'}
         
-        is_write_op = any(cmd in write_commands for cmd in cmd_parts)
+        is_write_op = any(cmd in filesystem_write_commands for cmd in cmd_parts)
         
         if is_write_op:
             if self.access_tier in [ShellAccessTier.TIER_1_PROJECT_READ, 
                                   ShellAccessTier.TIER_2_SYSTEM_READ]:
                 return False, "Write operations not allowed in read-only mode"
-                
+            
             if self.access_tier in [ShellAccessTier.TIER_3_PROJECT_RESTRICTED,
                                   ShellAccessTier.TIER_4_PROJECT_WRITE]:
-                # Check if operation affects protected paths
+                # For TIER_3, only allow writes in agent_notes_dir
                 if self.access_tier == ShellAccessTier.TIER_3_PROJECT_RESTRICTED:
                     for part in cmd_parts[1:]:
-                        if self._is_protected_path(part):
-                            return False, f"Cannot modify protected path: {part}"
-                
+                        if '>' in part or '>>' in part:
+                            continue  # Skip redirection operators
+                        abs_target = os.path.normpath(os.path.join(self.current_dir, part))
+                        if not str(abs_target).startswith(AGENT_NOTES_DIR):
+                            return False, f"Write operation not allowed outside of {AGENT_NOTES_DIR}"
+            
                 # For both TIER_3 and TIER_4, ensure writes stay within project
                 for part in cmd_parts[1:]:
                     if '>' in part or '>>' in part:
@@ -211,7 +241,20 @@ class BashExecutor:
                             return False, "Cannot write to files outside project directory"
                     except ValueError:
                         return False, "Cannot write to files outside project directory"
-
+                    
+        # Block file execution in restricted tiers (1-3)
+        if self.access_tier in [ShellAccessTier.TIER_1_PROJECT_READ,
+                              ShellAccessTier.TIER_2_SYSTEM_READ,
+                              ShellAccessTier.TIER_3_PROJECT_RESTRICTED]:
+            # Block direct file execution
+            if cmd_parts[0].startswith('./') or '/' in cmd_parts[0]:
+                return False, "Executing files is not allowed in restricted tiers"
+            
+            # Block execution via common commands
+            execute_commands = {'bash', 'sh', 'python', 'python3', 'perl', 'ruby', 'node', 'npm', 'yarn'}
+            if cmd_parts[0] in execute_commands:
+                return False, "Executing scripts is not allowed in restricted tiers"
+        
         return True, None
 
     def _start_bash(self) -> None:
