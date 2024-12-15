@@ -221,6 +221,7 @@ if [[ ${setup_restricted:0:1} =~ [yY] ]]; then
         fi
         
         echo -e "\033[32m>> Setting up restricted user (requires sudo)...\033[0m"
+        chmod +x ./scripts/setup_restricted_user.sh
         sudo ./scripts/setup_restricted_user.sh
         if [ $? -eq 0 ]; then
             echo -e "\033[32m>> Successfully set up restricted user\033[0m"
