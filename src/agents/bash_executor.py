@@ -452,12 +452,12 @@ class BashExecutor:
         if not is_allowed:
             self.blocked_commands += 1
             if self.blocked_commands >= 10:
-                logger.critical("Too many blocked commands (10+) - forcing shutdown for security")
+                logger.critical("Too many blocked commands - forcing shutdown for security")
                 raise SystemExit("Security shutdown: Too many blocked commands")
             elif self.blocked_commands >= 9:
-                logger.critical("Critical: 9 blocked commands - next blocked command will force shutdown")
+                logger.critical("Too many blocked commands - shutdown imminent")
             elif self.blocked_commands >= 4:
-                logger.warning(f"Warning: {self.blocked_commands} commands have been blocked - possible security issue")
+                logger.warning(f"Warning: too many blocked commands - possible security issue")
             return "", f"Security violation: {error}"
             
         return self._execute_raw(command, timeout)
