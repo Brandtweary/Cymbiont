@@ -50,6 +50,9 @@ else:
                 stdout, stderr = executor.execute(cmd)
                 assert "Security violation" in stderr, f"TIER_1 should block write operation: {cmd}"
             
+            # Reset counter after write tests
+            executor.reset_kill_switch_counter()
+            
             # Test read operations within project
             stdout, stderr = executor.execute(f"cat {test_file}")
             assert stderr == "", "TIER_1 should allow reading files"
@@ -66,6 +69,9 @@ else:
             for cmd in outside_read_commands:
                 stdout, stderr = executor.execute(cmd)
                 assert "Security violation" in stderr, f"TIER_1 should block reading outside project: {cmd}"
+                
+            # Reset counter after read tests
+            executor.reset_kill_switch_counter()
             
             # Test navigation restrictions
             # Should block navigation outside project
@@ -78,6 +84,9 @@ else:
             for cmd in outside_nav_commands:
                 stdout, stderr = executor.execute(cmd)
                 assert "Security violation" in stderr, f"TIER_1 should block navigation outside project: {cmd}"
+                
+            # Reset counter after navigation tests
+            executor.reset_kill_switch_counter()
                 
             # Should allow navigation within project
             stdout, stderr = executor.execute(f"cd {project_root}/src")
@@ -101,6 +110,9 @@ else:
             for cmd in write_commands:
                 stdout, stderr = executor.execute(cmd)
                 assert "Security violation" in stderr, f"TIER_2 should block write operation: {cmd}"
+                
+            # Reset counter after write tests
+            executor.reset_kill_switch_counter()
             
             # Test read operations within project
             stdout, stderr = executor.execute(f"cat {test_file}")
@@ -257,17 +269,34 @@ else:
         ]
         
         try:
-            # Test warning at 4 blocked commands
-            for i, cmd in enumerate(blocked_commands[:4], 1):
+            # Test first 3 commands - counter should increment but no warnings
+            for i, cmd in enumerate(blocked_commands[:3], 1):
                 stdout, stderr = executor.execute(cmd)
                 assert stdout == "", f"Command {i} should have empty stdout"
                 assert "Security violation" in stderr, f"Command {i} should be blocked"
+                assert executor.blocked_commands == i, f"Blocked commands counter should be {i}"
             
-            # Test critical warning at 9 blocked commands
-            for i, cmd in enumerate(blocked_commands[4:], 5):
+            # Test warning at 4th blocked command
+            stdout, stderr = executor.execute(blocked_commands[3])
+            assert stdout == ""
+            assert "Security violation" in stderr
+            assert executor.blocked_commands == 4
+            
+            # Test commands 5-8, counter should increment with warnings
+            for i, cmd in enumerate(blocked_commands[4:8], 5):
                 stdout, stderr = executor.execute(cmd)
                 assert stdout == "", f"Command {i} should have empty stdout"
                 assert "Security violation" in stderr, f"Command {i} should be blocked"
+                assert executor.blocked_commands == i, f"Blocked commands counter should be {i}"
+            
+            # Test 9th command - should trigger critical warning
+            stdout, stderr = executor.execute(blocked_commands[8])
+            assert stdout == ""
+            assert "Security violation" in stderr
+            assert executor.blocked_commands == 9, "Blocked commands counter should be 9"
+            
+            # Note: We don't test the 10th command as it would terminate the program
+            
         finally:
             executor.close()
 

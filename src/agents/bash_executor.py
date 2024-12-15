@@ -17,6 +17,7 @@ import grp
 from .agent_types import ShellAccessTier
 from utils import get_paths
 from shared_resources import DATA_DIR, logger
+import threading
 
 # Get paths for data directories
 paths = get_paths(DATA_DIR)
@@ -91,8 +92,10 @@ class BashExecutor:
         self.pid = None
         self.project_root = str(Path(__file__).parent.parent.parent)
         self.current_dir = self.project_root
+        self.blocked_commands = 0
         self._start_bash()
         self._apply_base_safeguards()  # Important: Apply base safeguards at startup
+        self._start_reset_timer()
 
     def _apply_base_safeguards(self) -> None:
         """Apply base security safeguards to bash environment."""
@@ -447,12 +450,38 @@ class BashExecutor:
         """
         is_allowed, error = self._validate_command(command)
         if not is_allowed:
+            self.blocked_commands += 1
+            if self.blocked_commands >= 10:
+                logger.critical("Too many blocked commands (10+) - forcing shutdown for security")
+                raise SystemExit("Security shutdown: Too many blocked commands")
+            elif self.blocked_commands >= 9:
+                logger.critical("Critical: 9 blocked commands - next blocked command will force shutdown")
+            elif self.blocked_commands >= 4:
+                logger.warning(f"Warning: {self.blocked_commands} commands have been blocked - possible security issue")
             return "", f"Security violation: {error}"
             
         return self._execute_raw(command, timeout)
 
+    def reset_kill_switch_counter(self):
+        """Reset the blocked commands counter. Useful for testing or when changing security contexts."""
+        self.blocked_commands = 0
+
+    def _start_reset_timer(self):
+        """Start a timer thread that resets the kill switch counter every hour."""
+        self._timer_active = True
+        self._timer_thread = threading.Thread(target=self._reset_timer_loop, daemon=True)
+        self._timer_thread.start()
+
+    def _reset_timer_loop(self):
+        """Timer loop that resets the kill switch counter every hour."""
+        while self._timer_active:
+            time.sleep(3600)  # Sleep for 1 hour
+            if self._timer_active:  # Check again in case we were closed during sleep
+                self.reset_kill_switch_counter()
+
     def close(self) -> None:
         """Clean up the bash process."""
+        self._timer_active = False  # Stop the timer thread
         if self.pid is not None:
             try:
                 # Try to reset terminal before closing
