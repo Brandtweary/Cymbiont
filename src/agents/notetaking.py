@@ -16,7 +16,7 @@ def add_note(note_content: str, metadata: Optional[Dict[str, Any]] = None) -> No
     try:
         # Get the daily notes directory path
         paths = get_paths(DATA_DIR)
-        daily_notes_dir = paths.agent_notes_dir
+        daily_notes_dir = paths.daily_notes_dir
         
         # Get current date and time
         now = datetime.now()
@@ -62,7 +62,7 @@ def read_notes(date: Optional[str] = None) -> None:
     try:
         # Get the daily notes directory path
         paths = get_paths(DATA_DIR)
-        daily_notes_dir = paths.agent_notes_dir
+        daily_notes_dir = paths.daily_notes_dir
         
         # Use current date if none provided
         if date is None:

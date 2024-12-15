@@ -174,6 +174,7 @@ def setup_directories(base_dir: Path) -> Paths:
 def get_paths(base_dir: Path) -> Paths:
     """Get directory paths for the specified base directory"""
     try:
+        agent_workspace_dir = base_dir / "data/agent_workspace"
         return Paths(
             base_dir=base_dir,
             docs_dir=base_dir / "input_documents",
@@ -183,7 +184,8 @@ def get_paths(base_dir: Path) -> Paths:
             logs_dir=base_dir / "logs",
             inert_docs_dir=base_dir / "inert_documents",
             snapshots_dir=base_dir / "snapshots",
-            agent_notes_dir=base_dir / "agent_notes/daily_notes"
+            agent_workspace_dir=agent_workspace_dir,
+            daily_notes_dir=agent_workspace_dir / "daily_notes"
         )
     except Exception as e:
         logger.error(f"Failed to get paths for {base_dir}: {str(e)}")

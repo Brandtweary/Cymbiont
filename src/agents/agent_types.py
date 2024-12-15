@@ -23,16 +23,20 @@ class TaskStatus(Enum):
 class ShellAccessTier(Enum):
     """Access tiers for shell command execution.
     
-    TIER_1_PROJECT_READ: Read-only access within project directory only
-    TIER_2_SYSTEM_READ: Read-only access to entire filesystem
-    TIER_3_PROJECT_RESTRICTED: Read-only system access, write access except for security-critical files
-    TIER_4_PROJECT_WRITE: Read-only system access, full write access within project
-    TIER_5_UNRESTRICTED: Full system access with no restrictions
+    TIER_1_PROJECT_READ: Read-only access to project files only. Cannot execute files or navigate outside project directory. Uses OS-level isolation.
+    
+    TIER_2_SYSTEM_READ: Read-only access to system files. Cannot execute files but can navigate outside project directory. Uses OS-level isolation.
+    
+    TIER_3_PROJECT_RESTRICTED: Read-only access to system files with write access to agent notes directory only. Cannot execute files. Uses OS-level isolation.
+    
+    TIER_4_PROJECT_WRITE: Read-only access to system files with read/write/execute access within project directory. Uses OS-level isolation. Not recommended.
+    
+    TIER_5_UNRESTRICTED: Full system access with no restrictions. No OS-level isolation. Not recommended.
     """
     TIER_1_PROJECT_READ = 1
     TIER_2_SYSTEM_READ = 2
-    TIER_3_PROJECT_RESTRICTED = 3
-    TIER_4_PROJECT_WRITE = 4
+    TIER_3_PROJECT_RESTRICTED_WRITE = 3
+    TIER_4_PROJECT_WRITE_EXECUTE = 4
     TIER_5_UNRESTRICTED = 5
 
 @dataclass

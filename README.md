@@ -39,6 +39,7 @@ The bootstrap script will:
 - Guide you through PyTorch installation
 - Perform system status checks
 - Optionally create a `.env` file and walk you through API key configuration
+- Optionally set up a restricted user for enhanced security (requires sudo)
 - Optionally launch Cymbiont
 
 The script will attempt to use the nvidia-smi tool to determine your CUDA version. If you don't have nvidia-smi, you can determine your CUDA version using a different method, or you can proceed if you already know which PyTorch compute platform you want (e.g. CPU, CUDA, ROCM). The PyTorch installation step can be skipped and performed later by running the bootstrap script again or [installing PyTorch manually](https://pytorch.org/get-started/locally/). 
@@ -65,6 +66,17 @@ The script will attempt to use the nvidia-smi tool to determine your CUDA versio
 
 4. Install PyTorch:
    Visit [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/) and follow the installation instructions for your platform and compute preferences.
+
+5. (Optional) Set up restricted user for enhanced security:
+   ```bash
+   # Install ACL support (requires sudo)
+   sudo apt-get install acl  # For Debian/Ubuntu
+   sudo yum install acl      # For RHEL/CentOS
+   sudo pacman -S acl        # For Arch Linux
+
+   # Run the setup script
+   sudo ./scripts/setup_restricted_user.sh
+   ```
 
 ## API Keys
 
@@ -99,6 +111,43 @@ To customize settings before first run:
 cp config.example.toml config.toml
 # Edit config.toml with your preferred settings
 ```
+
+#### Shell Access Tiers
+
+The `shell_access_tier` setting in `config.toml` determines the security level for shell commands. Available tiers:
+
+1. **TIER_1_PROJECT_READ** (Default)
+   - Read-only access to project files only
+   - Cannot execute files or scripts
+   - Cannot navigate outside project directory
+   - Supports OS-level isolation via restricted user
+
+2. **TIER_2_SYSTEM_READ**
+   - Read-only access to system files
+   - Cannot execute files or scripts
+   - Can navigate and read outside project directory
+   - Supports OS-level isolation via restricted user
+
+3. **TIER_3_PROJECT_RESTRICTED_WRITE**
+   - Read-only access to system files
+   - Write access to agent notes directory only
+   - Cannot execute files or scripts
+   - Supports OS-level isolation via restricted user
+
+4. **TIER_4_PROJECT_WRITE_EXECUTE**
+   - Read-only access to system files
+   - Write access to project files
+   - Can execute files within project
+   - Supports OS-level isolation via restricted user
+   - **Not recommended**
+
+5. **TIER_5_UNRESTRICTED**
+   - Full system access
+   - No restrictions on file operations
+   - No OS-level isolation
+   - **Not recommended**
+
+When using tiers 1-4, the bootstrap script or './bootstrap.sh' should be run with sudo to create the necessary restricted users and set up filesystem ACLs.
 
 ## Testing
 

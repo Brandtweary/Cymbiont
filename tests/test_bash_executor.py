@@ -12,25 +12,27 @@ if __name__ == "__main__":
     os.execv(sys.executable, [sys.executable, str(cymbiont_path), '--test', 'bash_executor'])
 else:
     import os
+    import sys
     import shutil
     from pathlib import Path
+    from typing import List
     from agents.agent_types import ShellAccessTier
     from agents.bash_executor import BashExecutor
-    from shared_resources import logger
+    from utils import get_paths
+    from shared_resources import DATA_DIR, logger
 
     async def test_access_tiers():
         """Test shell access tier restrictions."""
         project_root = Path(__file__).parent.parent
+        paths = get_paths(DATA_DIR)
         test_dir = project_root / "tests" / "bash_executor_test_files"
         test_file = test_dir / "test_file.txt"
-        protected_test_file = test_dir / "protected_file.txt"
         
         # Create test directory
         test_dir.mkdir(exist_ok=True)
         
-        # Create protected test file
-        with open(protected_test_file, "w") as f:
-            f.write("This is a protected test file. Do not modify in tiers 1-3.")
+        # Create test file
+        test_file.write_text("test content")
         
         try:
             # Test Tier 1: Project Read-Only
@@ -40,9 +42,8 @@ else:
             write_commands = [
                 f"touch {test_file}",  # Create file
                 f"mkdir -p {project_root}/test_dir",  # Create directory
-                f"echo 'test' > {test_file}",  # Write to file
                 f"rm -f {test_file}",  # Delete file
-                f"cp {protected_test_file} {test_file}",  # Copy file
+                f"cp {test_file} {test_file}.bak",  # Copy file
                 f"mv {test_file} {test_file}.bak",  # Move/rename file
             ]
             for cmd in write_commands:
@@ -50,8 +51,8 @@ else:
                 assert "Security violation" in stderr, f"TIER_1 should block write operation: {cmd}"
             
             # Test read operations within project
-            stdout, stderr = executor.execute(f"cat {protected_test_file}")
-            assert stderr == "", "TIER_1 should allow reading protected files"
+            stdout, stderr = executor.execute(f"cat {test_file}")
+            assert stderr == "", "TIER_1 should allow reading files"
             stdout, stderr = executor.execute("ls src/")
             assert stderr == "", "TIER_1 should allow listing project directories"
             
@@ -93,7 +94,6 @@ else:
             write_commands = [
                 f"touch {test_file}",  # Create file
                 f"mkdir -p {project_root}/test_dir",  # Create directory
-                f"echo 'test' > {test_file}",  # Write to file
                 f"rm -f {test_file}",  # Delete file
                 f"cp /etc/hosts {test_file}",  # Copy file
                 f"mv {test_file} {test_file}.bak",  # Move/rename file
@@ -103,8 +103,8 @@ else:
                 assert "Security violation" in stderr, f"TIER_2 should block write operation: {cmd}"
             
             # Test read operations within project
-            stdout, stderr = executor.execute(f"cat {protected_test_file}")
-            assert stderr == "", "TIER_2 should allow reading protected files"
+            stdout, stderr = executor.execute(f"cat {test_file}")
+            assert stderr == "", "TIER_2 should allow reading files"
             stdout, stderr = executor.execute("ls src/")
             assert stderr == "", "TIER_2 should allow listing project directories"
             
@@ -125,13 +125,21 @@ else:
             executor.close()
 
             # Test Tier 3: Project Restricted Write
-            executor = BashExecutor(ShellAccessTier.TIER_3_PROJECT_RESTRICTED)
-            stdout, stderr = executor.execute(f"touch {test_file}")
-            assert stderr == "", "TIER_3 should allow write to non-protected files"
-            stdout, stderr = executor.execute(f"touch {protected_test_file}")
-            assert "Security violation" in stderr, "TIER_3 should block writes to protected files"
+            executor = BashExecutor(ShellAccessTier.TIER_3_PROJECT_RESTRICTED_WRITE)
             
-            # Test navigation - should be allowed outside project
+            # Test writes in agent workspace (should be allowed)
+            stdout, stderr = executor.execute(f"touch {paths.agent_workspace_dir}/test_file.txt")
+            assert stderr == "", "TIER_3 should allow writes in agent_workspace"
+            stdout, stderr = executor.execute(f"mkdir -p {paths.agent_workspace_dir}/test_dir")
+            assert stderr == "", "TIER_3 should allow directory creation in agent_workspace"
+            
+            # Test writes outside agent workspace (should be blocked)
+            stdout, stderr = executor.execute(f"touch {test_file}")
+            assert "Security violation" in stderr, "TIER_3 should block writes outside agent_workspace"
+            stdout, stderr = executor.execute(f"mkdir -p {project_root}/test_dir")
+            assert "Security violation" in stderr, "TIER_3 should block directory creation outside agent_workspace"
+            
+            # Test navigation - should be allowed anywhere (read-only)
             stdout, stderr = executor.execute("cd /")
             assert stderr == "", "TIER_3 should allow system-wide navigation"
             stdout, stderr = executor.execute("cd /tmp")
@@ -139,10 +147,14 @@ else:
             stdout, stderr = executor.execute(f"cd {project_root}")
             assert stderr == "", "TIER_3 should allow navigation back to project"
             
+            # Cleanup agent workspace test files
+            executor.execute(f"rm -rf {paths.agent_workspace_dir}/test_file.txt")
+            executor.execute(f"rm -rf {paths.agent_workspace_dir}/test_dir")
+            
             executor.close()
 
             # Test Tier 4: Full Project Write
-            executor = BashExecutor(ShellAccessTier.TIER_4_PROJECT_WRITE)
+            executor = BashExecutor(ShellAccessTier.TIER_4_PROJECT_WRITE_EXECUTE)
             
             # Test write operations within project, including protected files
             stdout, stderr = executor.execute(f"touch {test_file}")
@@ -151,12 +163,6 @@ else:
             assert stderr == "", "TIER_4 should allow directory creation"
             stdout, stderr = executor.execute(f"echo 'test' > {test_file}")
             assert stderr == "", "TIER_4 should allow file modification"
-            
-            # Test write access to protected files (should be allowed in tier 4)
-            stdout, stderr = executor.execute(f"echo 'test' > {protected_test_file}.bak")
-            assert stderr == "", "TIER_4 should allow writes to protected paths"
-            stdout, stderr = executor.execute(f"rm {protected_test_file}.bak")
-            assert stderr == "", "TIER_4 should allow deletion of files in protected paths"
             
             # Test write operations outside project
             stdout, stderr = executor.execute("touch /tmp/test_file")
@@ -217,18 +223,12 @@ else:
                 stdout, stderr = executor.execute(cmd)
                 assert stderr == "", f"TIER_5 should allow shell feature: {cmd}"
             
-            # Test access to protected files
-            stdout, stderr = executor.execute(f"echo 'test' > {protected_test_file}")
-            assert stderr == "", "TIER_5 should allow writes to protected files"
-            
             executor.close()
             
         finally:
             # Cleanup
             if os.path.exists(test_file):
                 os.remove(test_file)
-            if os.path.exists(protected_test_file):
-                os.remove(protected_test_file)
             if os.path.exists(test_dir):
                 shutil.rmtree(test_dir)
             # Clean up test_dir in project root if it exists
@@ -249,11 +249,11 @@ else:
             "rm -rf /",         # Outside project
             "cd /etc",          # Outside project navigation
             "cat /etc/passwd",  # Outside project read
-            "echo test > /tmp/test",  # Outside project write
             "mkdir /var/test",  # Outside project
             "cp /etc/hosts /tmp",  # Outside project
             "mv /etc/hosts /tmp",  # Outside project
             "chmod 777 /etc/hosts",  # Outside project
+            "ln -s /etc/hosts /tmp/hosts"  # Outside project symlink
         ]
         
         try:

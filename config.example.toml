@@ -23,11 +23,12 @@ agent_activation_mode = "chat" # Options: "continuous" or "chat"
 
 [security]
 # Shell access tier (1-5):
-# 1: Project-restricted read-only
+# 1: Cymbiont directory read-only
 # 2: System-wide read-only
-# 3: Project restricted write (protects security-critical files)
-# 4: Full project write
+# 3: Project restricted write (can write to data/agent_workspace but not execute)
+# 4: Full project write/execute
 # 5: Unrestricted
+
 shell_access_tier = 1
 
 [environment]

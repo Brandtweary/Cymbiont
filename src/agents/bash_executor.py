@@ -1,4 +1,5 @@
 import os
+import sys
 import pty
 import fcntl
 import termios
@@ -11,34 +12,20 @@ import shlex
 import tomllib
 from pathlib import Path
 from typing import Optional, Tuple, List, Set
-
+import pwd
+import grp
 from .agent_types import ShellAccessTier
-
-# Security-critical paths that cannot be modified in restricted modes
-PROTECTED_PATHS = {
-    # Core shell execution
-    str(Path(__file__).parent.parent / "cymbiont_shell/cymbiont_shell.py"),
-    str(Path(__file__)),  # bash_executor.py
-    
-    # Core configuration
-    str(Path(__file__).parent.parent.parent / "config.toml"),
-    str(Path(__file__).parent.parent.parent / "config.example.toml"),
-    
-    # Virtual environment
-    str(Path(__file__).parent.parent.parent / ".venv"),
-    
-    # Test files
-    str(Path(__file__).parent.parent.parent / "tests/bash_executor_test_files/protected_file.txt"),
-}
+from utils import get_paths
+from shared_resources import DATA_DIR, logger
 
 # Get paths for data directories
 paths = get_paths(DATA_DIR)
-AGENT_NOTES_DIR = str(paths.agent_notes_dir)
+AGENT_WORKSPACE_DIR = str(paths.agent_workspace_dir)
 
 # Restricted users for different access tiers
 PROJECT_READ = "cymbiont_project_read"                    # Tier 1: Project-only read access
 SYSTEM_READ = "cymbiont_system_read"                      # Tier 2: System-wide read access
-PROJECT_RESTRICTED_WRITE = "cymbiont_project_restr_write" # Tier 3: System read + agent_notes write
+PROJECT_RESTRICTED_WRITE = "cymbiont_project_restr_write" # Tier 3: System read + agent_workspace write
 PROJECT_WRITE_EXECUTE = "cymbiont_project_write_exec"     # Tier 4: Project read/write/execute
 
 def check_restricted_user_exists(username: str) -> bool:
@@ -65,9 +52,6 @@ class BashExecutor:
         Args:
             access_tier: Override the security tier from config. If None, uses config value.
         """
-        self.master_fd: Optional[int] = None
-        self.pid: Optional[int] = None
-        
         # Load security tier from config if not overridden
         if access_tier is None:
             config_path = Path(__file__).parent.parent.parent / "config.toml"
@@ -81,9 +65,31 @@ class BashExecutor:
                 self.access_tier = ShellAccessTier.TIER_1_PROJECT_READ
         else:
             self.access_tier = access_tier
+        
+        # Check for restricted user if needed
+        self.use_restricted_user = False
+        self.restricted_username: Optional[str] = None
+        
+        if self.access_tier == ShellAccessTier.TIER_1_PROJECT_READ:
+            self.restricted_username = PROJECT_READ
+        elif self.access_tier == ShellAccessTier.TIER_2_SYSTEM_READ:
+            self.restricted_username = SYSTEM_READ
+        elif self.access_tier == ShellAccessTier.TIER_3_PROJECT_RESTRICTED_WRITE:
+            self.restricted_username = PROJECT_RESTRICTED_WRITE
+        elif self.access_tier == ShellAccessTier.TIER_4_PROJECT_WRITE_EXECUTE:
+            self.restricted_username = PROJECT_WRITE_EXECUTE
             
+        if self.restricted_username:
+            if check_restricted_user_exists(self.restricted_username):
+                self.use_restricted_user = True
+            else:
+                logger.warning("Running in fallback mode without OS-level isolation!")
+                logger.warning(get_setup_instructions())
+
+        # Initialize other attributes
+        self.master_fd = None
+        self.pid = None
         self.project_root = str(Path(__file__).parent.parent.parent)
-        # Track current directory
         self.current_dir = self.project_root
         self._start_bash()
         self._apply_base_safeguards()  # Important: Apply base safeguards at startup
@@ -123,18 +129,6 @@ class BashExecutor:
         
         for cmd in safeguards:
             self._execute_raw(cmd)
-
-    def _is_protected_path(self, path: str) -> bool:
-        """Check if a path is protected from modification."""
-        path = os.path.normpath(path)
-        abs_path = path if os.path.isabs(path) else os.path.join(self.project_root, path)
-        
-        # Check against protected paths
-        for protected in PROTECTED_PATHS:
-            protected_abs = protected
-            if abs_path.startswith(protected_abs):
-                return True
-        return False
 
     def _validate_command(self, command: str) -> Tuple[bool, Optional[str]]:
         """Validate a command against security restrictions.
@@ -219,21 +213,21 @@ class BashExecutor:
                                   ShellAccessTier.TIER_2_SYSTEM_READ]:
                 return False, "Write operations not allowed in read-only mode"
             
-            if self.access_tier in [ShellAccessTier.TIER_3_PROJECT_RESTRICTED,
-                                  ShellAccessTier.TIER_4_PROJECT_WRITE]:
-                # For TIER_3, only allow writes in agent_notes_dir
-                if self.access_tier == ShellAccessTier.TIER_3_PROJECT_RESTRICTED:
+            if self.access_tier in [ShellAccessTier.TIER_3_PROJECT_RESTRICTED_WRITE,
+                                  ShellAccessTier.TIER_4_PROJECT_WRITE_EXECUTE]:
+                # For TIER_3, only allow writes in agent_workspace_dir
+                if self.access_tier == ShellAccessTier.TIER_3_PROJECT_RESTRICTED_WRITE:
                     for part in cmd_parts[1:]:
-                        if '>' in part or '>>' in part:
-                            continue  # Skip redirection operators
+                        if '>' in part or '>>' in part or part.startswith('-'):
+                            continue  # Skip redirection operators and command flags
                         abs_target = os.path.normpath(os.path.join(self.current_dir, part))
-                        if not str(abs_target).startswith(AGENT_NOTES_DIR):
-                            return False, f"Write operation not allowed outside of {AGENT_NOTES_DIR}"
+                        if not str(abs_target).startswith(AGENT_WORKSPACE_DIR):
+                            return False, f"Write operation not allowed outside of {AGENT_WORKSPACE_DIR}"
             
                 # For both TIER_3 and TIER_4, ensure writes stay within project
                 for part in cmd_parts[1:]:
-                    if '>' in part or '>>' in part:
-                        continue  # Skip redirection operators
+                    if '>' in part or '>>' in part or part.startswith('-'):
+                        continue  # Skip redirection operators and command flags
                     abs_target = os.path.normpath(os.path.join(self.current_dir, part))
                     try:
                         rel_path = os.path.relpath(abs_target, self.project_root)
@@ -245,7 +239,7 @@ class BashExecutor:
         # Block file execution in restricted tiers (1-3)
         if self.access_tier in [ShellAccessTier.TIER_1_PROJECT_READ,
                               ShellAccessTier.TIER_2_SYSTEM_READ,
-                              ShellAccessTier.TIER_3_PROJECT_RESTRICTED]:
+                              ShellAccessTier.TIER_3_PROJECT_RESTRICTED_WRITE]:
             # Block direct file execution
             if cmd_parts[0].startswith('./') or '/' in cmd_parts[0]:
                 return False, "Executing files is not allowed in restricted tiers"
@@ -257,14 +251,38 @@ class BashExecutor:
         
         return True, None
 
+    def _switch_to_user(self, username: str) -> None:
+        """Switch the current process to run as a different user.
+        
+        Args:
+            username: Username to switch to
+        """
+        try:
+            user_info = pwd.getpwnam(username)
+            # Set supplementary groups
+            groups = [g.gr_gid for g in grp.getgrall() if username in g.gr_mem]
+            os.setgroups(groups)
+            # Set GID first (required for non-root)
+            os.setgid(user_info.pw_gid)
+            # Set UID
+            os.setuid(user_info.pw_uid)
+        except Exception as e:
+            raise RuntimeError(f"Failed to switch to user {username}: {str(e)}")
+
     def _start_bash(self) -> None:
         """Start a new bash process with PTY."""
         # Fork a new process with PTY
         pid, master_fd = pty.fork()
         
         if pid == 0:  # Child process
-            # Execute bash in the child process
-            os.execvp('bash', ['bash'])
+            if self.use_restricted_user and self.restricted_username is not None:
+                # Use su to start bash as the restricted user
+                # -l = login shell (sets up environment properly)
+                # -s = specify shell to use
+                os.execvp('su', ['su', '-l', self.restricted_username, '-s', '/bin/bash'])
+            else:
+                # Normal unrestricted mode
+                os.execvp('bash', ['bash'])
         else:  # Parent process
             self.master_fd = master_fd
             self.pid = pid

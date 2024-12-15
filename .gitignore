@@ -10,7 +10,7 @@ docs/
 config.toml
 
 # Data
-data/agent_notes/*
+data/agent_workspace/*
 data/chunks/*
 data/input_documents/*
 data/indexes/*
@@ -19,7 +19,7 @@ data/triples/*
 data/inert_documents/*
 data/logs/*
 data/snapshots/*
-!data/agent_notes/.gitkeep
+!data/agent_workspace/.gitkeep
 !data/chunks/.gitkeep
 !data/input_documents/.gitkeep
 !data/indexes/.gitkeep

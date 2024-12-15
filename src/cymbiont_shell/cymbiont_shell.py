@@ -326,12 +326,12 @@ class CymbiontShell:
                 
         try:
             # Execute the command
-            output, return_code = self.bash_executor.execute(args)
+            output, error = self.bash_executor.execute(args)
             
-            if output:
+            if error:
+                logger.error(error)
+            elif output:
                 logger.log(LogLevel.BASH, output)
-            if return_code != 0:
-                logger.error(f"Command failed with return code {return_code}")
                 
         except Exception as e:
             logger.error(f"Failed to execute command: {e}")
