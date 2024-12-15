@@ -83,7 +83,7 @@ class BashExecutor:
             if check_restricted_user_exists(self.restricted_username):
                 self.use_restricted_user = True
             else:
-                logger.warning("Running in fallback mode without OS-level isolation!")
+                logger.warning("Running in fallback mode without OS-level isolation.")
                 logger.warning(get_setup_instructions())
 
         # Initialize other attributes
@@ -99,37 +99,39 @@ class BashExecutor:
         if self.access_tier == ShellAccessTier.TIER_5_UNRESTRICTED:
             return  # No safeguards in unrestricted mode
 
-        # Disable dangerous shell features
+        # Disable dangerous shell features while preserving necessary functionality
         safeguards = [
-            "set -f",  # Disable glob expansion
-            "set -p",  # Use privileged mode
+            # Core security settings
+            "set -p",  # Use privileged mode for secure env
             "set -u",  # Error on undefined variables
-            "shopt -u expand_aliases",  # Disable alias expansion
-            "unset BASH_ENV ENV",  # Disable startup files
-            "PATH=/bin:/usr/bin",  # Restrict PATH
+            
+            # Environment restrictions
+            "PATH=/bin:/usr/bin:/usr/local/bin",  # Set safe PATH with necessary dirs
             "readonly PATH",  # Prevent PATH modification
-            "unset CDPATH",  # Disable CDPATH
-            "set +o history",  # Disable command history
             "readonly SHELL",  # Prevent shell switching
             "readonly HOME",  # Prevent home directory changes
             "readonly USER",  # Prevent user changes
             "readonly LOGNAME",  # Prevent login name changes
+            
+            # File safety
             "set -o noclobber",  # Prevent accidental file overwrites
             "umask 022",  # Set safe file creation mask
-            "set +o errexit",  # Prevent exit on error
-            "set +o nounset",  # Prevent error on undefined variables
-            "set +o pipefail",  # Prevent exit on pipe failure
+            
+            # Clean environment
+            "unset BASH_ENV ENV",  # Disable startup files
+            "unset SHELLOPTS",  # Disable shell options
+            "unset CDPATH",  # Disable CDPATH
+            
+            # Allow but don't enable potentially dangerous features
+            "set +o history",  # Disable command history
             "set +o xtrace",  # Prevent tracing
             "set +o verbose",  # Prevent verbose mode
-            "unset SHELLOPTS",  # Disable shell options
-            "unset ENV",  # Disable environment file
-            "unset BASH_ENV",  # Disable bash environment file
-            "unset CDPATH",  # Disable CDPATH
+            "set +o expand_aliases",  # Disable creation of new aliases
         ]
         
         for cmd in safeguards:
             self._execute_raw(cmd)
-
+            
     def _validate_command(self, command: str) -> Tuple[bool, Optional[str]]:
         """Validate a command against security restrictions.
         
@@ -296,7 +298,7 @@ class BashExecutor:
             
             # Clear initial prompt
             self._read_until_prompt()
-            
+
     def _set_terminal_size(self, rows: int, cols: int) -> None:
         """Set the terminal size for the PTY."""
         if self.master_fd is not None:
@@ -316,9 +318,11 @@ class BashExecutor:
         text = re.sub(r'\x1B\[\?1047[hl]', '', text)  # Alternate screen buffer (older terminals)
         text = re.sub(r'\x1B\[\?2004[hl]', '', text)  # Bracketed paste mode
         
-        # Remove cursor movement and screen clearing sequences
-        text = re.sub(r'\x1B\[\d*[ABCDEFGJKST]', '', text)  # Cursor movement and clear screen parts
-        text = re.sub(r'\x1B\[\d*[HJ]', '', text)           # Cursor position and clear screen
+        # Only remove specific cursor movement commands, preserve colors
+        text = re.sub(r'\x1B\[\d*[ABCD]', '', text)  # Cursor movement
+        text = re.sub(r'\x1B\[\d*[EF]', '', text)    # Cursor next/previous line
+        text = re.sub(r'\x1B\[\d*[GH]', '', text)    # Cursor position
+        text = re.sub(r'\x1B\[\d*[JK]', '', text)    # Clear screen/line parts
         
         return text
             
@@ -330,6 +334,7 @@ class BashExecutor:
         
         # Build up partial lines
         partial = ""
+        filtered_partial = ""  # For prompt detection only
         
         while True:
             try:
@@ -344,19 +349,21 @@ class BashExecutor:
                 if not data:
                     break
                     
-                # Filter escape sequences before adding to output
-                data = self._filter_ansi_escapes(data)
+                # Keep original data for output
                 partial += data
+                # Filter only for prompt detection
+                filtered_data = self._filter_ansi_escapes(data)
+                filtered_partial += filtered_data
                 
-                # Check if we have a complete prompt
-                if re.search(prompt_pattern, partial.split('\n')[-1]):
+                # Check if we have a complete prompt using filtered data
+                if re.search(prompt_pattern, filtered_partial.split('\n')[-1]):
                     break
                     
             except (OSError, BlockingIOError):
                 break
                 
         return partial
-            
+
     def _execute_raw(self, command: str, timeout: float = 0.1) -> Tuple[str, str]:
         """Execute a command in the bash process."""
         if self.master_fd is None:
@@ -398,8 +405,8 @@ class BashExecutor:
                 os.write(self.master_fd, b'\x03')
                 time.sleep(0.1)
                 
-                # Reset terminal
-                os.write(self.master_fd, 'tput reset\n'.encode())
+                # Reset only alternate screen buffer and scrolling mode
+                os.write(self.master_fd, b'\x1B[?1049l\x1B[?47l\x1B[?1047l')
                 self._read_until_prompt(timeout)
                 
                 # Restore terminal settings
@@ -416,7 +423,8 @@ class BashExecutor:
             try:
                 os.write(self.master_fd, b'\x03')  # Send ctrl-C
                 time.sleep(0.1)
-                os.write(self.master_fd, 'tput reset\n'.encode())
+                # Reset only alternate screen buffer and scrolling mode
+                os.write(self.master_fd, b'\x1B[?1049l\x1B[?47l\x1B[?1047l')
                 self._read_until_prompt(timeout)
                 if old_settings is not None:
                     try:
@@ -452,7 +460,8 @@ class BashExecutor:
                     try:
                         os.write(self.master_fd, b'\x03')  # Send ctrl-C
                         time.sleep(0.1)
-                        os.write(self.master_fd, 'tput reset\n'.encode())
+                        # Reset only alternate screen buffer and scrolling mode
+                        os.write(self.master_fd, b'\x1B[?1049l\x1B[?47l\x1B[?1047l')
                         self._read_until_prompt(0.1)
                     except:
                         pass

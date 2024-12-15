@@ -114,7 +114,7 @@ cp config.example.toml config.toml
 
 #### Shell Access Tiers
 
-The `shell_access_tier` setting in `config.toml` determines the security level for shell commands. Available tiers:
+The `shell_access_tier` setting in `config.toml` determines the security level for shell commands that can be used by the agent. Available tiers:
 
 1. **TIER_1_PROJECT_READ** (Default)
    - Read-only access to project files only
@@ -147,7 +147,7 @@ The `shell_access_tier` setting in `config.toml` determines the security level f
    - No OS-level isolation
    - **Not recommended**
 
-When using tiers 1-4, the bootstrap script or './bootstrap.sh' should be run with sudo to create the necessary restricted users and set up filesystem ACLs.
+When using tiers 1-4, `./bootstrap.sh` or `./scripts/setup_restricted_user.sh` should be run with sudo to create the necessary restricted users and set up filesystem ACLs.
 
 ## Testing
 

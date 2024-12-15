@@ -1,15 +1,15 @@
 #!/bin/bash
 
+# Detect OS early for system-specific operations
+OS=$(case "$(uname -s)" in
+    Linux*)     echo 'Linux';;
+    Darwin*)    echo 'Mac';;
+    MINGW*|MSYS*|CYGWIN*) echo 'Windows';;
+    *)         echo 'Unknown';;
+esac)
+
 # Function to handle PyTorch installation
 install_pytorch() {
-    # Detect OS
-    OS=$(case "$(uname -s)" in
-        Linux*)     echo 'Linux';;
-        Darwin*)    echo 'Mac';;
-        MINGW*|MSYS*|CYGWIN*) echo 'Windows';;
-        *)         echo 'Unknown';;
-    esac)
-
     # Check for CUDA on Linux and Windows (informational only)
     if [ "$OS" = "Linux" ] || [ "$OS" = "Windows" ]; then
         if command -v nvidia-smi &> /dev/null; then
@@ -198,31 +198,35 @@ else
 fi
 
 # Setup restricted user for enhanced security
-echo -e "\033[34m>> Would you like to set up a restricted user for enhanced security? (y/n): \033[0m"
+echo -e "\033[34m>> Would you like to set up a restricted user for enhanced shell security? (y/n): \033[0m"
 read setup_restricted
 
 if [[ ${setup_restricted:0:1} =~ [yY] ]]; then
-    echo -e "\033[32m>> Checking ACL support...\033[0m"
-    if ! command -v setfacl &> /dev/null; then
-        echo -e "\033[33m>> ACL support not found. Installing acl package (requires sudo)...\033[0m"
-        if [ -f /etc/debian_version ]; then
-            sudo apt-get update && sudo apt-get install -y acl
-        elif [ -f /etc/redhat-release ]; then
-            sudo yum install -y acl
-        elif [ -f /etc/arch-release ]; then
-            sudo pacman -S --noconfirm acl
-        else
-            echo -e "\033[31m>> Unsupported distribution. Please install 'acl' package manually.\033[0m"
-            exit 1
-        fi
-    fi
-    
-    echo -e "\033[32m>> Setting up restricted user (requires sudo)...\033[0m"
-    sudo ./scripts/setup_restricted_user.sh
-    if [ $? -eq 0 ]; then
-        echo -e "\033[32m>> Successfully set up restricted user\033[0m"
+    if [ "$OS" = "Windows" ]; then
+        echo -e "\033[33m>> On Windows systems, please run scripts/setup_restricted_user.sh with administrator privileges manually.\033[0m"
     else
-        echo -e "\033[31m>> Failed to set up restricted user. Continuing without enhanced security...\033[0m"
+        echo -e "\033[32m>> Checking ACL support...\033[0m"
+        if ! command -v setfacl &> /dev/null; then
+            echo -e "\033[33m>> ACL support not found. Installing acl package (requires sudo)...\033[0m"
+            if [ -f /etc/debian_version ]; then
+                sudo apt-get update && sudo apt-get install -y acl
+            elif [ -f /etc/redhat-release ]; then
+                sudo yum install -y acl
+            elif [ -f /etc/arch-release ]; then
+                sudo pacman -S --noconfirm acl
+            else
+                echo -e "\033[31m>> Unsupported distribution. Please install 'acl' package manually.\033[0m"
+                exit 1
+            fi
+        fi
+        
+        echo -e "\033[32m>> Setting up restricted user (requires sudo)...\033[0m"
+        sudo ./scripts/setup_restricted_user.sh
+        if [ $? -eq 0 ]; then
+            echo -e "\033[32m>> Successfully set up restricted user\033[0m"
+        else
+            echo -e "\033[31m>> Failed to set up restricted user. Continuing without enhanced security...\033[0m"
+        fi
     fi
 else
     echo -e "\033[33m>> Skipping restricted user setup. You can run scripts/setup_restricted_user.sh later if needed.\033[0m"
