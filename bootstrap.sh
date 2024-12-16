@@ -11,19 +11,40 @@ esac)
 # Function to show progress
 progress() {
     local msg="$1"
-    local progress="$2"
+    local current="$2"
     local total="$3"
     local width=50
-    local percentage=$((progress * 100 / total))
-    local completed=$((width * progress / total))
+    local percentage=$((current * 100 / total))
+    local completed=$((width * current / total))
+    printf "\r%-100s" " "  # Clear line first
     printf "\r[%-${width}s] %d%% %s" "$(printf '#%.0s' $(seq 1 $completed))" "$percentage" "$msg"
-    if [ "$progress" -eq "$total" ]; then
-        echo
-    fi
+}
+
+# Function to start a new progress bar
+start_progress() {
+    printf "\r%-100s" " "  # Clear line once at the start
+}
+
+# Function to start PyTorch progress bar
+start_pytorch_progress() {
+    (
+        start_progress
+        total=100
+        current=0
+        while [ $current -lt $total ]; do
+            progress "Installing PyTorch..." "$current" "$total"
+            sleep 1
+            ((current++))
+        done
+        echo  # New line after progress bar
+    ) &
+    PROGRESS_PID=$!
 }
 
 # Function to handle PyTorch installation
 install_pytorch() {
+    echo "Installing PyTorch..."
+    
     # Check for CUDA on Linux and Windows (informational only)
     if [ "$OS" = "Linux" ] || [ "$OS" = "Windows" ]; then
         if command -v nvidia-smi &> /dev/null; then
@@ -61,35 +82,29 @@ install_pytorch() {
     
     echo -e "\033[32m>> Installing PyTorch for: \033[34m$CHOICE\033[0m"
     
-    # Start progress bar in background
-    (
-        progress=0
-        while [ $progress -lt 100 ]; do
-            progress "Installing PyTorch..." "$progress" "100"
-            sleep 1
-            ((progress++))
-        done
-    ) &
-    PROGRESS_PID=$!
-
     # Do the installation quietly
     RESULT=0
     case $OS in
         "Linux")
             case $CHOICE in
                 "CUDA 11.8")
+                    start_pytorch_progress
                     python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cu118 || RESULT=1
                     ;;
                 "CUDA 12.1")
+                    start_pytorch_progress
                     python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cu121 || RESULT=1
                     ;;
                 "CUDA 12.4")
+                    start_pytorch_progress
                     python3 -m pip install torch -q || RESULT=1
                     ;;
                 "ROCm 6.2")
+                    start_pytorch_progress
                     python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/rocm6.2 || RESULT=1
                     ;;
                 "CPU-only")
+                    start_pytorch_progress
                     python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cpu || RESULT=1
                     ;;
             esac
@@ -97,25 +112,30 @@ install_pytorch() {
         "Windows")
             case $CHOICE in
                 "CUDA 11.8")
+                    start_pytorch_progress
                     python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cu118 || RESULT=1
                     ;;
                 "CUDA 12.1")
+                    start_pytorch_progress
                     python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cu121 || RESULT=1
                     ;;
                 "CUDA 12.4")
+                    start_pytorch_progress
                     python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cu124 || RESULT=1
                     ;;
                 "CPU-only")
+                    start_pytorch_progress
                     python3 -m pip install torch -q || RESULT=1
                     ;;
             esac
             ;;
         "Mac")
+            start_pytorch_progress
             python3 -m pip install torch torchvision torchaudio -q || RESULT=1
             ;;
     esac
     
-    # Kill progress bar and show final state
+    # Kill progress bar and check result
     kill $PROGRESS_PID 2>/dev/null
     wait $PROGRESS_PID 2>/dev/null
     if [ $RESULT -eq 0 ]; then
@@ -123,7 +143,7 @@ install_pytorch() {
         echo -e "\n\033[32m>> PyTorch installed successfully\033[0m"
         return 0
     else
-        echo -e "\n\033[31m>> Failed to install PyTorch\033[0m"
+        echo -e "\n\033[31m>> Error: Failed to install PyTorch\033[0m"
         return 1
     fi
 }
@@ -176,6 +196,7 @@ if [ "$MANAGE_VENV" = "False" ]; then
             current_package=0
             
             # Install packages one by one to track progress
+            start_progress
             while IFS= read -r package || [ -n "$package" ]; do
                 # Skip comments and empty lines
                 [[ $package =~ ^[[:space:]]*# ]] && continue
@@ -189,6 +210,7 @@ if [ "$MANAGE_VENV" = "False" ]; then
                     exit 1
                 fi
             done < requirements.txt
+            echo  # New line after progress bar
             echo -e "\033[32m>> Dependencies installed successfully\033[0m"
             
             # Check if PyTorch is already installed
@@ -257,6 +279,7 @@ else
     current_package=0
     
     # Install packages one by one to track progress
+    start_progress
     while IFS= read -r package || [ -n "$package" ]; do
         # Skip comments and empty lines
         [[ $package =~ ^[[:space:]]*# ]] && continue
@@ -270,6 +293,7 @@ else
             exit 1
         fi
     done < requirements.txt
+    echo  # New line after progress bar
     echo -e "\033[32m>> Dependencies installed successfully\033[0m"
 
     # Check if PyTorch is already installed
