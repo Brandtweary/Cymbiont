@@ -6,7 +6,7 @@ from prompt_toolkit.formatted_text.base import StyleAndTextTuples
 from typing import Tuple, Optional
 from agents import agent
 from agents.tool_helpers import register_tools
-from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED, AGENT_ACTIVATION_MODE, console_handler
+from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED, AGENT_ACTIVATION_MODE, console_handler, SHELL_ACCESS_TIER
 from cymbiont_logger.token_logger import token_logger
 from agents.chat_history import ChatHistory, setup_chat_history_handler
 from cymbiont_logger.logger_types import LogLevel
@@ -21,6 +21,7 @@ from .log_aware_session import LogAwareSession
 from agents.agent_types import ActivationMode
 from prompt_toolkit.patch_stdout import patch_stdout
 from agents.bash_executor import BashExecutor
+from utils import get_shell_access_tier_documentation
 
 
 class CymbiontShell:
@@ -146,7 +147,16 @@ class CymbiontShell:
             if not cmd_data.callable.__doc__:
                 continue
                 
-            doc_lines.append(f"{cmd_name}: {cmd_data.callable.__doc__.strip()}")
+            doc = cmd_data.callable.__doc__.strip()
+            
+            # Add shell access tier info for bash command
+            if cmd_name == "bash":
+                tier_doc = get_shell_access_tier_documentation(SHELL_ACCESS_TIER)
+                # Split and indent each line of the tier documentation
+                tier_doc = '\n        '.join(tier_doc.split('\n'))
+                doc += "\n\n        " + tier_doc
+                
+            doc_lines.append(f"{cmd_name}: {doc}")
         
         return '\n'.join(doc_lines)
 

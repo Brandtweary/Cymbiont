@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from collections import defaultdict
-from shared_resources import logger, FILE_RESET, DELETE_LOGS, DEBUG_ENABLED, Paths
+from shared_resources import logger, FILE_RESET, DELETE_LOGS, DEBUG_ENABLED, Paths, ShellAccessTier
 from pathlib import Path
 import json
 from cymbiont_logger.logger_types import LogLevel
@@ -251,3 +251,35 @@ def convert_messages_to_string(
     
     # Join messages with single newlines and clean up any resulting double newlines
     return '\n'.join(formatted_messages).replace('\n\n\n', '\n\n')
+
+def get_shell_access_tier_documentation(tier: ShellAccessTier) -> str:
+    """Get a human-readable description of shell access tier constraints.
+    
+    Args:
+        tier: The ShellAccessTier enum value
+        
+    Returns:
+        A string describing the access tier and its constraints
+    """
+    descriptions = {
+        ShellAccessTier.TIER_1_PROJECT_READ: 
+            "Your current shell access tier is: Project Read-Only (Tier 1)\n"
+            "You can only read files within the Cymbiont project directory. You cannot execute files or navigate outside the project.",
+            
+        ShellAccessTier.TIER_2_SYSTEM_READ:
+            "Your current shell access tier is: System Read-Only (Tier 2)\n"
+            "You can read files anywhere on the system but cannot write or execute files.",
+            
+        ShellAccessTier.TIER_3_PROJECT_RESTRICTED_WRITE:
+            "Your current shell access tier is: Project Restricted Write (Tier 3)\n" 
+            "You can read system files and write to your agent workspace, but cannot execute files.",
+            
+        ShellAccessTier.TIER_4_PROJECT_WRITE_EXECUTE:
+            "Your current shell access tier is: Project Write/Execute (Tier 4)\n"
+            "You can read system files and write/execute within the Cymbiont project directory.",
+            
+        ShellAccessTier.TIER_5_UNRESTRICTED:
+            "Your current shell access tier is: Unrestricted (Tier 5)\n"
+            "You can use all read/write/execute commands."
+    }
+    return descriptions[tier]

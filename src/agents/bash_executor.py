@@ -9,14 +9,13 @@ import signal
 import time
 import re
 import shlex
-import tomllib
 from pathlib import Path
-from typing import Optional, Tuple, List, Set
+from typing import Optional, Tuple
 import pwd
 import grp
 from .agent_types import ShellAccessTier
 from utils import get_paths
-from shared_resources import DATA_DIR, logger
+from shared_resources import DATA_DIR, logger, SHELL_ACCESS_TIER
 import threading
 from cymbiont_logger.bash_logger import BashLogger
 
@@ -55,18 +54,7 @@ class BashExecutor:
             access_tier: Override the security tier from config. If None, uses config value.
         """
         # Load security tier from config if not overridden
-        if access_tier is None:
-            config_path = Path(__file__).parent.parent.parent / "config.toml"
-            try:
-                with open(config_path, "rb") as f:
-                    config = tomllib.load(f)
-                tier_num = config.get("security", {}).get("shell_access_tier", 1)
-                self.access_tier = ShellAccessTier(tier_num)
-            except Exception as e:
-                # Default to most restrictive tier on any error
-                self.access_tier = ShellAccessTier.TIER_1_PROJECT_READ
-        else:
-            self.access_tier = access_tier
+        self.access_tier = access_tier or SHELL_ACCESS_TIER
         
         # Check for restricted user if needed
         self.use_restricted_user = False

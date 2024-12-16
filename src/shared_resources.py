@@ -5,7 +5,7 @@ import tomllib
 from dotenv import load_dotenv
 from typing import NamedTuple
 from anthropic import AsyncAnthropic
-
+from agents.agent_types import ShellAccessTier
 
 class Paths(NamedTuple):
     """Paths for data storage"""
@@ -80,6 +80,7 @@ TOOL_ENABLED = config["app"]["tool"]
 # Shell config
 USER_NAME = config["shell"]["user_name"]
 AGENT_NAME = config["shell"]["agent_name"]
+SHELL_ACCESS_TIER = ShellAccessTier(config["security"]["shell_access_tier"])
 
 # Agent activation mode config
 VALID_AGENT_ACTIVATION_MODES = {"continuous", "chat"}

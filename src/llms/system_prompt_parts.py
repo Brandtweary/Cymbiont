@@ -37,6 +37,7 @@ Command Execution Guidelines:
    - Validate command exists and arguments match format
    - Execute with proper arguments
    - Monitor output and handle errors
+   - Use the bash command to execute arbitary bash code, but ensure that you are following the read/write/execute rules for your current shell access tier
 
 2. Special Cases:
    - If user asks about available commands: run help
