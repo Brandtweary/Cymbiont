@@ -136,10 +136,12 @@ for user in "$PROJECT_READ" "$SYSTEM_READ" "$PROJECT_RESTRICTED_WRITE" "$PROJECT
     fi
 done
 
-# Get the current user (the one who invoked sudo)
-SUDO_USER="${SUDO_USER:-$USER}"
-
-echo "Setting up project directory permissions..."
+# Configure sudo access for the current user to run commands as restricted users without password
+echo "Configuring sudo access..."
+SUDO_CONF="/etc/sudoers.d/cymbiont_restricted_users"
+echo "# Allow current user to run commands as restricted users without password" > "$SUDO_CONF"
+echo "$SUDO_USER ALL=(${PROJECT_READ},${SYSTEM_READ},${PROJECT_RESTRICTED_WRITE},${PROJECT_WRITE_EXECUTE}) NOPASSWD: /bin/bash" >> "$SUDO_CONF"
+chmod 440 "$SUDO_CONF"
 
 # Reset base ACLs on project root
 debug "Setting base permissions on project root"

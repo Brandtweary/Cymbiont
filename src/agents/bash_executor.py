@@ -18,6 +18,7 @@ from .agent_types import ShellAccessTier
 from utils import get_paths
 from shared_resources import DATA_DIR, logger
 import threading
+from cymbiont_logger.bash_logger import BashLogger
 
 # Get paths for data directories
 paths = get_paths(DATA_DIR)
@@ -89,21 +90,50 @@ class BashExecutor:
 
         # Initialize other attributes
         self.master_fd = None
-        self.pid = None
+        self.bash_pid = None
         self.project_root = str(Path(__file__).parent.parent.parent)
         self.current_dir = self.project_root
         self.blocked_commands = 0
+        self.bash_logger = BashLogger()
+        
+        # Start bash process
         self._start_bash()
-        self._apply_base_safeguards()  # Important: Apply base safeguards at startup
+        
+        # Apply safeguards only if not in unrestricted mode
+        if self.access_tier != ShellAccessTier.TIER_5_UNRESTRICTED:
+            # Temporarily elevate to run safeguards
+            original_tier = self.access_tier
+            self.access_tier = ShellAccessTier.TIER_5_UNRESTRICTED
+            self._apply_base_safeguards()
+            self.access_tier = original_tier
+        
         self._start_reset_timer()
 
     def _apply_base_safeguards(self) -> None:
         """Apply base security safeguards to bash environment."""
-        if self.access_tier == ShellAccessTier.TIER_5_UNRESTRICTED:
-            return  # No safeguards in unrestricted mode
-
-        # Disable dangerous shell features while preserving necessary functionality
-        safeguards = [
+        # Set up minimal shell environment
+        shell_env = [
+            # Enable alias expansion
+            "shopt -s expand_aliases",
+            
+            # Common color and formatting aliases
+            "alias ls='ls --color=auto'",
+            "alias grep='grep --color=auto'",
+            "alias fgrep='fgrep --color=auto'",
+            "alias egrep='egrep --color=auto'",
+            "alias diff='diff --color=auto'",
+            "alias ip='ip --color=auto'",
+            
+            # Common directory navigation
+            "alias ll='ls -alF'",
+            "alias la='ls -A'",
+            "alias l='ls -CF'",
+            
+            # Set common environment variables
+            "export TERM=xterm-256color",  # Enable 256 color support
+            "export COLORTERM=truecolor",  # Enable true color support if available
+            "export CLICOLOR=1",          # Enable colors for BSD tools
+            
             # Core security settings
             "set -p",  # Use privileged mode for secure env
             "set -u",  # Error on undefined variables
@@ -112,7 +142,6 @@ class BashExecutor:
             "PATH=/bin:/usr/bin:/usr/local/bin",  # Set safe PATH with necessary dirs
             "readonly PATH",  # Prevent PATH modification
             "readonly SHELL",  # Prevent shell switching
-            "readonly HOME",  # Prevent home directory changes
             "readonly USER",  # Prevent user changes
             "readonly LOGNAME",  # Prevent login name changes
             
@@ -122,19 +151,17 @@ class BashExecutor:
             
             # Clean environment
             "unset BASH_ENV ENV",  # Disable startup files
-            "unset SHELLOPTS",  # Disable shell options
             "unset CDPATH",  # Disable CDPATH
-            
-            # Allow but don't enable potentially dangerous features
+
+            # Security hardening
             "set +o history",  # Disable command history
             "set +o xtrace",  # Prevent tracing
             "set +o verbose",  # Prevent verbose mode
-            "set +o expand_aliases",  # Disable creation of new aliases
         ]
         
-        for cmd in safeguards:
-            self._execute_raw(cmd)
-            
+        for cmd in shell_env:
+            output, _ = self._execute_raw(cmd)
+
     def _validate_command(self, command: str) -> Tuple[bool, Optional[str]]:
         """Validate a command against security restrictions.
         
@@ -280,17 +307,19 @@ class BashExecutor:
         pid, master_fd = pty.fork()
         
         if pid == 0:  # Child process
-            if self.use_restricted_user and self.restricted_username is not None:
-                # Use su to start bash as the restricted user
-                # -l = login shell (sets up environment properly)
-                # -s = specify shell to use
-                os.execvp('su', ['su', '-l', self.restricted_username, '-s', '/bin/bash'])
-            else:
-                # Normal unrestricted mode
-                os.execvp('bash', ['bash'])
+            try:
+                if self.use_restricted_user and self.restricted_username is not None:
+                    # Start bash as restricted user
+                    os.execvp('sudo', ['sudo', '-n', '-u', self.restricted_username, '/bin/bash'])
+                else:
+                    # Normal unrestricted mode
+                    os.execvp('bash', ['bash'])
+            except Exception as e:
+                print(f"Child process failed: {e}", file=sys.stderr)
+                os._exit(1)
         else:  # Parent process
             self.master_fd = master_fd
-            self.pid = pid
+            self.bash_pid = pid
             
             # Set non-blocking I/O on the master file descriptor
             flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
@@ -301,7 +330,7 @@ class BashExecutor:
             
             # Clear initial prompt
             self._read_until_prompt()
-
+            
     def _set_terminal_size(self, rows: int, cols: int) -> None:
         """Set the terminal size for the PTY."""
         if self.master_fd is not None:
@@ -402,6 +431,9 @@ class BashExecutor:
             
             result = '\n'.join(clean_lines)
             
+            # Log command and output
+            self.bash_logger.log_command(command, result)
+            
             # For interactive commands, ensure terminal is reset
             if command.strip().split()[0] in ['less', 'vim', 'nano', 'htop', 'top', 'man']:
                 # Send ctrl-C first in case program is still running
@@ -482,7 +514,7 @@ class BashExecutor:
     def close(self) -> None:
         """Clean up the bash process."""
         self._timer_active = False  # Stop the timer thread
-        if self.pid is not None:
+        if self.bash_pid is not None:
             try:
                 # Try to reset terminal before closing
                 if self.master_fd is not None:
@@ -494,16 +526,16 @@ class BashExecutor:
                         self._read_until_prompt(0.1)
                     except:
                         pass
-                os.kill(self.pid, signal.SIGTERM)
+                os.kill(self.bash_pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
                 
         if self.master_fd is not None:
             os.close(self.master_fd)
             self.master_fd = None
-            self.pid = None
+            self.bash_pid = None
             
     def __del__(self):
         """Ensure process cleanup on object destruction."""
-        if hasattr(self, 'master_fd') and hasattr(self, 'pid'):
+        if hasattr(self, 'master_fd') and hasattr(self, 'bash_pid'):
             self.close()
