@@ -69,12 +69,14 @@ The script will attempt to use the nvidia-smi tool to determine your CUDA versio
 
 5. (Optional) Set up restricted user for enhanced security:
    ```bash
+   # Note: Restricted user setup is not supported on Windows
+   
    # Install ACL support (probably on your system already)
    sudo apt-get install acl  # For Debian/Ubuntu
    sudo yum install acl      # For RHEL/CentOS
    sudo pacman -S acl        # For Arch Linux
 
-   # Run the setup script
+   # Run the setup script (Mac/Linux only)
    chmod +x ./scripts/setup_restricted_user.sh
    sudo ./scripts/setup_restricted_user.sh
    ```
@@ -149,6 +151,8 @@ The `shell_access_tier` setting in `config.toml` determines the security level f
    - **Not recommended**
 
 You should run `sudo ./scripts/setup_restricted_user.sh` to create the necessary restricted users and set up filesystem ACLs for OS-level isolation.
+
+**Note:** Restricted user setup is not currently supported on Windows. While command validation remains active on Windows, there is no backup OS-level isolation. Docker containerization support is planned for future releases to provide proper cross-platform isolation.
 
 ## Testing
 

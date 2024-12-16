@@ -323,7 +323,8 @@ read setup_restricted
 
 if [[ ${setup_restricted:0:1} =~ [yY] ]]; then
     if [ "$OS" = "Windows" ]; then
-        echo -e "\033[33m>> On Windows systems, please run scripts/setup_restricted_user.sh with administrator privileges manually.\033[0m"
+        echo -e "\033[33m>> Restricted user setup is not supported on Windows.\033[0m"
+        echo -e "\033[33m>> While command validation is still active, there is no backup OS-level isolation.\033[0m"
     else
         echo -e "\033[32m>> Checking ACL support...\033[0m"
         if ! command -v setfacl &> /dev/null; then

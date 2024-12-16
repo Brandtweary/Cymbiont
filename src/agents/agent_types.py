@@ -32,6 +32,12 @@ class ShellAccessTier(Enum):
     TIER_4_PROJECT_WRITE: Read-only access to system files with read/write/execute access within project directory. Uses OS-level isolation. Not recommended.
     
     TIER_5_UNRESTRICTED: Full system access with no restrictions. No OS-level isolation. Not recommended.
+
+    TODO: Consider implementing Docker containers for stronger isolation, particularly
+    for TIER_1_PROJECT_READ. Restricting filesystem access to only the project directory
+    is difficult to enforce at the OS level without proper containerization. While command
+    validation provides good protection, Docker would provide proper filesystem isolation
+    with industry-standard containerization.
     """
     TIER_1_PROJECT_READ = 1
     TIER_2_SYSTEM_READ = 2
