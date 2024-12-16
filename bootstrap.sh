@@ -4,8 +4,14 @@
 OS=$(case "$(uname -s)" in
     Linux*)     echo 'Linux';;
     Darwin*)    echo 'Mac';;
-    MINGW*|MSYS*|CYGWIN*) echo 'Windows';;
-    *)         echo 'Unknown';;
+    MINGW*|MSYS*|CYGWIN*)
+        echo -e "\033[31m>> Windows is not supported by this script. Please follow the manual setup instructions in README.md\033[0m"
+        exit 1
+        ;;
+    *)         
+        echo -e "\033[31m>> Unsupported operating system. Please follow the manual setup instructions in README.md\033[0m"
+        exit 1
+        ;;
 esac)
 
 # Function to show progress
@@ -46,7 +52,7 @@ install_pytorch() {
     echo "Installing PyTorch..."
     
     # Check for CUDA on Linux and Windows (informational only)
-    if [ "$OS" = "Linux" ] || [ "$OS" = "Windows" ]; then
+    if [ "$OS" = "Linux" ]; then
         if command -v nvidia-smi &> /dev/null; then
             CUDA_VERSION=$(nvidia-smi | grep -oP "CUDA Version: \K[0-9\.]+")
             if [ ! -z "$CUDA_VERSION" ]; then
@@ -62,8 +68,6 @@ install_pytorch() {
     echo -e "\033[32m>> Select PyTorch installation type:\033[0m"
     if [ "$OS" = "Linux" ]; then
         options=("CUDA 11.8" "CUDA 12.1" "CUDA 12.4" "ROCm 6.2" "CPU-only" "SKIP")
-    elif [ "$OS" = "Windows" ]; then
-        options=("CUDA 11.8" "CUDA 12.1" "CUDA 12.4" "CPU-only" "SKIP")
     else  # Mac
         options=("Default" "SKIP")
     fi
@@ -106,26 +110,6 @@ install_pytorch() {
                 "CPU-only")
                     start_pytorch_progress
                     python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cpu || RESULT=1
-                    ;;
-            esac
-            ;;
-        "Windows")
-            case $CHOICE in
-                "CUDA 11.8")
-                    start_pytorch_progress
-                    python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cu118 || RESULT=1
-                    ;;
-                "CUDA 12.1")
-                    start_pytorch_progress
-                    python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cu121 || RESULT=1
-                    ;;
-                "CUDA 12.4")
-                    start_pytorch_progress
-                    python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cu124 || RESULT=1
-                    ;;
-                "CPU-only")
-                    start_pytorch_progress
-                    python3 -m pip install torch -q || RESULT=1
                     ;;
             esac
             ;;
@@ -317,15 +301,17 @@ else
     fi
 fi
 
-# Setup restricted user for enhanced security
-echo -e "\033[34m>> Would you like to set up a restricted user for enhanced shell security? (y/n): \033[0m"
-read setup_restricted
+# Check if restricted user setup is available for this OS
+if [ "$OS" != "Linux" ]; then
+    echo -e "\033[33m>> Restricted user setup is only available on Linux.\033[0m"
+    echo -e "\033[33m>> While command validation remains active, there is no backup OS-level isolation.\033[0m"
+    echo -e "\033[33m>> Docker containerization support is planned for proper cross-platform isolation.\033[0m"
+else
+    # Setup restricted user for enhanced security
+    echo -e "\033[34m>> Would you like to set up a restricted user for enhanced shell security? (y/n): \033[0m"
+    read setup_restricted
 
-if [[ ${setup_restricted:0:1} =~ [yY] ]]; then
-    if [ "$OS" = "Windows" ]; then
-        echo -e "\033[33m>> Restricted user setup is not supported on Windows.\033[0m"
-        echo -e "\033[33m>> While command validation is still active, there is no backup OS-level isolation.\033[0m"
-    else
+    if [[ ${setup_restricted:0:1} =~ [yY] ]]; then
         echo -e "\033[32m>> Checking ACL support...\033[0m"
         if ! command -v setfacl &> /dev/null; then
             echo -e "\033[33m>> ACL support not found. Installing acl package (requires sudo)...\033[0m"
@@ -349,9 +335,9 @@ if [[ ${setup_restricted:0:1} =~ [yY] ]]; then
         else
             echo -e "\033[31m>> Failed to set up restricted user. Continuing without enhanced security...\033[0m"
         fi
+    else
+        echo -e "\033[33m>> Skipping restricted user setup. You can run scripts/setup_restricted_user.sh later if needed.\033[0m"
     fi
-else
-    echo -e "\033[33m>> Skipping restricted user setup. You can run scripts/setup_restricted_user.sh later if needed.\033[0m"
 fi
 
 # Environment configuration

@@ -6,12 +6,12 @@ At its core, Cymbiont implements a graph-based RAG (Retrieval-Augmented Generati
 
 ## Setup Instructions
 
-### Interactive Setup (Recommended)
+### Interactive Setup (Mac/Linux Only)
 
 1. Install Python:
-   - Windows: Download from [python.org](https://www.python.org/downloads/)
    - Mac: `brew install python@3.12`
    - Linux: `sudo apt install python3.12` (Ubuntu/Debian)
+   - Windows: Follow the Manual Setup instructions below
 
    **Note:** Python 3.12 is recommended. Newer versions may be incompatible with PyTorch.
 
@@ -23,10 +23,7 @@ At its core, Cymbiont implements a graph-based RAG (Retrieval-Augmented Generati
 
 3. Run the bootstrap script:
    ```bash
-   # Windows
-   ./bootstrap.sh
-
-   # Mac/Linux
+   # Mac/Linux only
    bash bootstrap.sh  # Run with bash
 
    chmod +x bootstrap.sh # Or make executable first
@@ -39,12 +36,12 @@ The bootstrap script will:
 - Guide you through PyTorch installation
 - Perform system status checks
 - Optionally create a `.env` file and walk you through API key configuration
-- Optionally set up a restricted user for enhanced security (requires sudo)
+- Optionally set up a restricted user for enhanced security (Linux only)
 - Optionally launch Cymbiont
 
 The script will attempt to use the nvidia-smi tool to determine your CUDA version. If you don't have nvidia-smi, you can determine your CUDA version using a different method, or you can proceed if you already know which PyTorch compute platform you want (e.g. CPU, CUDA, ROCM). The PyTorch installation step can be skipped and performed later by running the bootstrap script again or [installing PyTorch manually](https://pytorch.org/get-started/locally/). 
 
-### Manual Setup
+### Manual Setup (All Platforms)
 
 1. Install Python and clone repo (steps 1 and 2 above).
 
@@ -69,14 +66,14 @@ The script will attempt to use the nvidia-smi tool to determine your CUDA versio
 
 5. (Optional) Set up restricted user for enhanced security:
    ```bash
-   # Note: Restricted user setup is not supported on Windows
+   # Linux only - requires sudo
    
    # Install ACL support (probably on your system already)
    sudo apt-get install acl  # For Debian/Ubuntu
    sudo yum install acl      # For RHEL/CentOS
    sudo pacman -S acl        # For Arch Linux
 
-   # Run the setup script (Mac/Linux only)
+   # Run the setup script
    chmod +x ./scripts/setup_restricted_user.sh
    sudo ./scripts/setup_restricted_user.sh
    ```
@@ -152,7 +149,7 @@ The `shell_access_tier` setting in `config.toml` determines the security level f
 
 You should run `sudo ./scripts/setup_restricted_user.sh` to create the necessary restricted users and set up filesystem ACLs for OS-level isolation.
 
-**Note:** Restricted user setup is not currently supported on Windows. While command validation remains active on Windows, there is no backup OS-level isolation. Docker containerization support is planned for future releases to provide proper cross-platform isolation.
+**Note:** Restricted user setup is currently only supported on Linux. While command validation remains active on all platforms, there is no backup OS-level isolation on Windows or Mac. Docker containerization support is planned for future releases to provide proper cross-platform isolation.
 
 ## Testing
 
