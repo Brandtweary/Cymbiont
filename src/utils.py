@@ -174,7 +174,7 @@ def setup_directories(base_dir: Path) -> Paths:
 def get_paths(base_dir: Path) -> Paths:
     """Get directory paths for the specified base directory"""
     try:
-        agent_workspace_dir = base_dir / "data/agent_workspace"
+        agent_workspace_dir = base_dir / "agent_workspace"
         return Paths(
             base_dir=base_dir,
             docs_dir=base_dir / "input_documents",

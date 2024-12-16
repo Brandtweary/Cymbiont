@@ -8,6 +8,20 @@ OS=$(case "$(uname -s)" in
     *)         echo 'Unknown';;
 esac)
 
+# Function to show progress
+progress() {
+    local msg="$1"
+    local progress="$2"
+    local total="$3"
+    local width=50
+    local percentage=$((progress * 100 / total))
+    local completed=$((width * progress / total))
+    printf "\r[%-${width}s] %d%% %s" "$(printf '#%.0s' $(seq 1 $completed))" "$percentage" "$msg"
+    if [ "$progress" -eq "$total" ]; then
+        echo
+    fi
+}
+
 # Function to handle PyTorch installation
 install_pytorch() {
     # Check for CUDA on Linux and Windows (informational only)
@@ -46,53 +60,78 @@ install_pytorch() {
     fi
     
     echo -e "\033[32m>> Installing PyTorch for: \033[34m$CHOICE\033[0m"
+    
+    # Start progress bar in background
+    (
+        progress=0
+        while [ $progress -lt 100 ]; do
+            progress "Installing PyTorch..." "$progress" "100"
+            sleep 1
+            ((progress++))
+        done
+    ) &
+    PROGRESS_PID=$!
+
+    # Do the installation quietly
+    RESULT=0
     case $OS in
         "Linux")
             case $CHOICE in
                 "CUDA 11.8")
-                    python3 -m pip install torch --index-url https://download.pytorch.org/whl/cu118
+                    python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cu118 || RESULT=1
                     ;;
                 "CUDA 12.1")
-                    python3 -m pip install torch --index-url https://download.pytorch.org/whl/cu121
+                    python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cu121 || RESULT=1
                     ;;
                 "CUDA 12.4")
-                    python3 -m pip install torch
+                    python3 -m pip install torch -q || RESULT=1
                     ;;
                 "ROCm 6.2")
-                    python3 -m pip install torch --index-url https://download.pytorch.org/whl/rocm6.2
+                    python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/rocm6.2 || RESULT=1
                     ;;
                 "CPU-only")
-                    python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+                    python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cpu || RESULT=1
                     ;;
             esac
             ;;
         "Windows")
             case $CHOICE in
                 "CUDA 11.8")
-                    python3 -m pip install torch --index-url https://download.pytorch.org/whl/cu118
+                    python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cu118 || RESULT=1
                     ;;
                 "CUDA 12.1")
-                    python3 -m pip install torch --index-url https://download.pytorch.org/whl/cu121
+                    python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cu121 || RESULT=1
                     ;;
                 "CUDA 12.4")
-                    python3 -m pip install torch --index-url https://download.pytorch.org/whl/cu124
+                    python3 -m pip install torch -q --index-url https://download.pytorch.org/whl/cu124 || RESULT=1
                     ;;
                 "CPU-only")
-                    python3 -m pip install torch
+                    python3 -m pip install torch -q || RESULT=1
                     ;;
             esac
             ;;
         "Mac")
-            python3 -m pip install torch torchvision torchaudio
+            python3 -m pip install torch torchvision torchaudio -q || RESULT=1
             ;;
     esac
-    return 0
+    
+    # Kill progress bar and show final state
+    kill $PROGRESS_PID 2>/dev/null
+    wait $PROGRESS_PID 2>/dev/null
+    if [ $RESULT -eq 0 ]; then
+        progress "Installing PyTorch..." "100" "100"
+        echo -e "\n\033[32m>> PyTorch installed successfully\033[0m"
+        return 0
+    else
+        echo -e "\n\033[31m>> Failed to install PyTorch\033[0m"
+        return 1
+    fi
 }
 
 # Pretty startup banner
 echo ""
 echo -e "\033[32m╔════════════════════════════════════════╗\033[0m"
-echo -e "\033[32m║        Initializing \033[34mCyberOrganism\033[32m      ║\033[0m"
+echo -e "\033[32m║          Initializing \033[34mCymbiont\033[32m         ║\033[0m"
 echo -e "\033[32m╚════════════════════════════════════════╝\033[0m"
 
 # Check Python version
@@ -122,12 +161,41 @@ if [ "$MANAGE_VENV" = "False" ]; then
     
     case ${answer:0:1} in
         y|Y )
+            # Upgrade pip first to avoid warnings
+            echo -e "\033[32m>> Upgrading pip...\033[0m"
+            python3 -m pip install --upgrade pip -q || {
+                echo -e "\033[31m>> Warning: Failed to upgrade pip\033[0m"
+                # Continue anyway since this is not critical
+            }
+            
             # Install dependencies
             echo -e "\033[32m>> Installing dependencies...\033[0m"
-            if python3 -m pip install -r requirements.txt -q; then
-                echo -e "\033[32m>> Dependencies installed successfully\033[0m"
+            
+            # Count total packages
+            total_packages=$(grep -v '^\s*#' requirements.txt | grep -v '^\s*$' | wc -l)
+            current_package=0
+            
+            # Install packages one by one to track progress
+            while IFS= read -r package || [ -n "$package" ]; do
+                # Skip comments and empty lines
+                [[ $package =~ ^[[:space:]]*# ]] && continue
+                [[ -z "${package// }" ]] && continue
                 
-                # Only ask about PyTorch if dependencies were installed
+                ((current_package++))
+                progress "Installing: $package" "$current_package" "$total_packages"
+                
+                if ! python3 -m pip install "$package" -q; then
+                    echo -e "\n\033[31m>> Error: Failed to install $package\033[0m"
+                    exit 1
+                fi
+            done < requirements.txt
+            echo -e "\033[32m>> Dependencies installed successfully\033[0m"
+            
+            # Check if PyTorch is already installed
+            if python3 -c "import torch" &> /dev/null; then
+                echo -e "\033[32m>> PyTorch is already installed\033[0m"
+            else
+                # Only ask about PyTorch if dependencies were installed and PyTorch is not already present
                 echo -e -n "\033[34m>> Would you like to install PyTorch? (y/n): \033[0m"
                 read pytorch_answer
                 case ${pytorch_answer:0:1} in
@@ -141,9 +209,6 @@ if [ "$MANAGE_VENV" = "False" ]; then
                         echo -e "\033[33m>> See: https://pytorch.org/get-started/locally/\033[0m"
                         ;;
                 esac
-            else
-                echo -e "\033[31m>> Error: Failed to install dependencies\033[0m"
-                exit 1
             fi
             ;;
         * )
@@ -177,23 +242,54 @@ else
         exit 1
     fi
 
+    # Upgrade pip first to avoid warnings
+    echo -e "\033[32m>> Upgrading pip...\033[0m"
+    python3 -m pip install --upgrade pip -q || {
+        echo -e "\033[31m>> Warning: Failed to upgrade pip\033[0m"
+        # Continue anyway since this is not critical
+    }
+
     # Install dependencies in the virtual environment
     echo -e "\033[32m>> Installing dependencies in virtual environment...\033[0m"
-    if python3 -m pip install -r requirements.txt -q; then
-        echo -e "\033[32m>> Dependencies installed successfully\033[0m"
-    else
-        echo -e "\033[31m>> Error: Failed to install dependencies\033[0m"
-        exit 1
-    fi
+    
+    # Count total packages
+    total_packages=$(grep -v '^\s*#' requirements.txt | grep -v '^\s*$' | wc -l)
+    current_package=0
+    
+    # Install packages one by one to track progress
+    while IFS= read -r package || [ -n "$package" ]; do
+        # Skip comments and empty lines
+        [[ $package =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${package// }" ]] && continue
+        
+        ((current_package++))
+        progress "Installing: $package" "$current_package" "$total_packages"
+        
+        if ! python3 -m pip install "$package" -q; then
+            echo -e "\n\033[31m>> Error: Failed to install $package\033[0m"
+            exit 1
+        fi
+    done < requirements.txt
+    echo -e "\033[32m>> Dependencies installed successfully\033[0m"
 
     # Check if PyTorch is already installed
     if python3 -c "import torch" &> /dev/null; then
         echo -e "\033[32m>> PyTorch is already installed\033[0m"
-        PYTORCH_INSTALLED=true
     else
-        if install_pytorch; then
-            PYTORCH_INSTALLED=true
-        fi
+        # Only ask about PyTorch if dependencies were installed and PyTorch is not already present
+        echo -e -n "\033[34m>> Would you like to install PyTorch? (y/n): \033[0m"
+        read pytorch_answer
+        case ${pytorch_answer:0:1} in
+            y|Y )
+                if install_pytorch; then
+                    PYTORCH_INSTALLED=true
+                fi
+                ;;
+            * )
+                echo -e "\033[33m>> Skipping PyTorch installation\033[0m"
+                echo -e "\033[33m>> See: https://pytorch.org/get-started/locally/\033[0m"
+                ;;
+        esac
     fi
 fi
 
