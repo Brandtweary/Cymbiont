@@ -45,6 +45,20 @@ class ShellAccessTier(Enum):
     TIER_4_PROJECT_WRITE_EXECUTE = 4
     TIER_5_UNRESTRICTED = 5
 
+class RestrictedUser(Enum):
+    """Restricted users for different access tiers.
+    
+    These users provide OS-level isolation for different security tiers:
+    - PROJECT_READ: Project-only read access (Tier 1)
+    - SYSTEM_READ: System-wide read access (Tier 2)
+    - PROJECT_RESTRICTED_WRITE: System read + agent_workspace write (Tier 3)
+    - PROJECT_WRITE_EXECUTE: Project read/write/execute (Tier 4)
+    """
+    PROJECT_READ = "cymbiont_project_read"
+    SYSTEM_READ = "cymbiont_system_read"
+    PROJECT_RESTRICTED_WRITE = "cymbiont_project_restr_write"
+    PROJECT_WRITE_EXECUTE = "cymbiont_project_write_exec"
+
 @dataclass
 class Task:
     """A task with its description and metadata."""

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 import pwd
 import grp
-from .agent_types import ShellAccessTier
+from .agent_types import ShellAccessTier, RestrictedUser
 from utils import get_paths
 from shared_resources import DATA_DIR, logger, SHELL_ACCESS_TIER
 import threading
@@ -22,12 +22,6 @@ from cymbiont_logger.bash_logger import BashLogger
 # Get paths for data directories
 paths = get_paths(DATA_DIR)
 AGENT_WORKSPACE_DIR = str(paths.agent_workspace_dir)
-
-# Restricted users for different access tiers
-PROJECT_READ = "cymbiont_project_read"                    # Tier 1: Project-only read access
-SYSTEM_READ = "cymbiont_system_read"                      # Tier 2: System-wide read access
-PROJECT_RESTRICTED_WRITE = "cymbiont_project_restr_write" # Tier 3: System read + agent_workspace write
-PROJECT_WRITE_EXECUTE = "cymbiont_project_write_exec"     # Tier 4: Project read/write/execute
 
 def check_restricted_user_exists(username: str) -> bool:
     """Check if a restricted user exists on the system."""
@@ -61,13 +55,13 @@ class BashExecutor:
         self.restricted_username: Optional[str] = None
         
         if self.access_tier == ShellAccessTier.TIER_1_PROJECT_READ:
-            self.restricted_username = PROJECT_READ
+            self.restricted_username = RestrictedUser.PROJECT_READ.value
         elif self.access_tier == ShellAccessTier.TIER_2_SYSTEM_READ:
-            self.restricted_username = SYSTEM_READ
+            self.restricted_username = RestrictedUser.SYSTEM_READ.value
         elif self.access_tier == ShellAccessTier.TIER_3_PROJECT_RESTRICTED_WRITE:
-            self.restricted_username = PROJECT_RESTRICTED_WRITE
+            self.restricted_username = RestrictedUser.PROJECT_RESTRICTED_WRITE.value
         elif self.access_tier == ShellAccessTier.TIER_4_PROJECT_WRITE_EXECUTE:
-            self.restricted_username = PROJECT_WRITE_EXECUTE
+            self.restricted_username = RestrictedUser.PROJECT_WRITE_EXECUTE.value
             
         if self.restricted_username:
             if check_restricted_user_exists(self.restricted_username):
