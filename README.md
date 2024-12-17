@@ -9,8 +9,8 @@ At its core, Cymbiont implements a graph-based RAG (Retrieval-Augmented Generati
 ### Interactive Setup (Linux/Mac Only)
 
 1. Install Python:
-   - Mac: `brew install python@3.12`
    - Linux: `sudo apt install python3.12` (Ubuntu/Debian)
+   - Mac: `brew install python@3.12`
    - Windows: Follow the Manual Setup instructions below
 
    **Note:** Python 3.12 is recommended. Newer versions may be incompatible with PyTorch.
@@ -98,6 +98,7 @@ Cymbiont will automatically use the virtual environment created during setup. If
 ### Environment Issues?
 If you encounter any environment-related errors, you can re-run the bootstrap script:
 ```bash
+# Linux/Mac
 ./bootstrap.sh  # or: bash bootstrap.sh
 ```
 This will repair the virtual environment and reinstall dependencies if needed.
