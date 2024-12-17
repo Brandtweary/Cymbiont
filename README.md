@@ -6,7 +6,7 @@ At its core, Cymbiont implements a graph-based RAG (Retrieval-Augmented Generati
 
 ## Setup Instructions
 
-### Interactive Setup (Mac/Linux Only)
+### Interactive Setup (Linux/Mac Only)
 
 1. Install Python:
    - Mac: `brew install python@3.12`
@@ -23,7 +23,7 @@ At its core, Cymbiont implements a graph-based RAG (Retrieval-Augmented Generati
 
 3. Run the bootstrap script:
    ```bash
-   # Mac/Linux only
+   # Linux/Mac only
    bash bootstrap.sh  # Run with bash
 
    chmod +x bootstrap.sh # Or make executable first
@@ -51,7 +51,7 @@ The script will attempt to use the nvidia-smi tool to determine your CUDA versio
    python -m venv .venv
    .venv\Scripts\activate
    
-   # Mac/Linux
+   # Linux/Mac
    python3 -m venv .venv
    source .venv/bin/activate
    ```
