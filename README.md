@@ -11,7 +11,6 @@ At its core, Cymbiont implements a graph-based RAG (Retrieval-Augmented Generati
 1. Install Python:
    - Linux: `sudo apt install python3.12` (Ubuntu/Debian)
    - Mac: `brew install python@3.12`
-   - Windows: Follow the Manual Setup instructions below
 
    **Note:** Python 3.12 is recommended. Newer versions may be incompatible with PyTorch.
 
