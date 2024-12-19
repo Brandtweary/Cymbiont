@@ -4,6 +4,5 @@ anthropic
 python-dotenv
 sphinx
 html2text
-pdftotext
 prompt_toolkit
 nltk
