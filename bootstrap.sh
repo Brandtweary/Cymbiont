@@ -340,6 +340,21 @@ else
     fi
 fi
 
+# Check CUDA availability if PyTorch is present
+if python3 -c "import torch" &> /dev/null; then
+    PYTORCH_INSTALLED=true
+    echo -e "\033[32m>> Checking CUDA availability...\033[0m"
+    python3 -c '
+import torch
+cuda_available = torch.cuda.is_available()
+device_count = torch.cuda.device_count() if cuda_available else 0
+print("\033[32m>> CUDA Status:\033[0m", "\033[32mAvailable\033[0m" if cuda_available else "\033[31mNot Available\033[0m")
+if cuda_available:
+    print("\033[32m>> CUDA Devices:\033[0m", "\033[32m" + str(device_count) + "\033[0m")
+    print("\033[32m>> CUDA Version:\033[0m", "\033[34m" + torch.version.cuda + "\033[0m")
+'
+fi
+
 # Check if restricted user setup is available for this OS
 if [ "$OS" != "Linux" ]; then
     echo -e "\033[31m>> Restricted user setup is only available on Linux.\033[0m"
@@ -375,7 +390,7 @@ else
             echo -e "\033[31m>> Failed to set up restricted user. Continuing without enhanced security...\033[0m"
         fi
     else
-        echo -e "\033[31m>> Skipping restricted user setup. You can run scripts/setup_restricted_user.sh later if needed.\033[0m"
+        echo -e "\033[33m>> Skipping restricted user setup. You can run scripts/setup_restricted_user.sh later if needed.\033[0m"
     fi
 fi
 
@@ -434,24 +449,6 @@ if [ -f .env ] && { [ ! -z "$OPENAI_API_KEY" ] || [ ! -z "$ANTHROPIC_API_KEY" ];
     echo -e "\033[32m>> Model API: Configured\033[0m"
 else
     echo -e "\033[31m>> Warning: No API key set\033[0m"
-fi
-
-# CUDA check (only if PyTorch was installed or was already present)
-if [ "$PYTORCH_INSTALLED" = true ]; then
-    if python -c "import torch" &> /dev/null; then
-    echo -e "\033[32m>> Checking CUDA availability...\033[0m"
-        python -c '
-import torch
-cuda_available = torch.cuda.is_available()
-device_count = torch.cuda.device_count() if cuda_available else 0
-print("\033[32m>> CUDA Status:\033[0m", "\033[32mAvailable\033[0m" if cuda_available else "\033[31mNot Available\033[0m")
-if cuda_available:
-    print("\033[32m>> CUDA Devices:\033[0m", "\033[32m" + str(device_count) + "\033[0m")
-    print("\033[32m>> CUDA Version:\033[0m", "\033[34m" + torch.version.cuda + "\033[0m")
-'
-    else
-        echo -e "\033[31m>> PyTorch import failed, skipping CUDA check\033[0m"
-    fi
 fi
 
 # Check internet connectivity
