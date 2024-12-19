@@ -1,10 +1,18 @@
 import logging
 import logging.handlers
 from pathlib import Path
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple, Any, Union
 from datetime import datetime
 from .logger_types import LogLevel
-
+import asyncio
+from prompt_toolkit import PromptSession
+from prompt_toolkit.patch_stdout import patch_stdout
+from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.application import get_app
+from prompt_toolkit.formatted_text.base import StyleAndTextTuples
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from cymbiont_shell.cymbiont_shell import CymbiontShell
 
 # Register all custom log levels
 for level in LogLevel:
@@ -105,28 +113,26 @@ class ColoredFormatter(logging.Formatter):
         return super().format(record)
 
 class PromptRefreshingHandler(logging.StreamHandler):
-    """A handler that refreshes the prompt after emitting logs"""
+    """A handler that queues logs for the shell to display"""
     
     def __init__(self, stream=None):
         super().__init__(stream)
         self.prompt_session: Any = None
+        self.shell: Optional['CymbiontShell'] = None
     
     def emit(self, record):
         try:
             msg = self.format(record)
             
-            # Clear the prompt first if we have a session
-            if self.prompt_session:
-                self.prompt_session.clear_prompt()
+            # Queue the message for shell to handle
+            if self.shell and self.shell.log_queue:
+                asyncio.create_task(self.shell.log_queue.put(msg))
+            else:
+                # Fallback if shell not available
+                self.stream.write(msg)
+                self.stream.write(self.terminator)
+                self.flush()
             
-            # Write the message
-            self.stream.write(msg)
-            self.stream.write(self.terminator)
-            self.flush()
-            
-            # Redraw the prompt after logs
-            if self.prompt_session:
-                self.prompt_session.redraw_prompt()
         except Exception:
             self.handleError(record)
 
