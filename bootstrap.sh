@@ -22,13 +22,12 @@ progress() {
     local width=50
     local percentage=$((current * 100 / total))
     local completed=$((width * current / total))
-    printf "\r%-100s" " "  # Clear line first
     printf "\r[%-${width}s] %d%% %s" "$(printf '#%.0s' $(seq 1 $completed))" "$percentage" "$msg"
 }
 
 # Function to start a new progress bar
 start_progress() {
-    printf "\r%-100s" " "  # Clear line once at the start
+    printf "\n"  # Start on a new line
 }
 
 # Function to start PyTorch progress bar
@@ -39,9 +38,10 @@ start_pytorch_progress() {
         current=0
         while [ $current -lt $total ]; do
             progress "Installing PyTorch..." "$current" "$total"
-            sleep 1
+            sleep 0.1  # Reduced sleep time for smoother animation
             ((current++))
         done
+        progress "Installing PyTorch..." "$total" "$total"  # Ensure we show 100%
         echo  # New line after progress bar
     ) &
     PROGRESS_PID=$!
