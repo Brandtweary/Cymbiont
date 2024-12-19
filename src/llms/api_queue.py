@@ -3,11 +3,11 @@ import time
 import json
 from typing import Any, Optional, List, Dict, Set, Union, Literal
 from collections import deque
-from shared_resources import DEBUG_ENABLED, logger, openai_client, anthropic_client
+from shared_resources import DEBUG_ENABLED, logger
 from cymbiont_logger.token_logger import token_logger
 from .llm_types import SystemPromptPartsData, APICall, TokenUsage, ChatMessage, ToolName
 from cymbiont_logger.process_log import ProcessLog
-from llms.model_configuration import model_data
+from llms.model_configuration import model_data, openai_client, anthropic_client
 from llms.api_conversions import convert_from_anthropic_response, convert_from_openai_response, convert_to_anthropic_params, convert_to_openai_params
 
 # Constants
@@ -172,12 +172,18 @@ async def execute_call(call: APICall) -> None:
         else:
             # Real API call logic
             if call.provider == "openai":
+                if openai_client is None:
+                    logger.error("OpenAI client not initialized")
+                    return
                 api_params = convert_to_openai_params(call)
                 response = await openai_client.chat.completions.create(**api_params)
                 assert response.usage is not None, "API response missing 'usage'"
                 result = convert_from_openai_response(response, call)
                 token_logger.add_tokens(result["token_usage"]["total_tokens"])
             elif call.provider == "anthropic":
+                if anthropic_client is None:
+                    logger.error("Anthropic client not initialized")
+                    return
                 api_params = convert_to_anthropic_params(call)
                 response = await anthropic_client.messages.create(**api_params)
                 result = convert_from_anthropic_response(response, call)
