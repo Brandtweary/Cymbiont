@@ -58,10 +58,10 @@ install_pytorch() {
             if [ ! -z "$CUDA_VERSION" ]; then
                 echo -e "\033[32m>> CUDA Version: \033[34m$CUDA_VERSION\033[0m"
             else
-                echo -e "\033[33m>> Automatic CUDA detection failed\033[0m"
+                echo -e "\033[31m>> Automatic CUDA detection failed\033[0m"
             fi
         else
-            echo -e "\033[33m>> Automatic CUDA detection failed\033[0m"
+            echo -e "\033[31m>> Automatic CUDA detection failed\033[0m"
         fi
     fi
     
@@ -80,7 +80,7 @@ install_pytorch() {
     done
     
     if [ "$CHOICE" = "SKIP" ]; then
-        echo -e "\033[33m>> Skipping PyTorch installation\033[0m"
+        echo -e "\033[31m>> Skipping PyTorch installation\033[0m"
         return 1
     fi
     
@@ -148,18 +148,35 @@ echo -e "\033[32m>> Environment: Development\033[0m"
 
 # Load config
 echo -e "\033[32m>> Loading configuration...\033[0m"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 MANAGE_VENV=$(python3 -c '
 import tomllib
-with open("config.toml", "rb") as f:
+from pathlib import Path
+script_dir = Path("'"$SCRIPT_DIR"'")
+config_path = script_dir / "config.toml"
+example_config_path = script_dir / "config.example.toml"
+
+# If config.toml does not exist, create it from example
+if not config_path.exists():
+    if example_config_path.exists():
+        with example_config_path.open("rb") as f:
+            example_config = f.read()
+        with config_path.open("wb") as f:
+            f.write(example_config)
+    else:
+        print(True)  # Default to True if no config files exist
+        exit(0)
+
+with config_path.open("rb") as f:
     config = tomllib.load(f)
 print(config.get("environment", {}).get("manage_venv", True))
 ')
 
 if [ "$MANAGE_VENV" = "False" ]; then
     PYTHON_PATH=$(which python3)
-    echo -e "\033[33m>> Virtual environment management is disabled\033[0m"
-    echo -e "\033[33m>> Using system Python at: $PYTHON_PATH\033[0m"
-    echo -e "\033[33m>> Dependencies will be installed to this Python environment\033[0m"
+    echo -e "\033[31m>> Virtual environment management is disabled\033[0m"
+    echo -e "\033[31m>> Using system Python at: $PYTHON_PATH\033[0m"
+    echo -e "\033[31m>> Dependencies will be installed to this Python environment\033[0m"
     echo -e -n "\033[34m>> Continue with dependency installation? (y/n): \033[0m"
     read answer
     
@@ -178,6 +195,7 @@ if [ "$MANAGE_VENV" = "False" ]; then
             # Count total packages
             total_packages=$(grep -v '^\s*#' requirements.txt | grep -v '^\s*$' | wc -l)
             current_package=0
+            failed_packages=()
             
             # Install packages one by one to track progress
             start_progress
@@ -191,11 +209,21 @@ if [ "$MANAGE_VENV" = "False" ]; then
                 
                 if ! python3 -m pip install "$package" -q; then
                     echo -e "\n\033[31m>> Error: Failed to install $package\033[0m"
-                    exit 1
+                    failed_packages+=("$package")
                 fi
             done < requirements.txt
             echo  # New line after progress bar
-            echo -e "\033[32m>> Dependencies installed successfully\033[0m"
+            
+            if [ ${#failed_packages[@]} -eq 0 ]; then
+                echo -e "\033[32m>> All dependencies installed successfully\033[0m"
+            else
+                echo -e "\033[31m>> Installation completed with errors:\033[0m"
+                echo -e "\033[31m>> The following packages failed to install:\033[0m"
+                for package in "${failed_packages[@]}"; do
+                    echo -e "\033[31m   - $package\033[0m"
+                done
+                echo -e "\033[31m>> You may need to install these packages manually or check for compatibility issues\033[0m"
+            fi
             
             # Check if PyTorch is already installed
             if python3 -c "import torch" &> /dev/null; then
@@ -211,21 +239,21 @@ if [ "$MANAGE_VENV" = "False" ]; then
                         fi
                         ;;
                     * )
-                        echo -e "\033[33m>> Skipping PyTorch installation\033[0m"
-                        echo -e "\033[33m>> See: https://pytorch.org/get-started/locally/\033[0m"
+                        echo -e "\033[31m>> Skipping PyTorch installation\033[0m"
+                        echo -e "\033[31m>> See: https://pytorch.org/get-started/locally/\033[0m"
                         ;;
                 esac
             fi
             ;;
         * )
-            echo -e "\033[33m>> Skipping all package installation\033[0m"
+            echo -e "\033[31m>> Skipping all package installation\033[0m"
             ;;
     esac
 else
     # Check for virtual environment
     VENV_DIR=".venv"
     if [ ! -d "$VENV_DIR" ]; then
-        echo -e "\033[33m>> Virtual environment not found\033[0m"
+        echo -e "\033[31m>> Virtual environment not found\033[0m"
         echo -e "\033[32m>> Creating new virtual environment...\033[0m"
         python3 -m venv "$VENV_DIR"
         if [ $? -ne 0 ]; then
@@ -261,6 +289,7 @@ else
     # Count total packages
     total_packages=$(grep -v '^\s*#' requirements.txt | grep -v '^\s*$' | wc -l)
     current_package=0
+    failed_packages=()
     
     # Install packages one by one to track progress
     start_progress
@@ -274,11 +303,21 @@ else
         
         if ! python3 -m pip install "$package" -q; then
             echo -e "\n\033[31m>> Error: Failed to install $package\033[0m"
-            exit 1
+            failed_packages+=("$package")
         fi
     done < requirements.txt
     echo  # New line after progress bar
-    echo -e "\033[32m>> Dependencies installed successfully\033[0m"
+    
+    if [ ${#failed_packages[@]} -eq 0 ]; then
+        echo -e "\033[32m>> All dependencies installed successfully\033[0m"
+    else
+        echo -e "\033[31m>> Installation completed with errors:\033[0m"
+        echo -e "\033[31m>> The following packages failed to install:\033[0m"
+        for package in "${failed_packages[@]}"; do
+            echo -e "\033[31m   - $package\033[0m"
+        done
+        echo -e "\033[31m>> You may need to install these packages manually or check for compatibility issues\033[0m"
+    fi
 
     # Check if PyTorch is already installed
     if python3 -c "import torch" &> /dev/null; then
@@ -294,8 +333,8 @@ else
                 fi
                 ;;
             * )
-                echo -e "\033[33m>> Skipping PyTorch installation\033[0m"
-                echo -e "\033[33m>> See: https://pytorch.org/get-started/locally/\033[0m"
+                echo -e "\033[31m>> Skipping PyTorch installation\033[0m"
+                echo -e "\033[31m>> See: https://pytorch.org/get-started/locally/\033[0m"
                 ;;
         esac
     fi
@@ -303,9 +342,9 @@ fi
 
 # Check if restricted user setup is available for this OS
 if [ "$OS" != "Linux" ]; then
-    echo -e "\033[33m>> Restricted user setup is only available on Linux.\033[0m"
-    echo -e "\033[33m>> While command validation remains active, there is no backup OS-level isolation.\033[0m"
-    echo -e "\033[33m>> Docker containerization support is planned for proper cross-platform isolation.\033[0m"
+    echo -e "\033[31m>> Restricted user setup is only available on Linux.\033[0m"
+    echo -e "\033[31m>> While command validation remains active, there is no backup OS-level isolation.\033[0m"
+    echo -e "\033[31m>> Docker containerization support is planned for proper cross-platform isolation.\033[0m"
 else
     # Setup restricted user for enhanced security
     echo -e "\033[34m>> Would you like to set up a restricted user for enhanced shell security? (y/n): \033[0m"
@@ -314,7 +353,7 @@ else
     if [[ ${setup_restricted:0:1} =~ [yY] ]]; then
         echo -e "\033[32m>> Checking ACL support...\033[0m"
         if ! command -v setfacl &> /dev/null; then
-            echo -e "\033[33m>> ACL support not found. Installing acl package (requires sudo)...\033[0m"
+            echo -e "\033[31m>> ACL support not found. Installing acl package (requires sudo)...\033[0m"
             if [ -f /etc/debian_version ]; then
                 sudo apt-get update && sudo apt-get install -y acl
             elif [ -f /etc/redhat-release ]; then
@@ -336,7 +375,7 @@ else
             echo -e "\033[31m>> Failed to set up restricted user. Continuing without enhanced security...\033[0m"
         fi
     else
-        echo -e "\033[33m>> Skipping restricted user setup. You can run scripts/setup_restricted_user.sh later if needed.\033[0m"
+        echo -e "\033[31m>> Skipping restricted user setup. You can run scripts/setup_restricted_user.sh later if needed.\033[0m"
     fi
 fi
 
@@ -386,7 +425,7 @@ else
         source .env
         set +o allexport
     else
-        echo -e "\033[33m>> Skipping .env creation\033[0m"
+        echo -e "\033[31m>> Skipping .env creation\033[0m"
     fi
 fi
 
