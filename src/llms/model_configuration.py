@@ -3,7 +3,8 @@ import os
 from typing import Optional
 from shared_resources import config, logger
 from .llm_types import LLM
-
+from openai import AsyncOpenAI
+from anthropic import AsyncAnthropic
 
 # Rate limits are assuming tier 2 API access for both OpenAI and Anthropic
 model_data = {
@@ -40,6 +41,10 @@ model_data = {
         "total_tokens_per_minute": 450000
     }
 }
+
+# Initialize API clients
+openai_client = AsyncOpenAI() if os.getenv("OPENAI_API_KEY") else None
+anthropic_client = AsyncAnthropic() if os.getenv("ANTHROPIC_API_KEY") else None
 
 def get_available_providers():
     """Return a set of available providers based on API keys in environment."""
@@ -99,8 +104,10 @@ def initialize_model_configuration():
 # Initialize the models
 model_config = initialize_model_configuration()
 
-# Export the configured models
+# Export the configured models and clients
 CHAT_AGENT_MODEL = model_config["CHAT_AGENT_MODEL"]
 TAG_EXTRACTION_MODEL = model_config["TAG_EXTRACTION_MODEL"]
 PROGRESSIVE_SUMMARY_MODEL = model_config["PROGRESSIVE_SUMMARY_MODEL"]
 REVISION_MODEL = model_config["REVISION_MODEL"]
+
+__all__ = ['model_config', 'openai_client', 'anthropic_client']

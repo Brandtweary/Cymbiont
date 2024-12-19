@@ -1,10 +1,8 @@
 from pathlib import Path
-from openai import AsyncOpenAI
 from cymbiont_logger.logging_config import setup_logging
 import tomllib
 from dotenv import load_dotenv
 from typing import NamedTuple
-from anthropic import AsyncAnthropic
 from agents.agent_types import ShellAccessTier
 
 class Paths(NamedTuple):
@@ -32,9 +30,6 @@ if not DATA_DIR.exists():
     DATA_DIR.mkdir(parents=True)
 
 LOG_DIR = DATA_DIR / "logs"
-
-openai_client = AsyncOpenAI()
-anthropic_client = AsyncAnthropic()
 
 # Shell singleton instance
 _shell_instance = None
