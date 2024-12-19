@@ -4,7 +4,7 @@ from .agent import Agent
 from llms.llm_types import SystemPromptPartsData, ToolName
 from typing import Optional, List, Dict, Any, Union
 import asyncio
-from .agent_types import TaskStatus
+from .agent_types import ActivationMode, TaskStatus
 from .notetaking import add_note, read_notes
 
 async def process_message_self(
@@ -144,7 +144,7 @@ async def process_meditate(agent: Agent, wait_time: int = 0) -> None:
     """
     logger.log(LogLevel.TOOL, f"{agent.agent_name} used tool: meditate")
     
-    if agent.activation_mode == "continuous":
+    if agent.activation_mode == ActivationMode.CONTINUOUS:
         if wait_time > 0:
             agent.active = False
             await asyncio.sleep(wait_time)

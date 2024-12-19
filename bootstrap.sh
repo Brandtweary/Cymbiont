@@ -351,7 +351,7 @@ device_count = torch.cuda.device_count() if cuda_available else 0
 print("\033[32m>> CUDA Status:\033[0m", "\033[32mAvailable\033[0m" if cuda_available else "\033[31mNot Available\033[0m")
 if cuda_available:
     print("\033[32m>> CUDA Devices:\033[0m", "\033[32m" + str(device_count) + "\033[0m")
-    print("\033[32m>> CUDA Version:\033[0m", "\033[34m" + torch.version.cuda + "\033[0m")
+    print("\033[32m>> PyTorch CUDA Version:\033[0m", "\033[34m" + torch.version.cuda + "\033[0m")
 '
 fi
 
