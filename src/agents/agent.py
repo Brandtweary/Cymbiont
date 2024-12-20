@@ -234,8 +234,8 @@ class Agent:
                 if 'tool_call_results' in response:
                     logger.log(LogLevel.REASONING_TEXT, f"{self.agent_name}> {content}") # this is necessary to print the reasoning text before tool call processing - direct print statements are added to buffer
                 else:
-                    # Otherwise print response as normal
-                    print(f"\x1b[38;2;0;255;255m{self.agent_name}\x1b[0m> {content}")
+                    # Use REASONING_TEXT for normal responses too
+                    logger.log(LogLevel.REASONING_TEXT, f"{self.agent_name}> {content}")
 
             # Handle deactivation chat mode for text-only responses
             if self.activation_mode == ActivationMode.CHAT:
@@ -258,7 +258,7 @@ class Agent:
                     user_message = self.clean_agent_prefix(user_message)
                     # Get prefixed version for chat history
                     self.chat_history.add_message("assistant", user_message, name=self.agent_name)
-                    print(f"\x1b[38;2;0;255;255m{self.agent_name}\x1b[0m> {user_message}")
+                    logger.log(LogLevel.REASONING_TEXT, f"{self.agent_name}> {user_message}")
                     # Return original message as per ChatAgent behavior
                     return user_message
 
