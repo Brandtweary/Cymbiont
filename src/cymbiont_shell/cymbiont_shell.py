@@ -1,6 +1,7 @@
 import math
 import asyncio
 import sys
+from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.formatted_text.base import StyleAndTextTuples
@@ -18,7 +19,6 @@ from llms.system_prompt_parts import SYSTEM_MESSAGE_PARTS
 from llms.keyword_router import KeywordRouter
 from .command_completer import CommandCompleter
 from .command_metadata import create_commands
-from .log_aware_session import LogAwareSession
 from agents.agent_types import ActivationMode
 from prompt_toolkit.patch_stdout import patch_stdout
 from agents.bash_executor import BashExecutor
@@ -85,12 +85,12 @@ class CymbiontShell:
             'agent': '#00FFFF',   # Bright cyan
         })
         
-        self.session = LogAwareSession(
+        self.session = PromptSession(
             style=style,
             message=self.get_prompt,
             completer=self.completer
         )
-        self.session.shell = cast('CymbiontShell', self)  # Connect shell to session
+        #self.session.shell = cast('CymbiontShell', self)  # Connect shell to session
         
         # Connect shell to console handler
         if console_handler:
@@ -212,25 +212,10 @@ class CymbiontShell:
                 if DEBUG_ENABLED:
                     raise
 
-    async def _monitor_logs(self) -> None:
-        """Background task to monitor for new logs"""
-        while True:
-            if not self.log_queue.empty():
-                # Process all queued logs
-                while not self.log_queue.empty():
-                    log_msg = self.log_queue.get_nowait()
-                    # Clear prompt using direct stdout
-                    import sys
-                    sys.stdout.write("\033[A\033[2K\r")
-                    sys.stdout.flush()
-                    # Write using the handler's stream
-                    if console_handler and console_handler.stream:
-                        console_handler.stream.write(log_msg)
-                        console_handler.stream.write(console_handler.terminator)
-                        console_handler.stream.flush()
-                # Signal that we need a new prompt
-                self._needs_new_prompt = True
-            await asyncio.sleep(0.1)  # Check every 100ms
+    async def _prompt_async_with_patch(self) -> str:
+        """Wrapper around prompt_async that handles patch_stdout correctly"""
+        with patch_stdout(raw=True):
+            return await self.session.prompt_async()
 
     async def run(self) -> None:
         """Run the shell"""
@@ -242,7 +227,7 @@ class CymbiontShell:
             while True:
                 try:
                     # Create prompt task
-                    prompt_task = asyncio.create_task(self.session.prompt_async())
+                    prompt_task = asyncio.create_task(self._prompt_async_with_patch())
                     
                     while True:
                         # Wait a bit and check for logs
