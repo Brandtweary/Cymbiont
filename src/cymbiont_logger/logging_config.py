@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from cymbiont_shell.cymbiont_shell import CymbiontShell
 
+import os
+
 # Register all custom log levels
 for level in LogLevel:
     logging.addLevelName(level, level.name)
@@ -120,7 +122,7 @@ class PromptRefreshingHandler(logging.StreamHandler):
     """A handler that refreshes the prompt after logging"""
     def __init__(self, stream=None):
         super().__init__(stream)
-        self.shell = None
+        self.shell: Optional['CymbiontShell'] = None
         self.in_test_mode = False  # Added flag for test mode
         
     def emit(self, record):

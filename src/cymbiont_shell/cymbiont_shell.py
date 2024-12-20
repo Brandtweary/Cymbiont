@@ -49,6 +49,10 @@ class CymbiontShell:
         # Connect chat history to logger
         setup_chat_history_handler(logger, self.chat_history)
         
+        # Connect shell to console handler
+        if console_handler:
+            console_handler.shell = self
+        
         # Store command metadata
         self.commands = create_commands(
             do_exit=self.do_exit,
