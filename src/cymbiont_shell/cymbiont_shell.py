@@ -5,6 +5,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.formatted_text.base import StyleAndTextTuples
+from prompt_toolkit.document import Document
 from typing import Tuple, Optional, cast
 from agents import agent
 from agents.tool_helpers import register_tools
@@ -36,6 +37,7 @@ class CymbiontShell:
         self.log_queue = asyncio.Queue()  # Queue for log messages
         self._needs_new_prompt = False  # Flag for new prompt
         self._exit_type: Optional[str] = None  # Track how we're exiting
+        self._current_input: Optional[tuple[str, int]] = None  # Store current input text and cursor position
         
         # Initialize agents
         register_tools()
@@ -216,11 +218,22 @@ class CymbiontShell:
                 if DEBUG_ENABLED:
                     raise
 
+    def _get_current_input(self) -> tuple[str, int]:
+        """Get current input text and cursor position from the prompt session"""
+        if self.session and self.session.default_buffer:
+            return (self.session.default_buffer.text,
+                   self.session.default_buffer.cursor_position)
+        return ("", 0)
+
     async def _prompt_async_with_patch(self) -> str:
         """Wrapper around prompt_async that handles patch_stdout correctly"""
         with patch_stdout(raw=True):
-            return await self.session.prompt_async()
-
+            text, cursor_pos = self._current_input if self._current_input is not None else ("", 0)
+            self._current_input = None
+            return await self.session.prompt_async(
+                default=Document(text, cursor_position=cursor_pos)
+            )
+    
     async def run(self) -> None:
         """Run the shell"""
         try:
@@ -238,6 +251,9 @@ class CymbiontShell:
                         done, _ = await asyncio.wait([prompt_task], timeout=0.1)
                         
                         if not self.log_queue.empty():
+                            # Get current input text before canceling
+                            self._current_input = self._get_current_input()
+                            
                             # Then cancel the prompt task
                             prompt_task.cancel()
                             try:

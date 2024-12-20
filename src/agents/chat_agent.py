@@ -18,7 +18,7 @@ class ChatAgent(Agent):
             ToolName.TOGGLE_PROMPT_PART,
             ToolName.TOGGLE_TOOL,
             ToolName.MESSAGE_SELF,
-            ToolName.ADD_NOTE,
+          #  ToolName.ADD_NOTE,  # don't forget to re-enable this tool, it's just annoying when the agent uses it for no reason
             ToolName.READ_NOTES,
         }
         if activation_mode == ActivationMode.CONTINUOUS:
