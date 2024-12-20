@@ -16,7 +16,7 @@ def setup_python_path() -> None:
 setup_python_path()
 
 # Project imports
-from shared_resources import logger, DATA_DIR, set_shell
+from shared_resources import logger, DATA_DIR, set_shell, DEBUG_ENABLED, console_handler
 from cymbiont_logger.token_logger import token_logger
 from cymbiont_shell.cymbiont_shell import CymbiontShell
 from utils import setup_directories, delete_logs
@@ -36,6 +36,10 @@ async def async_main() -> None:
     try:
         # Check if we have a one-shot command
         if len(sys.argv) > 1 and sys.argv[1] == '--test':
+            # Set test mode for logging
+            if console_handler:
+                console_handler.in_test_mode = True
+                
             # Run the test command
             if len(sys.argv) > 2:
                 test_name = sys.argv[2]
@@ -48,7 +52,6 @@ async def async_main() -> None:
                 success, _ = await shell.execute_command('run_all_tests', '')
                 if not success:
                     sys.exit(1)
-            # Exit after test
             return
             
         # Normal interactive mode
@@ -56,6 +59,10 @@ async def async_main() -> None:
         
     except KeyboardInterrupt:
         logger.debug("Keyboard interrupt received")
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        if DEBUG_ENABLED:
+            raise
     finally:
         # Cleanup
         await stop_api_queue()

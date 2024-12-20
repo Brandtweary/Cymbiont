@@ -1,5 +1,6 @@
 import math
 import asyncio
+import sys
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.formatted_text.base import StyleAndTextTuples
@@ -34,6 +35,7 @@ class CymbiontShell:
         self.bash_executor: Optional[BashExecutor] = None
         self.log_queue = asyncio.Queue()  # Queue for log messages
         self._needs_new_prompt = False  # Flag for new prompt
+        self._exit_type: Optional[str] = None  # Track how we're exiting
         
         # Initialize agents
         register_tools()
@@ -89,10 +91,6 @@ class CymbiontShell:
             completer=self.completer
         )
         self.session.shell = cast('CymbiontShell', self)  # Connect shell to session
-        
-        # Connect the prompt session to the logging handler
-        console_handler.prompt_session = self.session
-        console_handler.shell = self  # Connect shell to handler
         
         # Log shell startup
         logger.log(LogLevel.SHELL, "Cymbiont shell started")
@@ -183,9 +181,9 @@ class CymbiontShell:
             # Show specific command help
             cmd_data = self.commands.get(args)
             if cmd_data:
-                logger.info(f"{args}: {cmd_data.callable.__doc__ or 'No help available'}\n")
+                logger.info(f"{args}: {cmd_data.callable.__doc__ or 'No help available'}")
             else:
-                logger.info(f"No help available for '{args}'\n")
+                logger.info(f"No help available for '{args}'")
 
     async def run_chat_agent(self) -> None:
         """Background task that runs the chat agent based on its activation mode."""
@@ -239,9 +237,6 @@ class CymbiontShell:
 
             while True:
                 try:
-                    # Clear any previous prompt state
-                    #self.session.clear_prompt()
-                    
                     # Create prompt task
                     prompt_task = asyncio.create_task(self.session.prompt_async())
                     
@@ -258,7 +253,6 @@ class CymbiontShell:
                                 pass
                                 
                             # Clear prompt using direct stdout
-                            import sys
                             sys.stdout.write("\033[A\033[2K\r")
                             sys.stdout.flush()
                                 
@@ -283,14 +277,20 @@ class CymbiontShell:
                             if text and text.strip():
                                 should_exit = await self.handle_input(text)
                                 if should_exit:
+                                    self._exit_type = 'exit'
                                     return
+
                             break
 
                 except (EOFError, KeyboardInterrupt):
+                    self._exit_type = 'interrupt'
                     break
 
         finally:
             await self.stop_chat_agent()
+            # Re-raise KeyboardInterrupt if that's how we exited
+            if self._exit_type == 'interrupt':
+                raise KeyboardInterrupt()
 
     async def handle_input(self, text: str) -> bool:
         """Handle user input, returns True if shell should exit"""
@@ -368,6 +368,10 @@ class CymbiontShell:
                 await self.chat_agent_task
             except asyncio.CancelledError:
                 pass
+      
+        # Clear shell reference from handler so it falls back to direct output
+        if console_handler:
+            console_handler.shell = None
 
     async def do_print_total_tokens(self, args: str) -> None:
         """Print the total token count"""

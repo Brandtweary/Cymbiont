@@ -79,6 +79,10 @@ class ColoredFormatter(logging.Formatter):
         self.ORANGE = "\033[38;2;255;165;0m"  # Tool logs (RGB: 255,165,0)
 
     def format(self, record: logging.LogRecord) -> str:
+        # Normalize message first - strip all trailing newlines
+        if isinstance(record.msg, str):
+            record.msg = record.msg.rstrip()
+
         # Pass through bash output without color modification
         if record.levelno == LogLevel.BASH:
             return super().format(record)
@@ -113,22 +117,24 @@ class ColoredFormatter(logging.Formatter):
         return super().format(record)
 
 class PromptRefreshingHandler(logging.StreamHandler):
-    """A handler that queues logs for the shell to display"""
-    
+    """A handler that refreshes the prompt after logging"""
     def __init__(self, stream=None):
         super().__init__(stream)
-        self.prompt_session: Any = None
-        self.shell: Optional['CymbiontShell'] = None
-    
+        self.shell = None
+        self.in_test_mode = False  # Added flag for test mode
+        
     def emit(self, record):
         try:
             msg = self.format(record)
             
-            # Queue the message for shell to handle
-            if self.shell and self.shell.log_queue:
+            # Queue the message for shell to handle, but only if:
+            # 1. Not in test mode
+            # 2. Shell is available
+            # 3. Log queue exists
+            if not self.in_test_mode and self.shell and self.shell.log_queue:
                 asyncio.create_task(self.shell.log_queue.put(msg))
             else:
-                # Fallback if shell not available
+                # Fallback if shell not available or in test mode
                 self.stream.write(msg)
                 self.stream.write(self.terminator)
                 self.flush()
