@@ -4,10 +4,8 @@ import sys
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
-from prompt_toolkit.formatted_text.base import StyleAndTextTuples
 from prompt_toolkit.document import Document
-from typing import Tuple, Optional, cast
-from agents import agent
+from typing import Tuple, Optional
 from agents.tool_helpers import register_tools
 from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED, AGENT_ACTIVATION_MODE, console_handler, SHELL_ACCESS_TIER
 from cymbiont_logger.token_logger import token_logger
@@ -25,7 +23,6 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from agents.bash_executor import BashExecutor
 from utils import get_shell_access_tier_documentation
 import sys
-from prompt_toolkit.application import get_app
 
 
 class CymbiontShell:
@@ -234,6 +231,53 @@ class CymbiontShell:
                 default=Document(text, cursor_position=cursor_pos)
             )
     
+    async def _process_logs(self) -> None:
+        """Process all queued log messages"""
+        # Clear prompt using direct stdout
+        sys.stdout.write("\033[A\033[2K\r")
+        sys.stdout.flush()
+            
+        # Process logs
+        while not self.log_queue.empty():
+            log_msg = self.log_queue.get_nowait()
+            if console_handler and console_handler.stream:
+                console_handler.stream.write(log_msg)
+                console_handler.stream.write(console_handler.terminator)
+                console_handler.stream.flush()
+
+    async def _handle_prompt_cycle(self) -> str:
+        """Handle one cycle of prompt and log processing.
+        Returns the user input text."""
+        # Create prompt task
+        prompt_task = asyncio.create_task(self._prompt_async_with_patch())
+        
+        while True:
+            # Wait a bit and check for logs
+            done, _ = await asyncio.wait([prompt_task], timeout=0.1)
+            
+            if not self.log_queue.empty():
+                # Get current input text before canceling
+                self._current_input = self._get_current_input()
+                
+                # Then cancel the prompt task
+                prompt_task.cancel()
+                try:
+                    await prompt_task
+                except asyncio.CancelledError:
+                    pass
+                    
+                await self._process_logs()
+                
+                # Only break to create new prompt if no more logs
+                if self.log_queue.empty():
+                    return ""
+                # Otherwise continue checking for more logs
+                continue
+                
+            if done:
+                # We got user input
+                return prompt_task.result()
+
     async def run(self) -> None:
         """Run the shell"""
         try:
@@ -243,53 +287,15 @@ class CymbiontShell:
 
             while True:
                 try:
-                    # Create prompt task
-                    prompt_task = asyncio.create_task(self._prompt_async_with_patch())
+                    # Get user input, handling any logs that come in
+                    text = await self._handle_prompt_cycle()
                     
-                    while True:
-                        # Wait a bit and check for logs
-                        done, _ = await asyncio.wait([prompt_task], timeout=0.1)
-                        
-                        if not self.log_queue.empty():
-                            # Get current input text before canceling
-                            self._current_input = self._get_current_input()
-                            
-                            # Then cancel the prompt task
-                            prompt_task.cancel()
-                            try:
-                                await prompt_task
-                            except asyncio.CancelledError:
-                                pass
-                                
-                            # Clear prompt using direct stdout
-                            sys.stdout.write("\033[A\033[2K\r")
-                            sys.stdout.flush()
-                                
-                            # Process logs
-                            while not self.log_queue.empty():
-                                log_msg = self.log_queue.get_nowait()
-                                if console_handler and console_handler.stream:
-                                    console_handler.stream.write(log_msg)
-                                    console_handler.stream.write(console_handler.terminator)
-                                    console_handler.stream.flush()
-                            
-                            # Only break to create new prompt if no more logs
-                            if self.log_queue.empty():
-                                break
-                            # Otherwise continue checking for more logs
-                            continue
-                            
-                        if done:
-                            # We got user input
-                            text = prompt_task.result()
-                            
-                            if text and text.strip():
-                                should_exit = await self.handle_input(text)
-                                if should_exit:
-                                    self._exit_type = 'exit'
-                                    return
-
-                            break
+                    # Process commands if we got input
+                    if text and text.strip():
+                        should_exit = await self.handle_input(text)
+                        if should_exit:
+                            self._exit_type = 'exit'
+                            return
 
                 except (EOFError, KeyboardInterrupt):
                     self._exit_type = 'interrupt'
