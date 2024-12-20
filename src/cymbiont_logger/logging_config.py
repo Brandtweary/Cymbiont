@@ -120,9 +120,13 @@ class PromptRefreshingHandler(logging.StreamHandler):
     """A handler that refreshes the prompt after logging"""
     def __init__(self, stream=None):
         super().__init__(stream)
-        self.shell = None
+        self.shell: Optional['CymbiontShell'] = None
         self.in_test_mode = False  # Added flag for test mode
         
+    def set_shell(self, shell: 'CymbiontShell') -> None:
+        """Set the shell instance"""
+        self.shell = shell
+
     def emit(self, record):
         try:
             msg = self.format(record)

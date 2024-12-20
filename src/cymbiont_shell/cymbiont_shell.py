@@ -92,6 +92,10 @@ class CymbiontShell:
         )
         self.session.shell = cast('CymbiontShell', self)  # Connect shell to session
         
+        # Connect shell to console handler
+        if console_handler:
+            console_handler.set_shell(self)
+        
         # Log shell startup
         logger.log(LogLevel.SHELL, "Cymbiont shell started")
         logger.info("Welcome to Cymbiont. Type help or ? to list commands.")
