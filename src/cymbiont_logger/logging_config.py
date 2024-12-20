@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from cymbiont_shell.cymbiont_shell import CymbiontShell
 
+import os
+
 # Register all custom log levels
 for level in LogLevel:
     logging.addLevelName(level, level.name)
