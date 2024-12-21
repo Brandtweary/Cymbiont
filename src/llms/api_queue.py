@@ -157,7 +157,6 @@ async def process_pending_calls() -> None:
             if DEBUG_ENABLED:
                 raise
 
-
 async def execute_call(call: APICall) -> None:
     """Execute a single API call with retry logic."""
     try:

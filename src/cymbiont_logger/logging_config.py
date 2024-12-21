@@ -73,12 +73,13 @@ class ColoredFormatter(logging.Formatter):
         self.YELLOW = "\033[33m"      # Warning
         self.RED = "\033[31m"         # Error
         self.BRIGHT_RED = "\033[91m"  # Critical
-        self.WHITE = "\033[97m"       # Benchmark
-        self.MAGENTA = "\033[35m"     # Prompt/Response
+        self.WHITE = "\033[97m"       # Chat response
+        self.MAGENTA = "\033[35m"     # Benchmark
         self.CYAN = "\033[38;2;0;255;255m"  # Cyan for agent name in reasoning text
+        self.VIOLET = "\033[38;2;147;112;219m"  # Violet for Prompt/Response
+        self.ORANGE = "\033[38;2;255;165;0m"  # Tool logs (RGB: 255,165,0)
         self.RESET = "\033[0m"
         # RGB colors
-        self.ORANGE = "\033[38;2;255;165;0m"  # Tool logs (RGB: 255,165,0)
 
     def format(self, record: logging.LogRecord) -> str:
         # Normalize message first - strip all trailing newlines
@@ -101,13 +102,13 @@ class ColoredFormatter(logging.Formatter):
             color = self.BRIGHT_RED
             prefix = "CRITICAL: "
         elif record.levelno == LogLevel.BENCHMARK:
-            color = self.WHITE
+            color = self.MAGENTA
         elif record.levelno == LogLevel.TOOL:
             color = self.ORANGE
         elif record.levelno in (LogLevel.PROMPT, LogLevel.RESPONSE):
-            color = self.MAGENTA
-        elif record.levelno == LogLevel.REASONING_TEXT:
-            # Special handling for reasoning text - color agent name in cyan
+            color = self.VIOLET
+        elif record.levelno == LogLevel.CHAT_RESPONSE:
+            # Special handling for chat response - color agent name in cyan
             if '>' in record.msg:
                 agent_name, message = record.msg.split('>', 1)
                 record.msg = f"{self.CYAN}{agent_name}>{self.WHITE}{message}"

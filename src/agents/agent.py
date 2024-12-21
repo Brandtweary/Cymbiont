@@ -226,16 +226,9 @@ class Agent:
             # Clean any accidental agent prefixes from the content
             content = self.clean_agent_prefix(content)
             
-            # Add to chat history
+            # Add to chat history and log the response
             self.chat_history.add_message("assistant", content, name=self.agent_name)
-            
-            # If there's both content and tool calls, log as reasoning text
-            if content:
-                if 'tool_call_results' in response:
-                    logger.log(LogLevel.REASONING_TEXT, f"{self.agent_name}> {content}") # this is necessary to print the reasoning text before tool call processing - direct print statements are added to buffer
-                else:
-                    # Use REASONING_TEXT for normal responses too
-                    logger.log(LogLevel.REASONING_TEXT, f"{self.agent_name}> {content}")
+            logger.log(LogLevel.CHAT_RESPONSE, f"{self.agent_name}> {content}")
 
             # Handle deactivation chat mode for text-only responses
             if self.activation_mode == ActivationMode.CHAT:
@@ -256,9 +249,9 @@ class Agent:
                 if user_message:
                     # Clean any accidental agent prefixes
                     user_message = self.clean_agent_prefix(user_message)
-                    # Get prefixed version for chat history
+                    # Add to chat history and log the response
                     self.chat_history.add_message("assistant", user_message, name=self.agent_name)
-                    logger.log(LogLevel.REASONING_TEXT, f"{self.agent_name}> {user_message}")
+                    logger.log(LogLevel.CHAT_RESPONSE, f"{self.agent_name}> {user_message}")
                     # Return original message as per ChatAgent behavior
                     return user_message
 
