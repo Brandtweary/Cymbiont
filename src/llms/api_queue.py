@@ -23,6 +23,73 @@ batch_lock = asyncio.Lock()
 token_history: Dict[str, List[TokenUsage]] = {}  # per-model token history
 
 
+async def cleanup_token_history(current_time: float) -> None:
+    """Clean up old token usage records."""
+    for model in list(token_history.keys()):
+        history = token_history[model]
+        cutoff_idx = 0
+        for idx, usage in enumerate(history):
+            if usage.timestamp >= current_time - TPM_WINDOW:
+                break
+            cutoff_idx = idx + 1
+        if cutoff_idx > 0:
+            token_history[model] = history[cutoff_idx:]
+
+
+def group_calls_by_model() -> Dict[str, List[APICall]]:
+    """Group pending calls by model."""
+    model_calls: Dict[str, List[APICall]] = {}
+    for call in pending_calls:
+        if call.model not in model_calls:
+            model_calls[call.model] = []
+        model_calls[call.model].append(call)
+    return model_calls
+
+
+def calculate_interpolation_factor(model: str, model_config: dict, recent_usage: list) -> float:
+    """Calculate token-based interpolation factor for rate limiting."""
+    interpolation_factor = 1.0
+    
+    if "total_tokens_per_minute" in model_config:
+        # OpenAI-style total token limiting
+        total_tokens = sum(usage.total_tokens for usage in recent_usage)
+        tokens_per_minute = total_tokens * (60 / TPM_WINDOW)
+        limit = model_config["total_tokens_per_minute"]
+        
+        if tokens_per_minute > limit * TPM_SOFT_LIMIT:
+            interpolation_factor = max(0.0,
+                1.0 - (tokens_per_minute - limit * TPM_SOFT_LIMIT) /
+                (limit * (1.0 - TPM_SOFT_LIMIT)))
+    else:
+        # Anthropic-style separate input/output token limiting
+        input_factor = output_factor = 1.0
+        
+        if "input_tokens_per_minute" in model_config:
+            input_tokens = sum(usage.input_tokens for usage in recent_usage)
+            input_tpm = input_tokens * (60 / TPM_WINDOW)
+            input_limit = model_config["input_tokens_per_minute"]
+            
+            if input_tpm > input_limit * TPM_SOFT_LIMIT:
+                input_factor = max(0.0,
+                    1.0 - (input_tpm - input_limit * TPM_SOFT_LIMIT) /
+                    (input_limit * (1.0 - TPM_SOFT_LIMIT)))
+        
+        if "output_tokens_per_minute" in model_config:
+            output_tokens = sum(usage.output_tokens for usage in recent_usage)
+            output_tpm = output_tokens * (60 / TPM_WINDOW)
+            output_limit = model_config["output_tokens_per_minute"]
+            
+            if output_tpm > output_limit * TPM_SOFT_LIMIT:
+                output_factor = max(0.0,
+                    1.0 - (output_tpm - output_limit * TPM_SOFT_LIMIT) /
+                    (output_limit * (1.0 - TPM_SOFT_LIMIT)))
+        
+        # Use the more restrictive factor
+        interpolation_factor = min(input_factor, output_factor)
+    
+    return interpolation_factor
+
+
 async def process_pending_calls() -> None:
     """Process pending API calls within rate limits.
     Processes calls on a per-model basis within their respective rate limits."""
@@ -32,22 +99,10 @@ async def process_pending_calls() -> None:
                 current_time = time.time()
                 
                 # Clean up old token usage records
-                for model in list(token_history.keys()):
-                    history = token_history[model]
-                    cutoff_idx = 0
-                    for idx, usage in enumerate(history):
-                        if usage.timestamp >= current_time - TPM_WINDOW:
-                            break
-                        cutoff_idx = idx + 1
-                    if cutoff_idx > 0:
-                        token_history[model] = history[cutoff_idx:]
+                await cleanup_token_history(current_time)
                 
                 # Group pending calls by model
-                model_calls: Dict[str, List[APICall]] = {}
-                for call in pending_calls:
-                    if call.model not in model_calls:
-                        model_calls[call.model] = []
-                    model_calls[call.model].append(call)
+                model_calls = group_calls_by_model()
                 
                 # Process each model's calls separately
                 calls_to_process = []
@@ -58,50 +113,14 @@ async def process_pending_calls() -> None:
                     rpm_limit = model_config.get("requests_per_minute", float('inf'))
                     model_batch_limit = int(rpm_limit / (60 / BATCH_INTERVAL_TIME))
                     
-                    # Calculate token-based interpolation factor
-                    interpolation_factor = 1.0
+                    # Initialize token history if needed
                     if model not in token_history:
                         token_history[model] = []
                     
-                    # Get recent token usage for this model
-                    recent_usage = token_history[model]
-                    
-                    if "total_tokens_per_minute" in model_config:
-                        # OpenAI-style total token limiting
-                        total_tokens = sum(usage.total_tokens for usage in recent_usage)
-                        tokens_per_minute = total_tokens * (60 / TPM_WINDOW)
-                        limit = model_config["total_tokens_per_minute"]
-                        
-                        if tokens_per_minute > limit * TPM_SOFT_LIMIT:
-                            interpolation_factor = max(0.0,
-                                1.0 - (tokens_per_minute - limit * TPM_SOFT_LIMIT) /
-                                (limit * (1.0 - TPM_SOFT_LIMIT)))
-                    else:
-                        # Anthropic-style separate input/output token limiting
-                        input_factor = output_factor = 1.0
-                        
-                        if "input_tokens_per_minute" in model_config:
-                            input_tokens = sum(usage.input_tokens for usage in recent_usage)
-                            input_tpm = input_tokens * (60 / TPM_WINDOW)
-                            input_limit = model_config["input_tokens_per_minute"]
-                            
-                            if input_tpm > input_limit * TPM_SOFT_LIMIT:
-                                input_factor = max(0.0,
-                                    1.0 - (input_tpm - input_limit * TPM_SOFT_LIMIT) /
-                                    (input_limit * (1.0 - TPM_SOFT_LIMIT)))
-                        
-                        if "output_tokens_per_minute" in model_config:
-                            output_tokens = sum(usage.output_tokens for usage in recent_usage)
-                            output_tpm = output_tokens * (60 / TPM_WINDOW)
-                            output_limit = model_config["output_tokens_per_minute"]
-                            
-                            if output_tpm > output_limit * TPM_SOFT_LIMIT:
-                                output_factor = max(0.0,
-                                    1.0 - (output_tpm - output_limit * TPM_SOFT_LIMIT) /
-                                    (output_limit * (1.0 - TPM_SOFT_LIMIT)))
-                        
-                        # Use the more restrictive factor
-                        interpolation_factor = min(input_factor, output_factor)
+                    # Calculate rate limiting factor
+                    interpolation_factor = calculate_interpolation_factor(
+                        model, model_config, token_history[model]
+                    )
                     
                     # Calculate final batch limit for this model
                     model_interpolated_limit = int(model_batch_limit * interpolation_factor)
@@ -113,7 +132,7 @@ async def process_pending_calls() -> None:
                     
                     if model_calls_to_process:
                         logger.debug(
-                            f"Processing {len(model_calls_to_process)} API calls: {model} "
+                            f"Processing {len(model_calls_to_process)} API {'call' if len(model_calls_to_process) == 1 else 'calls'}: {model} "
                         )
                     
                     calls_to_process.extend(model_calls_to_process)
@@ -137,6 +156,7 @@ async def process_pending_calls() -> None:
             logger.error(f"Error in processor: {str(e)}")
             if DEBUG_ENABLED:
                 raise
+
 
 async def execute_call(call: APICall) -> None:
     """Execute a single API call with retry logic."""

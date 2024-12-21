@@ -325,6 +325,7 @@ class CymbiontShell:
             
             # Activate chat agent
             self.chat_agent.active = True
+            logger.info("Generating response...")
             
             return False
 
