@@ -21,6 +21,7 @@ class LLM(Enum):
     O1_PREVIEW = "o1-preview"
     SONNET_3_5 = "claude-3-5-sonnet-latest"
     HAIKU_3_5 = "claude-3-5-haiku-latest"
+    LLAMA_70B = "llama-3-3-70b-instruct"
 
 @dataclass
 class TokenUsage:

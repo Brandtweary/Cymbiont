@@ -22,7 +22,8 @@ progress() {
     local width=50
     local percentage=$((current * 100 / total))
     local completed=$((width * current / total))
-    printf "\r[%-${width}s] %d%% %s" "$(printf '#%.0s' $(seq 1 $completed))" "$percentage" "$msg"
+    # Clear the entire line and move cursor to beginning
+    printf "\r\033[K[%-${width}s] %d%% %s" "$(printf '#%.0s' $(seq 1 $completed))" "$percentage" "$msg"
 }
 
 # Function to start a new progress bar

@@ -6,3 +6,4 @@ sphinx
 html2text
 prompt_toolkit
 nltk
+transformers

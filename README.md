@@ -6,6 +6,16 @@ At its core, Cymbiont implements a graph-based RAG (Retrieval-Augmented Generati
 
 ## Setup Instructions
 
+### Setting up Hugging Face Access
+
+1. Create a Hugging Face account at https://huggingface.co/
+2. Create an access token at https://huggingface.co/settings/tokens
+3. Run `huggingface-cli login` in your terminal
+4. Paste your token when prompted
+5. Select "no" when asked about git credentials (unless you need git access to private repos)
+
+Note: You'll also need to request access to Llama-3.3-70B-Instruct at https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct before you can download it.
+
 ### Interactive Setup (Linux/Mac Only)
 
 1. Install Python:
