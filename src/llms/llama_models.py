@@ -58,6 +58,19 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
             
         logger.info(f"Loading model from {model_path}")
         
+        # Initialize pynvml and get handle outside try blocks
+        pynvml.nvmlInit()
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)  # Assuming first GPU
+        
+        # Check GPU memory before loading
+        try:
+            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            free_gb = int(info.free) / (1024**3)
+            total_gb = int(info.total) / (1024**3)
+            logger.info(f"GPU Memory before loading - Free: {free_gb:.2f}GB / Total: {total_gb:.2f}GB")
+        except Exception as e:
+            logger.warning(f"Could not get GPU memory info before loading: {str(e)}")
+        
         # Load tokenizer
         tokenizer = AutoTokenizer.from_pretrained(str(model_path), local_files_only=True)
         
@@ -66,22 +79,26 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
             str(model_path),
             device_map="auto",
             quantization_config=quant_config,
-            local_files_only=True
+            local_files_only=True,
+            torch_dtype=torch.bfloat16
         )
         
         logger.info(f"Model device map: {model.hf_device_map}")
         logger.info(f"First layer device: {next(model.parameters()).device}")
         
-        # Get GPU memory usage
+        # Verify model is fully loaded on GPU
+        last_layer_name = f"model.layers.{len(model.config.num_hidden_layers)-1}"
+        assert model.hf_device_map[last_layer_name] == 0, f"Last layer not on GPU! Device map: {model.hf_device_map}"
+        assert model.hf_device_map['lm_head'] == 0, f"LM head not on GPU! Device map: {model.hf_device_map}"
+        
+        # Get GPU memory after loading
         try:
-            pynvml.nvmlInit()
-            handle = pynvml.nvmlDeviceGetHandleByIndex(0)  # Assuming first GPU
             info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            used_gb = int(info.used) / (1024**3)  # Convert to GB
+            used_gb = int(info.used) / (1024**3)
             total_gb = int(info.total) / (1024**3)
-            logger.info(f"GPU Memory: {used_gb:.2f}GB / {total_gb:.2f}GB")
+            logger.info(f"GPU Memory after loading - Used: {used_gb:.2f}GB / Total: {total_gb:.2f}GB")
         except Exception as e:
-            logger.warning(f"Could not get GPU memory info: {str(e)}")
+            logger.warning(f"Could not get GPU memory info after loading: {str(e)}")
             
         logger.info(f"Successfully loaded local model from {model_dir}")
         
