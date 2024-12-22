@@ -67,9 +67,14 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
             info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             free_gb = int(info.free) / (1024**3)
             total_gb = int(info.total) / (1024**3)
+            # Calculate max memory to use (90% of total)
+            max_memory_gb = int(0.9 * total_gb)
+            max_memory = {0: f"{max_memory_gb}GiB"}
             logger.info(f"GPU Memory before loading - Free: {free_gb:.2f}GB / Total: {total_gb:.2f}GB")
+            logger.info(f"Setting max GPU memory usage to: {max_memory_gb}GB")
         except Exception as e:
             logger.warning(f"Could not get GPU memory info before loading: {str(e)}")
+            max_memory = None
         
         # Load tokenizer
         tokenizer = AutoTokenizer.from_pretrained(str(model_path), local_files_only=True)
@@ -78,6 +83,7 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
         model = AutoModelForCausalLM.from_pretrained(
             str(model_path),
             device_map="auto",
+            max_memory=max_memory,
             quantization_config=quant_config,
             local_files_only=True,
             torch_dtype=torch.bfloat16
@@ -87,7 +93,7 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
         logger.info(f"First layer device: {next(model.parameters()).device}")
         
         # Verify model is fully loaded on GPU
-        last_layer_name = f"model.layers.{len(model.config.num_hidden_layers)-1}"
+        last_layer_name = f"model.layers.{model.config.num_hidden_layers - 1}"
         assert model.hf_device_map[last_layer_name] == 0, f"Last layer not on GPU! Device map: {model.hf_device_map}"
         assert model.hf_device_map['lm_head'] == 0, f"LM head not on GPU! Device map: {model.hf_device_map}"
         
