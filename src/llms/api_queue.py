@@ -9,6 +9,8 @@ from .llm_types import SystemPromptPartsData, APICall, TokenUsage, ChatMessage, 
 from cymbiont_logger.process_log import ProcessLog
 from llms.model_configuration import model_data, openai_client, anthropic_client
 from llms.api_conversions import convert_from_anthropic_response, convert_from_openai_response, convert_to_anthropic_params, convert_to_openai_params
+from .llama_models import generate_completion
+
 
 # Constants
 BATCH_INTERVAL_TIME: float = 1/15  # seconds
@@ -206,6 +208,9 @@ async def execute_call(call: APICall) -> None:
                 api_params = convert_to_anthropic_params(call)
                 response = await anthropic_client.messages.create(**api_params)
                 result = convert_from_anthropic_response(response, call)
+                token_logger.add_tokens(result["token_usage"]["total_tokens"])
+            elif call.provider == "huggingface_llama_local":
+                result = await generate_completion(call)
                 token_logger.add_tokens(result["token_usage"]["total_tokens"])
             else:
                 raise ValueError(f"Unknown provider: {call.provider}")

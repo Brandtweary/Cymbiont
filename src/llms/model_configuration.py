@@ -131,7 +131,7 @@ def load_local_model(model_id: str) -> Dict[str, Any]:
             info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             used_gb = int(info.used) / (1024**3)  # Convert to GB
             total_gb = int(info.total) / (1024**3)
-            logger.info(f"GPU Memory Usage after loading model: {used_gb:.2f}GB / {total_gb:.2f}GB")
+            logger.info(f"GPU Memory: {used_gb:.2f}GB / {total_gb:.2f}GB")
         except Exception as e:
             logger.warning(f"Could not get GPU memory info: {str(e)}")
             
