@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional, Set, Literal
 from .llm_types import APICall, ChatMessage, ToolName, LLM
 from shared_resources import logger, config, PROJECT_ROOT
 from agents.tool_schemas import TOOL_SCHEMAS
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, PreTrainedTokenizerFast
 import pynvml
 from pathlib import Path
 
@@ -82,7 +82,7 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
         return {"model": None, "tokenizer": None}
 
 def format_llama_input(
-    tokenizer: Any,  # Temporarily use Any while we debug the actual type
+    tokenizer: PreTrainedTokenizerFast,
     system_message: str,
     messages: List[ChatMessage],
     tools: Optional[Set[ToolName]] = None,
@@ -142,7 +142,7 @@ def format_llama_input(
         logger.debug(f"Tokenizer class: {tokenizer.__class__.__name__}")
         logger.debug(f"Tokenizer module: {tokenizer.__class__.__module__}")
         
-        raise Exception("DEBUG STOP - checking tokenizer type")
+        #raise Exception("DEBUG STOP - checking tokenizer type")
         
         # Simple version for debugging
         input_text = tokenizer.apply_chat_template(chat_messages, tokenize=False)

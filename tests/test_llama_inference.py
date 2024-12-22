@@ -69,6 +69,11 @@ def main():
         
         # Prepare input
         messages = [{"role": "user", "content": "Please suggest what I should cook for dinner tonight."}]
+        logger.info(f"Tokenizer type: {type(tokenizer).__name__}")
+        logger.info(f"Tokenizer class: {tokenizer.__class__.__name__}")
+        logger.info(f"Tokenizer module: {tokenizer.__class__.__module__}")
+        raise Exception("DEBUG STOP - checking tokenizer type")
+        
         input_text = tokenizer.apply_chat_template(messages, tokenize=False)
         
         logger.info("\n=== Tensor Device Tracking ===")
