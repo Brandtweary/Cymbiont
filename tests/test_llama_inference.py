@@ -65,7 +65,7 @@ def main():
         log_gpu_memory()
         
         # Prepare input
-        input_text = "What are we having for dinner?"
+        input_text = "You are a helpful AI assistant. Please suggest what I should cook for dinner tonight."
         logger.info(f"Input text: {input_text}")
         
         input_ids = tokenizer(input_text, return_tensors="pt").input_ids.to("cuda")
@@ -82,7 +82,9 @@ def main():
             output = model.generate(
                 input_ids,
                 max_new_tokens=10,
-                temperature=0.7
+                temperature=0.7,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id
             )
             
         # Clear timeout
@@ -92,7 +94,7 @@ def main():
         log_gpu_memory()
         
         # Decode output
-        result = tokenizer.decode(output[0], skip_special_tokens=True)
+        result = tokenizer.decode(output[0], skip_special_tokens=False)
         logger.info(f"Output: {result}")
         
     except Exception as e:
