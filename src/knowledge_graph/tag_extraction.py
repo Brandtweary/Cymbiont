@@ -5,7 +5,7 @@ from .knowledge_graph_types import Chunk
 from llms.llm_types import ChatMessage
 from cymbiont_logger.process_log import ProcessLog
 from llms.api_queue import enqueue_api_call
-from llms.model_state import TAG_EXTRACTION_MODEL
+from llms.model_registry import registry
 from llms.prompt_helpers import get_system_message, create_system_prompt_parts_data
 from utils import log_performance
 import json
@@ -34,7 +34,7 @@ async def extract_tags(
             ]
             
             future = enqueue_api_call(
-                model=TAG_EXTRACTION_MODEL,
+                model=registry.tag_extraction_model,
                 messages=messages_to_send,
                 system_message=system_content,
                 mock=mock,
@@ -66,7 +66,7 @@ async def extract_tags(
                 continue
 
             chunk.tags = tags
-            chunk.metadata['tag_extraction_model'] = TAG_EXTRACTION_MODEL
+            chunk.metadata['tag_extraction_model'] = registry.tag_extraction_model
             process_log.debug(f"Extracted tags: {tags}")
             process_log.debug(f"Final attempt count: {expiration_counter}")
             return

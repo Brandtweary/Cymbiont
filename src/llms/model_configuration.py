@@ -7,7 +7,7 @@ from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
 from pathlib import Path
 from .llama_models import load_local_model
-from . import model_state
+from .model_registry import ModelRegistry
 
 # Initialize API clients
 openai_client = AsyncOpenAI() if os.getenv("OPENAI_API_KEY") else None
@@ -86,16 +86,15 @@ model_data = {
     }
 }
 
-def initialize_model_configuration():
+def initialize_model_configuration() -> Optional[Dict[str, str]]:
     """Initialize model configuration based on config file and available API keys."""
     available_providers = get_available_providers()
     
     # Initialize model configurations from config file
-    required_models = ["CHAT_AGENT_MODEL", "TAG_EXTRACTION_MODEL", "PROGRESSIVE_SUMMARY_MODEL", "REVISION_MODEL"]
     model_configs = {}
     
     # Check that all required models are in config
-    for model_key in required_models:
+    for model_key in ModelRegistry.REQUIRED_MODELS:
         if model_key not in config["models"]:
             logger.error(f"Missing required model in config.toml: {model_key}")
             return None
@@ -143,26 +142,12 @@ def initialize_model_configuration():
         configured_models[model_key] = model_value  # Store just the model name
     
     # Check that all required models were configured
-    missing_models = [model for model in required_models if model not in configured_models]
+    missing_models = [model for model in ModelRegistry.REQUIRED_MODELS if model not in configured_models]
     if missing_models:
         logger.error(f"Failed to configure required models: {missing_models}")
         return None
     
     return configured_models
 
-def set_model_constants(model_config: Dict[str, str]) -> None:
-    """Set the model constants from the configuration."""
-    required_models = ["CHAT_AGENT_MODEL", "TAG_EXTRACTION_MODEL", "PROGRESSIVE_SUMMARY_MODEL", "REVISION_MODEL"]
-    missing_models = [model for model in required_models if model not in model_config]
-    if missing_models:
-        logger.error(f"Missing required models in config: {missing_models}")
-        return
-    
-    model_state.CHAT_AGENT_MODEL = model_config["CHAT_AGENT_MODEL"]
-    model_state.TAG_EXTRACTION_MODEL = model_config["TAG_EXTRACTION_MODEL"]
-    model_state.PROGRESSIVE_SUMMARY_MODEL = model_config["PROGRESSIVE_SUMMARY_MODEL"]
-    model_state.REVISION_MODEL = model_config["REVISION_MODEL"]
-
 # Export the configured models and clients
-__all__ = ['model_data', 'openai_client', 'anthropic_client', 'initialize_model_configuration',
-           'set_model_constants', 'model_state']
+__all__ = ['model_data', 'openai_client', 'anthropic_client', 'initialize_model_configuration']

@@ -1,11 +1,11 @@
 import asyncio
 from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED
-from llms.model_state import CHAT_AGENT_MODEL
+from llms.model_registry import registry
 from llms.llm_types import ToolName
 from .chat_history import ChatHistory
 from .agent import Agent
 from .agent_types import ActivationMode
-from typing import Any
+from typing import Any, Optional
 
 class ChatAgent(Agent):
     """
@@ -13,7 +13,7 @@ class ChatAgent(Agent):
     Unlike ToolAgent, this agent generates chat messages and uses tools only when needed.
     """
     
-    def __init__(self, chat_history: ChatHistory, agent_name: str = AGENT_NAME, model: str = CHAT_AGENT_MODEL, activation_mode: ActivationMode = ActivationMode.CONTINUOUS):
+    def __init__(self, chat_history: ChatHistory, agent_name: str = AGENT_NAME, model: Optional[str] = None, activation_mode: ActivationMode = ActivationMode.CONTINUOUS):
         default_tools = {
             ToolName.TOGGLE_PROMPT_PART,
             ToolName.TOGGLE_TOOL,
@@ -27,7 +27,7 @@ class ChatAgent(Agent):
         super().__init__(
             chat_history=chat_history,
             agent_name=agent_name,
-            model=model,
+            model=model or registry.chat_agent_model,
             activation_mode=activation_mode,
             default_tools=default_tools
         )

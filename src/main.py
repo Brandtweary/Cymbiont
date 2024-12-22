@@ -21,7 +21,8 @@ from cymbiont_logger.token_logger import token_logger
 from cymbiont_shell.cymbiont_shell import CymbiontShell
 from utils import setup_directories, delete_logs
 from llms.api_queue import start_api_queue, stop_api_queue
-from llms.model_configuration import initialize_model_configuration, set_model_constants
+from llms.model_configuration import initialize_model_configuration
+from llms.model_registry import registry
 
 async def async_main() -> None:
     # Setup directories
@@ -32,7 +33,7 @@ async def async_main() -> None:
     if not model_config:
         logger.error("Failed to initialize any models. Exiting.")
         sys.exit(1)
-    set_model_constants(model_config)
+    registry.initialize(model_config)
     
     # Start API queue
     await start_api_queue()

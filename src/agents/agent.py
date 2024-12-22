@@ -2,7 +2,7 @@ import asyncio
 from typing import Any, Dict, List, Optional, Set, Tuple, Literal, Union, Callable
 from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED, get_shell
 from cymbiont_logger.logger_types import LogLevel
-from llms.model_state import CHAT_AGENT_MODEL
+from llms.model_registry import registry
 from llms.prompt_helpers import get_system_message, DEFAULT_SYSTEM_PROMPT_PARTS
 from llms.llm_types import SystemPromptPartInfo, SystemPromptPartsData, ChatMessage, ToolName, ToolChoice, ContextPart, TemporaryContextValue
 from utils import log_performance, convert_messages_to_string
@@ -22,7 +22,7 @@ class Agent:
     def __init__(
         self,
         chat_history: ChatHistory,
-        model: str = CHAT_AGENT_MODEL,
+        model: Optional[str] = None,
         agent_name: str = AGENT_NAME,
         default_system_prompt_parts: SystemPromptPartsData = DEFAULT_SYSTEM_PROMPT_PARTS,
         default_tool_choice: ToolChoice = ToolChoice.AUTO,
@@ -43,7 +43,7 @@ class Agent:
         """
         
         self.chat_history = chat_history
-        self.model = model
+        self.model = model or registry.chat_agent_model
         self.agent_name = agent_name
         self.activation_mode = activation_mode  # Active by default in continuous mode
         self.active = activation_mode == ActivationMode.CONTINUOUS  # Active by default in continuous mode

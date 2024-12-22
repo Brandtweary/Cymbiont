@@ -9,7 +9,7 @@ from prompt_toolkit.styles import Style
 from llms.api_queue import enqueue_api_call
 from llms.llm_types import ChatMessage
 from cymbiont_logger.logger_types import LogLevel
-from llms.model_state import REVISION_MODEL
+from llms.model_registry import registry
 from llms.prompt_helpers import get_system_message, create_system_prompt_parts_data
 from utils import get_paths
 
@@ -170,7 +170,7 @@ async def do_revise_document(args: str) -> None:
             # Get the revised text from the agent
             try:
                 response = await enqueue_api_call(
-                    model=REVISION_MODEL,
+                    model=registry.revision_model,
                     messages=messages_to_send,
                     system_message=system_content,
                     temperature=1.0  # Required for o1-preview
