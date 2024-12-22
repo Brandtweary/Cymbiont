@@ -2,7 +2,6 @@ import json
 import re
 import time
 import torch
-import asyncio
 import signal
 from typing import Dict, Any, List, Optional, Set, Literal
 from .llm_types import APICall, ChatMessage, ToolName, LLM
@@ -10,7 +9,7 @@ from shared_resources import logger, config, PROJECT_ROOT
 from agents.tool_schemas import TOOL_SCHEMAS
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, PreTrainedTokenizerFast
 import pynvml
-from pathlib import Path
+
 
 # Store loaded models and tokenizers
 llama_models: Dict[str, Dict[str, Any]] = {
@@ -58,7 +57,8 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
             )
         elif quant_setting == "8-bit":
             quant_config = BitsAndBytesConfig(
-                load_in_8bit=True
+                load_in_8bit=True,
+                bnb_8bit_compute_dtype=torch.bfloat16
             )
         elif quant_setting == "none":
             logger.warning(f"Loading model without quantization - this will require significant GPU memory!")
@@ -73,85 +73,36 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
     try:
         logger.info(f"Loading model from {model_dir}")
         
-        # Initialize pynvml and get handle outside try blocks
-        pynvml.nvmlInit()
-        handle = pynvml.nvmlDeviceGetHandleByIndex(0)  # Assuming first GPU
-        
-        # Check GPU memory before loading
-        try:
-            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            free_gb = int(info.free) / (1024**3)
-            total_gb = int(info.total) / (1024**3)
-            # Calculate max memory to use (90% of total)
-            max_memory_gb = int(0.9 * total_gb)
-            max_memory = {0: f"{max_memory_gb}GiB"}
-            logger.info(f"GPU Memory before loading - Free: {free_gb:.2f}GB / Total: {total_gb:.2f}GB")
-            logger.info(f"Setting max GPU memory usage to: {max_memory_gb}GB")
-        except Exception as e:
-            logger.warning(f"Could not get GPU memory info before loading: {str(e)}")
-            max_memory = None
-        
         # Load tokenizer
         tokenizer = AutoTokenizer.from_pretrained(str(model_dir), local_files_only=True)
-
         
-        # Get initial GPU info
-        try:
-            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            used_gb = int(info.used) / (1024**3)
-            free_gb = int(info.free) / (1024**3)
-            logger.info(f"Before model load - Used: {used_gb:.2f}GB, Free: {free_gb:.2f}GB")
-            
-            # Try to get CUDA memory info too
-            if torch.cuda.is_available():
-                cuda_allocated = torch.cuda.memory_allocated(0) / (1024**3)
-                cuda_reserved = torch.cuda.memory_reserved(0) / (1024**3)
-                logger.info(f"CUDA memory - Allocated: {cuda_allocated:.2f}GB, Reserved: {cuda_reserved:.2f}GB")
-        except Exception as e:
-            logger.warning(f"Could not get detailed GPU memory info: {str(e)}")
-        
-        # Load model with 4-bit quantization
+        # Load model with quantization
         model = AutoModelForCausalLM.from_pretrained(
             str(model_dir),
             device_map="auto",
-            max_memory=max_memory,
             quantization_config=quant_config,
-            local_files_only=True,
-            torch_dtype=torch.bfloat16
+            torch_dtype=torch.bfloat16,
+            local_files_only=True
         )
+
+        # Check if any part of the model is not on GPU
+        if model.hf_device_map:  # Only check if device map exists
+            devices = set(model.hf_device_map.values())
+            if 'cpu' in devices or 'disk' in devices:
+                logger.warning("Some model layers are not on GPU - this may impact performance")
+                logger.debug(f"Model device map: {model.hf_device_map}")
         
-        logger.info(f"Model device map: {model.hf_device_map}")
-        logger.info(f"First layer device: {next(model.parameters()).device}")
-        
-        # Log detailed memory info for layers around the failure point
-        for i in range(20, 25):
-            layer_name = f"model.layers.{i}"
-            if layer_name in model.hf_device_map:
-                logger.info(f"Layer {i} device: {model.hf_device_map[layer_name]}")
-                try:
-                    info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                    used_gb = int(info.used) / (1024**3)
-                    free_gb = int(info.free) / (1024**3)
-                    logger.info(f"At layer {i} - Used: {used_gb:.2f}GB, Free: {free_gb:.2f}GB")
-                except Exception as e:
-                    logger.warning(f"Could not get GPU memory info for layer {i}: {str(e)}")
-        
-        # Verify model is fully loaded on GPU
-        last_layer_name = f"model.layers.{model.config.num_hidden_layers - 1}"
-        assert model.hf_device_map[last_layer_name] == 0, f"Last layer not on GPU! Device map: {model.hf_device_map}"
-        assert model.hf_device_map['lm_head'] == 0, f"LM head not on GPU! Device map: {model.hf_device_map}"
-        
-        # Get GPU memory after loading
+        # Log final memory usage
         try:
+            pynvml.nvmlInit()
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)  # Assuming first GPU
             info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             used_gb = int(info.used) / (1024**3)
             total_gb = int(info.total) / (1024**3)
-            logger.info(f"GPU Memory after loading - Used: {used_gb:.2f}GB / Total: {total_gb:.2f}GB")
+            logger.debug(f"GPU Memory - Used: {used_gb:.2f}GB / Total: {total_gb:.2f}GB")
         except Exception as e:
-            logger.warning(f"Could not get GPU memory info after loading: {str(e)}")
-            
-        logger.info(f"Successfully loaded local model from {model_dir}")
-        
+            logger.warning(f"Could not get GPU memory info: {str(e)}")
+
         # Store the loaded model and tokenizer
         llama_models[model_name]["model"] = model
         llama_models[model_name]["tokenizer"] = tokenizer
@@ -217,33 +168,20 @@ def format_llama_input(
     # Apply chat template and convert to tensor
     device = "cuda" if torch.cuda.is_available() else "cpu"
     try:
-        logger.debug("Attempting to use chat template...")
-        logger.debug(f"Tokenizer type: {type(tokenizer).__name__}")
-        logger.debug(f"Tokenizer class: {tokenizer.__class__.__name__}")
-        logger.debug(f"Tokenizer module: {tokenizer.__class__.__module__}")
-        
-        #raise Exception("DEBUG STOP - checking tokenizer type")
-        
-        # Simple version for debugging
-        input_text = tokenizer.apply_chat_template(chat_messages, tokenize=False)
-        assert isinstance(input_text, str), f"Expected string from apply_chat_template, got {type(input_text)}"
-        formatted_input = tokenizer(input_text, return_tensors="pt").input_ids.to(device)
-        
-        # Tool-enabled version for later
-        # formatted_input = tokenizer.apply_chat_template(
-        #     chat_messages,
-        #     add_generation_prompt=True,
-        #     return_tensors="pt",
-        #     tools=tool_definitions if tools and tool_choice != "none" else None
-        # ).to(device)
+        formatted_input = tokenizer.apply_chat_template(
+            chat_messages,
+            add_generation_prompt=True,
+            return_tensors="pt",
+            tools=tool_definitions if tools and tool_choice != "none" else None
+        )
+        assert isinstance(formatted_input, torch.Tensor), f"Expected tensor from apply_chat_template, got {type(formatted_input)}"
+        formatted_input = formatted_input.to(device)
     except Exception as e:
-        logger.error(f"Failed to format input with tokenizer {type(tokenizer).__name__}: {str(e)}")
+        logger.error(f"Failed to format input: {str(e)}")
         raise
         
-    return formatted_input
-
-def timeout_handler(signum, frame):
-    raise TimeoutError("Operation timed out after 60 seconds")
+    # We've already asserted this is a tensor above
+    return formatted_input  # type: ignore[return-value]
 
 async def generate_completion(api_call: APICall):
     """Generate a completion using a local Llama model."""
@@ -256,8 +194,6 @@ async def generate_completion(api_call: APICall):
     tokenizer = model_info["tokenizer"]
     
     try:
-        model.eval()  # Ensure model is in eval mode
-        
         # Format input
         formatted_input = format_llama_input(
             tokenizer=tokenizer,
@@ -267,22 +203,13 @@ async def generate_completion(api_call: APICall):
             tool_choice=api_call.tool_choice
         )
         prompt_tokens = len(formatted_input[0])
-            
-        logger.debug("Running model inference...")
         
-        # Set 30 second timeout
+        # Set 60 second timeout
         signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(30)
+        signal.alarm(60)
         
         try:
             with torch.inference_mode():
-                # Check that input tensor is on same device as model
-                model_device = next(model.parameters()).device
-                logger.info(f"Model device map: {model.hf_device_map}")
-                logger.info(f"Model first layer device: {model_device}")
-                logger.info(f"Input tensor device: {formatted_input.device}")
-                assert formatted_input.device == model_device, f"Input tensor on {formatted_input.device} but model on {model_device}"
-                
                 outputs = model.generate(
                     formatted_input,
                     max_new_tokens=api_call.max_completion_tokens,
@@ -343,3 +270,6 @@ async def generate_completion(api_call: APICall):
     except Exception as e:
         logger.error(f"Error in generate_completion: {str(e)}", exc_info=True)
         raise
+
+def timeout_handler(signum, frame):
+    raise TimeoutError("Operation timed out after 60 seconds")
