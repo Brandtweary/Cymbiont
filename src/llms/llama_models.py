@@ -92,10 +92,12 @@ async def generate_completion(api_call: APICall):
     tokenizer = model_info["tokenizer"]
     
     try:
-        # Clear CUDA cache before generation
+        # Clear CUDA cache and ensure model is in eval mode
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             logger.debug(f"GPU Memory before generation: {torch.cuda.memory_allocated()/1e9:.2f}GB")
+        
+        model.eval()  # Ensure model is in eval mode
         
         # Format input
         formatted_input = format_llama_input(
@@ -106,35 +108,31 @@ async def generate_completion(api_call: APICall):
             tool_choice=api_call.tool_choice
         )
         prompt_tokens = len(formatted_input[0])
-        
             
-        # Create attention mask
-        attention_mask = torch.ones_like(formatted_input)
-        
         logger.debug("Running model inference...")
         loop = asyncio.get_event_loop()
-        generate_fn = partial(
-            model.generate,
-            formatted_input,
-            max_new_tokens=api_call.max_completion_tokens,
-            temperature=api_call.temperature,
-            pad_token_id=tokenizer.pad_token_id,
-            eos_token_id=tokenizer.eos_token_id,
-        )
         
-        outputs = await asyncio.wait_for(
-            loop.run_in_executor(None, generate_fn),
-            timeout=60.0  # 60 second timeout
-        )
+        async def run_generate():
+            with torch.inference_mode():
+                return model.generate(
+                    formatted_input,
+                    max_new_tokens=api_call.max_completion_tokens,
+                    temperature=api_call.temperature,
+                    pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=tokenizer.eos_token_id,
+                )
+        
+        outputs = await asyncio.wait_for(run_generate(), timeout=60.0)
         
         if torch.cuda.is_available():
+            torch.cuda.synchronize()  # Ensure all CUDA operations are complete
             logger.debug(f"GPU Memory after generation: {torch.cuda.memory_allocated()/1e9:.2f}GB")
             torch.cuda.empty_cache()
             
     except asyncio.TimeoutError:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        raise RuntimeError("Model inference timed out after 30 seconds")
+        raise RuntimeError("Model inference timed out after 60 seconds")
     except RuntimeError as e:
         if "out of memory" in str(e):
             if torch.cuda.is_available():
