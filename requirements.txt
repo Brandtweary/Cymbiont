@@ -9,3 +9,4 @@ nltk
 transformers
 accelerate>=0.26.0
 pynvml
+bitsandbytes>=0.41.1

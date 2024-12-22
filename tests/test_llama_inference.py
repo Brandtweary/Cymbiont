@@ -58,6 +58,7 @@ def main():
             str(model_path),
             device_map="auto",
             local_files_only=True,
+            torch_dtype=torch.bfloat16,
             quantization_config=quantization_config
         )
         logger.info("Model loaded")
@@ -67,9 +68,7 @@ def main():
         input_text = "What are we having for dinner?"
         logger.info(f"Input text: {input_text}")
         
-        input_ids = tokenizer(input_text, return_tensors="pt").input_ids
-        if torch.cuda.is_available():
-            input_ids = input_ids.to("cuda")
+        input_ids = tokenizer(input_text, return_tensors="pt").input_ids.to("cuda")
         logger.info(f"Input shape: {input_ids.shape}")
         
         # Generate
@@ -83,9 +82,7 @@ def main():
             output = model.generate(
                 input_ids,
                 max_new_tokens=10,
-                temperature=0.7,
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id
+                temperature=0.7
             )
             
         # Clear timeout
