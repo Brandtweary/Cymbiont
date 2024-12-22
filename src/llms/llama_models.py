@@ -3,6 +3,7 @@ import re
 import time
 import torch
 import asyncio
+import signal
 from typing import Dict, Any, List, Optional, Set, Literal
 from .llm_types import APICall, ChatMessage, ToolName, LLM
 from shared_resources import logger, config, PROJECT_ROOT
@@ -146,8 +147,7 @@ def format_llama_input(
         
         # Simple version for debugging
         input_text = tokenizer.apply_chat_template(chat_messages, tokenize=False)
-        logger.debug(f"input_text type: {type(input_text)}")
-        logger.debug(f"input_text: {input_text}")
+        assert isinstance(input_text, str), f"Expected string from apply_chat_template, got {type(input_text)}"
         formatted_input = tokenizer(input_text, return_tensors="pt").input_ids.to(device)
         
         # Tool-enabled version for later
@@ -162,6 +162,9 @@ def format_llama_input(
         raise
         
     return formatted_input
+
+def timeout_handler(signum, frame):
+    raise TimeoutError("Operation timed out after 60 seconds")
 
 async def generate_completion(api_call: APICall):
     """Generate a completion using a local Llama model."""
@@ -188,14 +191,33 @@ async def generate_completion(api_call: APICall):
             
         logger.debug("Running model inference...")
         
-        with torch.inference_mode():
-            outputs = model.generate(
-                formatted_input,
-                max_new_tokens=api_call.max_completion_tokens,
-                temperature=api_call.temperature,
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id,
-            )
+        # Set 60 second timeout
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(60)
+        
+        try:
+            with torch.inference_mode():
+                # Check that input tensor is on same device as model
+                model_device = next(model.parameters()).device
+                assert formatted_input.device == model_device, f"Input tensor on {formatted_input.device} but model on {model_device}"
+                
+                outputs = model.generate(
+                    formatted_input,
+                    max_new_tokens=api_call.max_completion_tokens,
+                    temperature=api_call.temperature,
+                    pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=tokenizer.eos_token_id,
+                )
+                
+            # Clear timeout after successful generation
+            signal.alarm(0)
+            
+        except TimeoutError:
+            raise TimeoutError("Model inference timed out after 60 seconds")
+            
+        finally:
+            # Always clear the alarm
+            signal.alarm(0)
             
         # Decode only the new tokens
         response = tokenizer.decode(
