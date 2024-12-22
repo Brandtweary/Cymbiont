@@ -4,7 +4,7 @@ import time
 import torch
 from typing import Dict, Any, List, Optional, Set, Literal
 from .llm_types import APICall, ChatMessage, ToolName
-from .model_configuration import model_config
+from .model_configuration import model_data
 from shared_resources import logger
 from agents.tool_schemas import TOOL_SCHEMAS
 from transformers import AutoTokenizer
@@ -76,7 +76,7 @@ def format_llama_input(
 async def generate_completion(api_call: APICall):
     """Generate a completion using a local Llama model."""
     # Get model and tokenizer from model configuration
-    model_info = model_config.get(api_call.model)
+    model_info = model_data.get(api_call.model)
     if not model_info or not model_info.get("model") or not model_info.get("tokenizer"):
         raise RuntimeError(f"{api_call.model} missing model or tokenizer.")
         
