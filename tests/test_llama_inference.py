@@ -38,27 +38,25 @@ def main():
         if not model_path.exists():
             raise RuntimeError(f"Model not found at {model_path}")
             
-        logger.info("Loading model and tokenizer...")
+        logger.info("=== CUDA and Device Information ===")
+        logger.info(f"CUDA available: {torch.cuda.is_available()}")
+        if torch.cuda.is_available():
+            logger.info(f"Current CUDA device: {torch.cuda.current_device()}")
+            logger.info(f"Device name: {torch.cuda.get_device_name()}")
         log_gpu_memory()
         
-        # Load tokenizer first
+        # Load tokenizer and model
         tokenizer = AutoTokenizer.from_pretrained(
             str(model_path),
             local_files_only=True
         )
-        logger.info("Tokenizer loaded")
         
-        # Log special tokens
-        logger.info(f"Special tokens: {tokenizer.special_tokens_map}")
-        logger.info(f"All special tokens: {tokenizer.all_special_tokens}")
-        logger.info(f"All special IDs: {tokenizer.all_special_ids}")
-        
-        # Load model with 4-bit quantization
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_compute_dtype=torch.bfloat16
         )
         
+        logger.info("\n=== Loading Model ===")
         model = AutoModelForCausalLM.from_pretrained(
             str(model_path),
             device_map="auto",
@@ -66,19 +64,22 @@ def main():
             torch_dtype=torch.bfloat16,
             quantization_config=quantization_config
         )
-        logger.info("Model loaded")
+        logger.info(f"Model device: {next(model.parameters()).device}")
         log_gpu_memory()
         
         # Prepare input
         messages = [{"role": "user", "content": "Please suggest what I should cook for dinner tonight."}]
         input_text = tokenizer.apply_chat_template(messages, tokenize=False)
-        logger.info(f"Input text: {input_text}")
         
-        input_ids = tokenizer(input_text, return_tensors="pt").input_ids.to("cuda")
-        logger.info(f"Input shape: {input_ids.shape}")
+        logger.info("\n=== Tensor Device Tracking ===")
+        input_ids = tokenizer(input_text, return_tensors="pt").input_ids
+        logger.info(f"Input tensor device before move: {input_ids.device}")
+        input_ids = input_ids.to("cuda")
+        logger.info(f"Input tensor device after move: {input_ids.device}")
         
         # Generate
-        logger.info("Starting inference...")
+        logger.info("\n=== Starting Inference ===")
+        log_gpu_memory()
         
         # Set 60 second timeout for inference
         signal.signal(signal.SIGALRM, timeout_handler)
@@ -92,16 +93,17 @@ def main():
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id
             )
+            logger.info(f"Output tensor device: {output.device}")
             
         # Clear timeout
         signal.alarm(0)
         
-        logger.info("Inference complete")
+        logger.info("\n=== Inference Complete ===")
         log_gpu_memory()
         
         # Decode only the new tokens
         result = tokenizer.decode(output[0][input_ids.shape[1]:], skip_special_tokens=True)
-        logger.info(f"Output: {result}")
+        logger.info(f"Result: {result}")
         
     except Exception as e:
         logger.error(f"Error: {str(e)}", exc_info=True)

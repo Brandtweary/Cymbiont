@@ -92,11 +92,6 @@ async def generate_completion(api_call: APICall):
     tokenizer = model_info["tokenizer"]
     
     try:
-        # Clear CUDA cache and ensure model is in eval mode
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            logger.debug(f"GPU Memory before generation: {torch.cuda.memory_allocated()/1e9:.2f}GB")
-        
         model.eval()  # Ensure model is in eval mode
         
         # Format input
@@ -110,72 +105,55 @@ async def generate_completion(api_call: APICall):
         prompt_tokens = len(formatted_input[0])
             
         logger.debug("Running model inference...")
-        loop = asyncio.get_event_loop()
         
-        async def run_generate():
-            with torch.inference_mode():
-                return model.generate(
-                    formatted_input,
-                    max_new_tokens=api_call.max_completion_tokens,
-                    temperature=api_call.temperature,
-                    pad_token_id=tokenizer.pad_token_id,
-                    eos_token_id=tokenizer.eos_token_id,
-                )
-        
-        outputs = await asyncio.wait_for(run_generate(), timeout=60.0)
-        
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()  # Ensure all CUDA operations are complete
-            logger.debug(f"GPU Memory after generation: {torch.cuda.memory_allocated()/1e9:.2f}GB")
-            torch.cuda.empty_cache()
+        with torch.inference_mode():
+            outputs = model.generate(
+                formatted_input,
+                max_new_tokens=api_call.max_completion_tokens,
+                temperature=api_call.temperature,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
             
-    except asyncio.TimeoutError:
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        raise RuntimeError("Model inference timed out after 60 seconds")
-    except RuntimeError as e:
-        if "out of memory" in str(e):
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            raise RuntimeError(f"GPU out of memory during inference: {str(e)}")
-        raise  # Re-raise other runtime errors
-    except Exception as e:
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        raise RuntimeError(f"Error during model inference: {str(e)}")
+        # Decode only the new tokens
+        response = tokenizer.decode(
+            outputs[0][prompt_tokens:],
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=True
+        )
         
-    # Count completion tokens
-    completion_tokens = len(outputs[0]) - prompt_tokens
-    
-    # Decode and clean response
-    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    
-    result = {
-        "content": response,
-        "token_usage": {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_tokens": prompt_tokens + completion_tokens
-        },
-        "timestamp": time.time(),
-        "expiration_counter": api_call.expiration_counter + 1
-    }
-    
-    # Parse tool calls if present
-    if api_call.tools and api_call.tool_choice != "none":
-        try:
-            # Extract JSON from response
-            json_match = re.search(r'\{.*\}', response)
-            if json_match:
-                tool_call = json.loads(json_match.group())
-                result["content"] = None  # No text response when tool calling
-                result["tool_call_results"] = {
-                    "0": {  # Using "0" as ID since we don't have multiple tool calls yet
-                        "tool_name": tool_call["name"],
-                        "arguments": tool_call["parameters"]
+        completion_tokens = len(outputs[0]) - prompt_tokens
+        
+        result = {
+            "content": response,
+            "token_usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens
+            },
+            "timestamp": time.time(),
+            "expiration_counter": api_call.expiration_counter + 1
+        }
+        
+        # Parse tool calls if present
+        if api_call.tools and api_call.tool_choice != "none":
+            try:
+                # Extract JSON from response
+                json_match = re.search(r'\{.*\}', response)
+                if json_match:
+                    tool_call = json.loads(json_match.group())
+                    result["content"] = None  # No text response when tool calling
+                    result["tool_call_results"] = {
+                        "0": {  # Using "0" as ID since we don't have multiple tool calls yet
+                            "tool_name": tool_call["name"],
+                            "arguments": tool_call["parameters"]
+                        }
                     }
-                }
-        except json.JSONDecodeError:
-            pass  # Handle as regular text response if JSON parsing fails
-
-    return result
+            except json.JSONDecodeError:
+                pass  # Handle as regular text response if JSON parsing fails
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in generate_completion: {str(e)}", exc_info=True)
+        raise
