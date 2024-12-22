@@ -40,6 +40,19 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
             bnb_4bit_compute_dtype=torch.bfloat16
         )
         
+        # Initialize pynvml once
+        pynvml.nvmlInit()
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        total_gb = int(pynvml.nvmlDeviceGetMemoryInfo(handle).total) / (1024**3)
+        
+        # Log GPU memory before loading
+        try:
+            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            free_gb = int(info.free) / (1024**3)
+            logger.info(f"GPU Memory before loading - Free: {free_gb:.2f}GB / Total: {total_gb:.2f}GB")
+        except Exception as e:
+            logger.error(f"Failed to get GPU memory info: {e}")
+        
         model = AutoModelForCausalLM.from_pretrained(
             str(model_path),
             device_map="auto",
@@ -48,7 +61,20 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
             quantization_config=quantization_config
         )
         
-        logger.info(f"Model device map: {model.hf_device_map}")
+        # Detailed device map logging
+        logger.info("=== Detailed Device Map ===")
+        for key, device in model.hf_device_map.items():
+            logger.info(f"{key}: {device}")
+        logger.info("=== End Device Map ===")
+        
+        # Log GPU memory after loading
+        try:
+            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            free_gb = int(info.free) / (1024**3)
+            logger.info(f"GPU Memory after loading - Free: {free_gb:.2f}GB / Total: {total_gb:.2f}GB")
+        except Exception as e:
+            logger.error(f"Failed to get GPU memory info: {e}")
+        
         logger.info(f"First layer device: {next(model.parameters()).device}")
         
         return {"model": model, "tokenizer": tokenizer}
