@@ -48,6 +48,11 @@ def main():
         )
         logger.info("Tokenizer loaded")
         
+        # Log special tokens
+        logger.info(f"Special tokens: {tokenizer.special_tokens_map}")
+        logger.info(f"All special tokens: {tokenizer.all_special_tokens}")
+        logger.info(f"All special IDs: {tokenizer.all_special_ids}")
+        
         # Load model with 4-bit quantization
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -65,7 +70,8 @@ def main():
         log_gpu_memory()
         
         # Prepare input
-        input_text = "You are a helpful AI assistant. Please suggest what I should cook for dinner tonight."
+        messages = [{"role": "user", "content": "Please suggest what I should cook for dinner tonight."}]
+        input_text = tokenizer.apply_chat_template(messages, tokenize=False)
         logger.info(f"Input text: {input_text}")
         
         input_ids = tokenizer(input_text, return_tensors="pt").input_ids.to("cuda")
@@ -81,7 +87,7 @@ def main():
         with torch.inference_mode():
             output = model.generate(
                 input_ids,
-                max_new_tokens=10,
+                max_new_tokens=50,
                 temperature=0.7,
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id
@@ -93,8 +99,8 @@ def main():
         logger.info("Inference complete")
         log_gpu_memory()
         
-        # Decode output
-        result = tokenizer.decode(output[0], skip_special_tokens=False)
+        # Decode only the new tokens
+        result = tokenizer.decode(output[0][input_ids.shape[1]:], skip_special_tokens=True)
         logger.info(f"Output: {result}")
         
     except Exception as e:
