@@ -5,14 +5,6 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
-class UninitializedModel(str):
-    """Special string type for uninitialized models that can be used as a string but warns when accessed."""
-    def __new__(cls):
-        return super().__new__(cls, "Model registry not initialized")
-        
-    def __bool__(self):
-        return False
-
 class ModelRegistry:
     """Central registry for model configuration and access."""
     
@@ -25,10 +17,10 @@ class ModelRegistry:
     ]
     
     def __init__(self):
-        self._chat_agent_model = UninitializedModel()
-        self._tag_extraction_model = UninitializedModel()
-        self._progressive_summary_model = UninitializedModel()
-        self._revision_model = UninitializedModel()
+        self._chat_agent_model = "Model registry not initialized"
+        self._tag_extraction_model = "Model registry not initialized"
+        self._progressive_summary_model = "Model registry not initialized"
+        self._revision_model = "Model registry not initialized"
         self._initialized = False
     
     def __getitem__(self, key: str) -> str:
@@ -58,25 +50,25 @@ class ModelRegistry:
     @property
     def chat_agent_model(self) -> str:
         if not self._initialized:
-            return UninitializedModel()
+            return "Model registry not initialized"
         return self._chat_agent_model
         
     @property
     def tag_extraction_model(self) -> str:
         if not self._initialized:
-            return UninitializedModel()
+            return "Model registry not initialized"
         return self._tag_extraction_model
         
     @property
     def progressive_summary_model(self) -> str:
         if not self._initialized:
-            return UninitializedModel()
+            return "Model registry not initialized"
         return self._progressive_summary_model
         
     @property
     def revision_model(self) -> str:
         if not self._initialized:
-            return UninitializedModel()
+            return "Model registry not initialized"
         return self._revision_model
     
     def initialize(self, model_config: Dict[str, str]) -> None:
