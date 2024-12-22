@@ -74,7 +74,7 @@ The script will attempt to use the nvidia-smi tool to determine your CUDA versio
 
    # Run the setup script
    chmod +x ./scripts/setup_restricted_user.sh
-   sudo ./scripts/setup_restricted_user.sh
+   sudo ./scripts/setup_restricted_user.sh  # this could take a while
    ```
 
 ## API Keys
@@ -110,11 +110,11 @@ We use the Hugging Face transformers library to run inference. Models must be do
    ```bash
    huggingface-cli login
    ```
-   When prompted, enter the access token you created in step 3.
+   When prompted, enter the access token you created in step 3. Select 'no' when asked about git credentials (unless you need git access to private repos).
 6. Download the model to the correct directory:
    ```bash
    # Adjust model name and directory if needed
-   env HF_HUB_DOWNLOAD_TIMEOUT=600 huggingface-cli download meta-llama/Llama-3.3-70B-Instruct --local-dir local_models/Llama-3.3-70B-Instruct
+   env HF_HUB_DOWNLOAD_TIMEOUT=600 huggingface-cli download meta-llama/Llama-3.3-70B-Instruct --local-dir local_models/Llama-3.3-70B-Instruct --exclude "original/*"
    ```
 
 Note: If you don't have sufficient hardware to run local models, you can skip this section and use API-based models instead.

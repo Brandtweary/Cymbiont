@@ -123,6 +123,13 @@ if ! getent group "$PROJECT_GROUP" >/dev/null 2>&1; then
     echo "Created project access group: $PROJECT_GROUP"
 fi
 
+# Add SUDO_USER to project group if not already a member
+if ! groups "$SUDO_USER" | grep -q "\b${PROJECT_GROUP}\b"; then
+    debug "Adding $SUDO_USER to $PROJECT_GROUP"
+    usermod -a -G "$PROJECT_GROUP" "$SUDO_USER" || error_exit "Failed to add $SUDO_USER to group $PROJECT_GROUP"
+    echo "Added $SUDO_USER to project group"
+fi
+
 # Create all restricted users (fast operation)
 for user in "$PROJECT_READ" "$SYSTEM_READ" "$PROJECT_RESTRICTED_WRITE" "$PROJECT_WRITE_EXECUTE"; do
     if ! id -u "$user" >/dev/null 2>&1; then
