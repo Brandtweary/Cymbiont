@@ -78,6 +78,22 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
         
         # Load tokenizer
         tokenizer = AutoTokenizer.from_pretrained(str(model_path), local_files_only=True)
+
+        
+        # Get initial GPU info
+        try:
+            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            used_gb = int(info.used) / (1024**3)
+            free_gb = int(info.free) / (1024**3)
+            logger.info(f"Before model load - Used: {used_gb:.2f}GB, Free: {free_gb:.2f}GB")
+            
+            # Try to get CUDA memory info too
+            if torch.cuda.is_available():
+                cuda_allocated = torch.cuda.memory_allocated(0) / (1024**3)
+                cuda_reserved = torch.cuda.memory_reserved(0) / (1024**3)
+                logger.info(f"CUDA memory - Allocated: {cuda_allocated:.2f}GB, Reserved: {cuda_reserved:.2f}GB")
+        except Exception as e:
+            logger.warning(f"Could not get detailed GPU memory info: {str(e)}")
         
         # Load model with 4-bit quantization
         model = AutoModelForCausalLM.from_pretrained(
@@ -91,6 +107,19 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
         
         logger.info(f"Model device map: {model.hf_device_map}")
         logger.info(f"First layer device: {next(model.parameters()).device}")
+        
+        # Log detailed memory info for layers around the failure point
+        for i in range(20, 25):
+            layer_name = f"model.layers.{i}"
+            if layer_name in model.hf_device_map:
+                logger.info(f"Layer {i} device: {model.hf_device_map[layer_name]}")
+                try:
+                    info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                    used_gb = int(info.used) / (1024**3)
+                    free_gb = int(info.free) / (1024**3)
+                    logger.info(f"At layer {i} - Used: {used_gb:.2f}GB, Free: {free_gb:.2f}GB")
+                except Exception as e:
+                    logger.warning(f"Could not get GPU memory info for layer {i}: {str(e)}")
         
         # Verify model is fully loaded on GPU
         last_layer_name = f"model.layers.{model.config.num_hidden_layers - 1}"
