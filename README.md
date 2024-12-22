@@ -6,26 +6,6 @@ At its core, Cymbiont implements a graph-based RAG (Retrieval-Augmented Generati
 
 ## Setup Instructions
 
-### Setting up Hugging Face Access (Optional)
-
-This step is only required if you want to use local models. Currently, we support:
-- Llama 3.3 70B Instruct: Requires ~40GB VRAM with 4-bit quantization
-
-We use the Hugging Face Transformers library to run these models locally. Models must be downloaded to the `local_models` directory, as this is where the software looks for them by default.
-
-1. Create a Hugging Face account at https://huggingface.co/
-2. Request access to Llama-3.3-70B-Instruct at https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct
-3. Log in to the Hugging Face CLI:
-   ```bash
-   huggingface-cli login
-   ```
-4. Download the model to the correct directory:
-   ```bash
-   env HF_HUB_DOWNLOAD_TIMEOUT=300 huggingface-cli download meta-llama/Llama-3.3-70B-Instruct --local-dir local_models/Llama-3.3-70B-Instruct
-   ```
-
-Note: If you don't have sufficient hardware to run local models, you can skip this section and use API-based models instead.
-
 ### Interactive Setup (Linux/Mac Only)
 
 1. Install Python:
@@ -99,12 +79,45 @@ The script will attempt to use the nvidia-smi tool to determine your CUDA versio
 
 ## API Keys
 
-Create a `.env` file in the project root and set at least one of the following variables:
+Create a `.env` file in the project root and set any of the following variables:
 ```bash
 OPENAI_API_KEY="your_api_key_here"
 ANTHROPIC_API_KEY="your_api_key_here"
 ```
 The bootstrap script will walk you through this step if this file is not present.
+
+### Local Models via Hugging Face (Optional)
+
+Currently, Cymbiont supports the following local models:
+- [Llama 3.3 70B Instruct](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct)*: Requires ~40GB VRAM with 4-bit quantization
+
+*Gated model - please request access on Hugging Face
+
+We use the Hugging Face transformers library to run inference. Models must be downloaded to the `local_models` directory, as this is where the software looks for them by default.
+
+1. Create a Hugging Face account at https://huggingface.co/
+2. Request access to the model if it is gated (your request will be granted in a few hours)
+3. Create an access token at https://huggingface.co/settings/tokens with read access
+4. Activate the Cymbiont virtual environment if not already active:
+   ```bash
+   # Linux/Mac
+   source .venv/bin/activate
+   
+   # Windows
+   .venv\Scripts\activate
+   ```
+5. Log in to the Hugging Face CLI:
+   ```bash
+   huggingface-cli login
+   ```
+   When prompted, enter the access token you created in step 3.
+6. Download the model to the correct directory:
+   ```bash
+   # Adjust model name and directory if needed
+   env HF_HUB_DOWNLOAD_TIMEOUT=600 huggingface-cli download meta-llama/Llama-3.3-70B-Instruct --local-dir local_models/Llama-3.3-70B-Instruct
+   ```
+
+Note: If you don't have sufficient hardware to run local models, you can skip this section and use API-based models instead.
 
 ## Running Cymbiont
 
