@@ -173,6 +173,9 @@ def initialize_model_configuration():
             components = load_local_model(model_info["model_id"])
             if components["model"] and components["tokenizer"]:
                 configured_models[model_key] = model_value  # Store just the model name
+                # Store the model and tokenizer in model_data
+                model_data[model_value]["model"] = components["model"]
+                model_data[model_value]["tokenizer"] = components["tokenizer"]
                 continue
             else:
                 blacklisted_models.add(model_value)
