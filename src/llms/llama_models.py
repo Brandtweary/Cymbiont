@@ -17,7 +17,7 @@ llama_models: Dict[str, Dict[str, Any]] = {
     LLM.LLAMA_70B.value: {
         "model": None,
         "tokenizer": None,
-        "model_id": "meta-llama/Llama-3.3-70B-Instruct"
+        "local_dir": "Llama-3.3-70B-Instruct"  # Directory name under local_models/
     }
 }
 
@@ -29,34 +29,49 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
         logger.error(f"Unknown model: {model_name}")
         return {"model": None, "tokenizer": None}
         
-    model_id = model_info["model_id"]
     local_models_dir = PROJECT_ROOT / "local_models"
-    model_dir = local_models_dir / model_id.split("/")[-1]
+    model_dir = local_models_dir / model_info["local_dir"]
     
     if not model_dir.exists():
         logger.warning(f"Model directory not found: {model_dir}")
         return {"model": None, "tokenizer": None}
     
     # Get quantization configuration
-    quant_setting = config.get("local_model_quantization", {}).get(model_id, "none")
-    quant_config = None
-    
-    if quant_setting == "4-bit":
-        quant_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.bfloat16
-        )
-    elif quant_setting == "8-bit":
-        quant_config = BitsAndBytesConfig(
-            load_in_8bit=True
-        )
+    try:
+        quant_section = config.get("local_model_quantization")
+        if not quant_section:
+            logger.error("No 'local_model_quantization' section found in config")
+            return {"model": None, "tokenizer": None}
+        
+        # Use model_name for config lookup, not model_id!
+        quant_setting = quant_section.get(model_name.lower())
+        if not quant_setting:
+            logger.error(f"No quantization setting found for model '{model_name}'")
+            return {"model": None, "tokenizer": None}
+        
+        logger.info(f"Using quantization setting: {quant_setting} for model {model_name}")
+        
+        if quant_setting == "4-bit":
+            quant_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.bfloat16
+            )
+        elif quant_setting == "8-bit":
+            quant_config = BitsAndBytesConfig(
+                load_in_8bit=True
+            )
+        elif quant_setting == "none":
+            logger.warning(f"Loading model without quantization - this will require significant GPU memory!")
+            quant_config = None
+        else:
+            logger.error(f"Invalid quantization setting '{quant_setting}' for model")
+            return {"model": None, "tokenizer": None}
+    except Exception as e:
+        logger.error(f"Error getting quantization config: {str(e)}", exc_info=True)
+        return {"model": None, "tokenizer": None}
     
     try:
-        model_path = model_dir
-        if not model_path.exists():
-            raise RuntimeError(f"Model not found at {model_path}")
-            
-        logger.info(f"Loading model from {model_path}")
+        logger.info(f"Loading model from {model_dir}")
         
         # Initialize pynvml and get handle outside try blocks
         pynvml.nvmlInit()
@@ -77,7 +92,7 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
             max_memory = None
         
         # Load tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(str(model_path), local_files_only=True)
+        tokenizer = AutoTokenizer.from_pretrained(str(model_dir), local_files_only=True)
 
         
         # Get initial GPU info
@@ -97,7 +112,7 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
         
         # Load model with 4-bit quantization
         model = AutoModelForCausalLM.from_pretrained(
-            str(model_path),
+            str(model_dir),
             device_map="auto",
             max_memory=max_memory,
             quantization_config=quant_config,
@@ -143,7 +158,7 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
         
         return {"model": model, "tokenizer": tokenizer}
     except Exception as e:
-        logger.error(f"Failed to load local model {model_id}: {str(e)}", exc_info=True)
+        logger.error(f"Failed to load local model: {str(e)}", exc_info=True)
         return {"model": None, "tokenizer": None}
 
 def format_llama_input(

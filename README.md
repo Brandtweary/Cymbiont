@@ -111,9 +111,8 @@ We use the Hugging Face transformers library to run inference. Models must be do
    huggingface-cli login
    ```
    When prompted, enter the access token you created in step 3. Select 'no' when asked about git credentials (unless you need git access to private repos).
-6. Download the model to the correct directory:
+6. Download the model to the local_models directory. The directory name must match the one configured in [llama_models.py](cci:7://file:///home/brandt/Cymbiont/src/llms/llama_models.py:0:0-0:0):
    ```bash
-   # Adjust model name and directory if needed
    env HF_HUB_DOWNLOAD_TIMEOUT=600 huggingface-cli download meta-llama/Llama-3.3-70B-Instruct --local-dir local_models/Llama-3.3-70B-Instruct --exclude "original/*"
    ```
 
