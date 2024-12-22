@@ -8,6 +8,8 @@
 .notes/
 docs/
 config.toml
+local_models/*
+!local_models/.gitkeep
 
 # Data
 data/agent_workspace/*

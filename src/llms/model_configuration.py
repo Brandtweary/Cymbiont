@@ -1,27 +1,45 @@
 from enum import Enum
 import os
 from typing import Optional, Dict, Any
-from shared_resources import config, logger
+from shared_resources import config, logger, PROJECT_ROOT
 from .llm_types import LLM
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from pathlib import Path
 
-def get_quantization_config(model_id: str) -> Optional[BitsAndBytesConfig]:
-    """Get quantization configuration for a model based on config settings."""
-    quant_setting = config.get("local_model_quantization", {}).get(model_id, "none")
+# Initialize API clients
+openai_client = AsyncOpenAI() if os.getenv("OPENAI_API_KEY") else None
+anthropic_client = AsyncAnthropic() if os.getenv("ANTHROPIC_API_KEY") else None
+
+def get_available_providers() -> set:
+    """Return a set of available providers based on API keys in environment."""
+    providers = set()
     
-    if quant_setting == "4-bit":
-        return BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.bfloat16
-        )
-    elif quant_setting == "8-bit":
-        return BitsAndBytesConfig(
-            load_in_8bit=True,
-            bnb_8bit_compute_dtype=torch.bfloat16
-        )
+    if os.getenv("ANTHROPIC_API_KEY"):
+        providers.add("anthropic")
+    if os.getenv("OPENAI_API_KEY"):
+        providers.add("openai")
+    if os.path.exists(PROJECT_ROOT / "local_models"):
+        providers.add("huggingface_llama_local")
+        
+    return providers
+
+def get_fallback_model(desired_model: str, available_providers: set, blacklisted_models: Optional[set] = None) -> Optional[str]:
+    """Get a fallback model from an available provider.
+    
+    Args:
+        desired_model: The model that needs a fallback
+        available_providers: Set of available providers
+        blacklisted_models: Optional set of model names (from LLM enum) to exclude from fallback options
+    """
+    blacklisted_models = blacklisted_models or set()
+    
+    if "anthropic" in available_providers and LLM.SONNET_3_5.value not in blacklisted_models:
+        return LLM.SONNET_3_5.value
+    if "openai" in available_providers and LLM.GPT_4O.value not in blacklisted_models:
+        return LLM.GPT_4O.value
+    if "huggingface_llama_local" in available_providers and LLM.LLAMA_70B.value not in blacklisted_models:
+        return LLM.LLAMA_70B.value
     return None
 
 # Rate limits are assuming tier 2 API access for both OpenAI and Anthropic
@@ -69,41 +87,42 @@ model_data = {
     }
 }
 
-# Initialize API clients
-openai_client = AsyncOpenAI() if os.getenv("OPENAI_API_KEY") else None
-anthropic_client = AsyncAnthropic() if os.getenv("ANTHROPIC_API_KEY") else None
-
-def get_available_providers() -> set:
-    """Return a set of available providers based on API keys in environment."""
-    providers = {"huggingface_llama_local"}  # Always start with huggingface_llama_local
-    
-    if os.getenv("OPENAI_API_KEY"):
-        providers.add("openai")
-    if os.getenv("ANTHROPIC_API_KEY"):
-        providers.add("anthropic")
-        
-    return providers
-
-def get_fallback_model(desired_model: str, available_providers: set) -> Optional[str]:
-    """Get a fallback model from an available provider."""
-    if "anthropic" in available_providers:
-        return LLM.SONNET_3_5.value
-    if "openai" in available_providers:
-        return LLM.GPT_4O.value
-    if "huggingface_llama_local" in available_providers:
-        return LLM.LLAMA_70B.value
-    return None
-
 def load_local_model(model_id: str) -> Dict[str, Any]:
-    """Load a local transformers model and tokenizer."""
-    quant_config = get_quantization_config(model_id)
+    """Load a local transformers model and tokenizer from the local_models directory.
+    Returns None for both model and tokenizer if loading fails."""
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+    import torch
+    
+    local_models_dir = PROJECT_ROOT / "local_models"
+    model_dir = local_models_dir / model_id.split("/")[-1]
+    
+    if not model_dir.exists():
+        logger.warning(f"Model directory not found: {model_dir}")
+        return {"model": None, "tokenizer": None}
+    
+    # Get quantization configuration
+    quant_setting = config.get("local_model_quantization", {}).get(model_id, "none")
+    quant_config = None
+    
+    if quant_setting == "4-bit":
+        quant_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.bfloat16
+        )
+    elif quant_setting == "8-bit":
+        quant_config = BitsAndBytesConfig(
+            load_in_8bit=True
+        )
+    
     try:
         model = AutoModelForCausalLM.from_pretrained(
-            model_id,
+            str(model_dir),
             device_map="auto",
-            quantization_config=quant_config if quant_config else None
+            quantization_config=quant_config,
+            local_files_only=True
         )
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
+        tokenizer = AutoTokenizer.from_pretrained(str(model_dir), local_files_only=True)
+        logger.info(f"Successfully loaded local model from {model_dir}")
         return {"model": model, "tokenizer": tokenizer}
     except Exception as e:
         logger.error(f"Failed to load local model {model_id}: {str(e)}")
@@ -113,22 +132,6 @@ def initialize_model_configuration():
     """Initialize model configuration based on config file and available API keys."""
     available_providers = get_available_providers()
     
-    # Try to load local models first - if they fail, remove huggingface_llama_local from providers
-    local_models = [model for model in model_data.values() if model["provider"] == "huggingface_llama_local"]
-    local_model_loaded = False
-    for model_config in local_models:
-        if "model_id" in model_config:
-            components = load_local_model(model_config["model_id"])
-            if components["model"] and components["tokenizer"]:
-                local_model_loaded = True
-                break
-    
-    if not local_model_loaded:
-        available_providers.remove("huggingface_llama_local")
-        if not available_providers:
-            logger.warning("No providers available. Please configure API keys or ensure access to local models.")
-            return {}
-
     # Initialize model configurations from config file
     model_configs = {
         "CHAT_AGENT_MODEL": config["models"]["CHAT_AGENT_MODEL"],
@@ -138,6 +141,7 @@ def initialize_model_configuration():
     }
 
     configured_models = {}
+    blacklisted_models = set()
     
     for model_key, model_value in model_configs.items():
         if model_value not in model_data:
@@ -149,33 +153,38 @@ def initialize_model_configuration():
         
         # Handle local models
         if provider == "huggingface_llama_local":
-            if "huggingface_llama_local" not in available_providers:
-                fallback = get_fallback_model(model_value, available_providers)
+            if "model_id" not in model_info:
+                logger.warning(f"No model_id specified for local model {model_value}")
+                continue
+                
+            components = load_local_model(model_info["model_id"])
+            if components["model"] and components["tokenizer"]:
+                configured_models[model_key] = model_info.copy()
+                configured_models[model_key].update(components)
+                continue
+            else:
+                blacklisted_models.add(model_value)
+                fallback = get_fallback_model(model_value, available_providers, blacklisted_models)
                 if fallback:
-                    logger.warning(f"Local model not available for {model_key}, falling back to {fallback}")
+                    logger.warning(f"Local model failed to load for {model_key}, falling back to {fallback}")
                     model_value = fallback
                     model_info = model_data[fallback]
                     provider = model_info["provider"]
                 else:
-                    continue
-            else:
-                components = load_local_model(model_info["model_id"])
-                if components["model"] and components["tokenizer"]:
-                    configured_models[model_key] = model_info.copy()
-                    configured_models[model_key].update(components)
+                    logger.warning(f"No fallback available for failed local model {model_value}")
                     continue
         
         # Handle API-based models
         if provider not in available_providers:
-            fallback = get_fallback_model(model_value, available_providers)
+            fallback = get_fallback_model(model_value, available_providers, blacklisted_models)
             if fallback:
                 logger.warning(f"Provider {provider} not available for {model_key}, falling back to {fallback}")
                 model_value = fallback
                 model_info = model_data[fallback]
             else:
                 continue
-        
-        configured_models[model_key] = model_info.copy()
+            
+        configured_models[model_key] = model_value  # Store just the model name, not the entire info dict
     
     if not configured_models:
         logger.warning("No models could be configured. Please check your config.toml")

@@ -6,15 +6,25 @@ At its core, Cymbiont implements a graph-based RAG (Retrieval-Augmented Generati
 
 ## Setup Instructions
 
-### Setting up Hugging Face Access
+### Setting up Hugging Face Access (Optional)
+
+This step is only required if you want to use local models. Currently, we support:
+- Llama 3.3 70B Instruct: Requires ~40GB VRAM with 4-bit quantization
+
+We use the Hugging Face Transformers library to run these models locally. Models must be downloaded to the `local_models` directory, as this is where the software looks for them by default.
 
 1. Create a Hugging Face account at https://huggingface.co/
-2. Create an access token at https://huggingface.co/settings/tokens
-3. Run `huggingface-cli login` in your terminal
-4. Paste your token when prompted
-5. Select "no" when asked about git credentials (unless you need git access to private repos)
+2. Request access to Llama-3.3-70B-Instruct at https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct
+3. Log in to the Hugging Face CLI:
+   ```bash
+   huggingface-cli login
+   ```
+4. Download the model to the correct directory:
+   ```bash
+   env HF_HUB_DOWNLOAD_TIMEOUT=300 huggingface-cli download meta-llama/Llama-3.3-70B-Instruct --local-dir local_models/Llama-3.3-70B-Instruct
+   ```
 
-Note: You'll also need to request access to Llama-3.3-70B-Instruct at https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct before you can download it.
+Note: If you don't have sufficient hardware to run local models, you can skip this section and use API-based models instead.
 
 ### Interactive Setup (Linux/Mac Only)
 
