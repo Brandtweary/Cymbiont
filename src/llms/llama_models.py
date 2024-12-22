@@ -103,7 +103,7 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
             if usage > 0.9:
                 logger.warning(f"GPU Memory - Used: {used_gb:.2f}GB / Total: {total_gb:.2f}GB ({usage*100:.2f}% used)")
             else:
-                logger.info(f"GPU Memory - Used: {used_gb:.2f}GB / Total: {total_gb:.2f}GB ({usage*100:.2f}% used)")
+                logger.info(f"GPU Memory - {used_gb:.2f}/{total_gb:.2f}GB ({usage*100:.2f}% used)")
         except Exception as e:
             logger.warning(f"No NVIDIA GPU found or could not get GPU memory info: {str(e)}")
 

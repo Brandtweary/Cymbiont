@@ -5,6 +5,9 @@ class UninitializedModel(str):
     """Special string type for uninitialized models that can be used as a string but warns when accessed."""
     def __new__(cls):
         return super().__new__(cls, "Model registry not initialized")
+        
+    def __bool__(self):
+        return False
 
 class ModelRegistry:
     """Central registry for model configuration and access."""
@@ -33,8 +36,8 @@ class ModelRegistry:
         if not key.isupper():
             key = f"{key.upper()}_MODEL"
             
-        # Convert to property name
-        prop_name = key.lower().replace('_model', '_model')
+        # Convert UPPER_CASE_MODEL to snake_case_model
+        prop_name = f"_{key.lower()}"
         if not hasattr(self, prop_name):
             raise KeyError(f"Unknown model key: {key}")
             
@@ -42,18 +45,26 @@ class ModelRegistry:
     
     @property
     def chat_agent_model(self) -> str:
+        if not self._initialized:
+            return UninitializedModel()
         return self._chat_agent_model
         
     @property
     def tag_extraction_model(self) -> str:
+        if not self._initialized:
+            return UninitializedModel()
         return self._tag_extraction_model
         
     @property
     def progressive_summary_model(self) -> str:
+        if not self._initialized:
+            return UninitializedModel()
         return self._progressive_summary_model
         
     @property
     def revision_model(self) -> str:
+        if not self._initialized:
+            return UninitializedModel()
         return self._revision_model
     
     def initialize(self, model_config: Dict[str, str]) -> None:
