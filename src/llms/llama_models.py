@@ -2,17 +2,87 @@ import json
 import re
 import time
 import torch
-from typing import Dict, Any, List, Optional, Set, Literal
-from .llm_types import APICall, ChatMessage, ToolName
-from .model_configuration import model_data
-from shared_resources import logger
-from agents.tool_schemas import TOOL_SCHEMAS
-from transformers import AutoTokenizer
 import asyncio
-from functools import partial
+from typing import Dict, Any, List, Optional, Set, Literal
+from .llm_types import APICall, ChatMessage, ToolName, LLM
+from shared_resources import logger, config, PROJECT_ROOT
+from agents.tool_schemas import TOOL_SCHEMAS
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+import pynvml
+from pathlib import Path
+
+# Store loaded models and tokenizers
+llama_models: Dict[str, Dict[str, Any]] = {
+    LLM.LLAMA_70B.value: {
+        "model": None,
+        "tokenizer": None,
+        "model_id": "meta-llama/Llama-3.3-70B-Instruct"
+    }
+}
+
+def load_local_model(model_name: str) -> Dict[str, Any]:
+    """Load a local transformers model and tokenizer from the local_models directory.
+    Returns None for both model and tokenizer if loading fails."""
+    model_info = llama_models.get(model_name)
+    if not model_info:
+        logger.error(f"Unknown model: {model_name}")
+        return {"model": None, "tokenizer": None}
+        
+    model_id = model_info["model_id"]
+    local_models_dir = PROJECT_ROOT / "local_models"
+    model_dir = local_models_dir / model_id.split("/")[-1]
+    
+    if not model_dir.exists():
+        logger.warning(f"Model directory not found: {model_dir}")
+        return {"model": None, "tokenizer": None}
+    
+    # Get quantization configuration
+    quant_setting = config.get("local_model_quantization", {}).get(model_id, "none")
+    quant_config = None
+    
+    if quant_setting == "4-bit":
+        quant_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.bfloat16
+        )
+    elif quant_setting == "8-bit":
+        quant_config = BitsAndBytesConfig(
+            load_in_8bit=True
+        )
+    
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            str(model_dir),
+            device_map="auto",
+            quantization_config=quant_config,
+            local_files_only=True
+        )
+        tokenizer = AutoTokenizer.from_pretrained(str(model_dir), local_files_only=True)
+        
+        # Get GPU memory usage
+        try:
+            pynvml.nvmlInit()
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)  # Assuming first GPU
+            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            used_gb = int(info.used) / (1024**3)  # Convert to GB
+            total_gb = int(info.total) / (1024**3)
+            logger.info(f"GPU Memory: {used_gb:.2f}GB / {total_gb:.2f}GB")
+        except Exception as e:
+            logger.warning(f"Could not get GPU memory info: {str(e)}")
+            
+        logger.info(f"Successfully loaded local model from {model_dir}")
+        
+        # Store the loaded model and tokenizer
+        llama_models[model_name]["model"] = model
+        llama_models[model_name]["tokenizer"] = tokenizer
+        
+        return {"model": model, "tokenizer": tokenizer}
+    except Exception as e:
+        logger.error(f"Failed to load local model {model_id}: {str(e)}")
+        return {"model": None, "tokenizer": None}
 
 def format_llama_input(
-    tokenizer: AutoTokenizer,
+    tokenizer: Any,  # Temporarily use Any while we debug the actual type
     system_message: str,
     messages: List[ChatMessage],
     tools: Optional[Set[ToolName]] = None,
@@ -68,12 +138,23 @@ def format_llama_input(
     device = "cuda" if torch.cuda.is_available() else "cpu"
     try:
         logger.debug("Attempting to use chat template...")
-        formatted_input = tokenizer.apply_chat_template(  # type: ignore
-            chat_messages,
-            add_generation_prompt=True,
-            return_tensors="pt",
-            tools=tool_definitions if tools and tool_choice != "none" else None
-        ).to(device)
+        logger.debug(f"Tokenizer type: {type(tokenizer).__name__}")
+        logger.debug(f"Tokenizer class: {tokenizer.__class__.__name__}")
+        logger.debug(f"Tokenizer module: {tokenizer.__class__.__module__}")
+        
+        raise Exception("DEBUG STOP - checking tokenizer type")
+        
+        # Simple version for debugging
+        input_text = tokenizer.apply_chat_template(chat_messages, tokenize=False)
+        formatted_input = tokenizer(input_text, return_tensors="pt").input_ids.to(device)
+        
+        # Tool-enabled version for later
+        # formatted_input = tokenizer.apply_chat_template(
+        #     chat_messages,
+        #     add_generation_prompt=True,
+        #     return_tensors="pt",
+        #     tools=tool_definitions if tools and tool_choice != "none" else None
+        # ).to(device)
     except Exception as e:
         logger.error(f"Failed to format input with tokenizer {type(tokenizer).__name__}: {str(e)}")
         logger.error(f"Available tokenizer methods: {dir(tokenizer)}")
@@ -83,8 +164,8 @@ def format_llama_input(
 
 async def generate_completion(api_call: APICall):
     """Generate a completion using a local Llama model."""
-    # Get model and tokenizer from model configuration
-    model_info = model_data.get(api_call.model)
+    # Get model and tokenizer
+    model_info = llama_models.get(api_call.model)
     if not model_info or not model_info.get("model") or not model_info.get("tokenizer"):
         raise RuntimeError(f"{api_call.model} missing model or tokenizer.")
         

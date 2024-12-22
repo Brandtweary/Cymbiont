@@ -6,7 +6,7 @@ from .llm_types import LLM
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
 from pathlib import Path
-import pynvml
+from .llama_models import load_local_model
 
 # Initialize API clients
 openai_client = AsyncOpenAI() if os.getenv("OPENAI_API_KEY") else None
@@ -81,65 +81,9 @@ model_data = {
         "provider": "huggingface_llama_local",
         "max_output_tokens": 2048,
         "requests_per_minute": 10000,  # arbitrary high value for local models
-        "total_tokens_per_minute": 5000000,  # arbitrary high value for local models
-        "model_id": "meta-llama/Llama-3.3-70B-Instruct",
-        "model": None,  # Will be populated during initialization
-        "tokenizer": None  # Will be populated during initialization
+        "total_tokens_per_minute": 5000000  # arbitrary high value for local models
     }
 }
-
-def load_local_model(model_id: str) -> Dict[str, Any]:
-    """Load a local transformers model and tokenizer from the local_models directory.
-    Returns None for both model and tokenizer if loading fails."""
-    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-    import torch
-    
-    local_models_dir = PROJECT_ROOT / "local_models"
-    model_dir = local_models_dir / model_id.split("/")[-1]
-    
-    if not model_dir.exists():
-        logger.warning(f"Model directory not found: {model_dir}")
-        return {"model": None, "tokenizer": None}
-    
-    # Get quantization configuration
-    quant_setting = config.get("local_model_quantization", {}).get(model_id, "none")
-    quant_config = None
-    
-    if quant_setting == "4-bit":
-        quant_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.bfloat16
-        )
-    elif quant_setting == "8-bit":
-        quant_config = BitsAndBytesConfig(
-            load_in_8bit=True
-        )
-    
-    try:
-        model = AutoModelForCausalLM.from_pretrained(
-            str(model_dir),
-            device_map="auto",
-            quantization_config=quant_config,
-            local_files_only=True
-        )
-        tokenizer = AutoTokenizer.from_pretrained(str(model_dir), local_files_only=True)
-        
-        # Get GPU memory usage
-        try:
-            pynvml.nvmlInit()
-            handle = pynvml.nvmlDeviceGetHandleByIndex(0)  # Assuming first GPU
-            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            used_gb = int(info.used) / (1024**3)  # Convert to GB
-            total_gb = int(info.total) / (1024**3)
-            logger.info(f"GPU Memory: {used_gb:.2f}GB / {total_gb:.2f}GB")
-        except Exception as e:
-            logger.warning(f"Could not get GPU memory info: {str(e)}")
-            
-        logger.info(f"Successfully loaded local model from {model_dir}")
-        return {"model": model, "tokenizer": tokenizer}
-    except Exception as e:
-        logger.error(f"Failed to load local model {model_id}: {str(e)}")
-        return {"model": None, "tokenizer": None}
 
 def initialize_model_configuration():
     """Initialize model configuration based on config file and available API keys."""
@@ -166,16 +110,9 @@ def initialize_model_configuration():
         
         # Handle local models
         if provider == "huggingface_llama_local":
-            if "model_id" not in model_info:
-                logger.warning(f"No model_id specified for local model {model_value}")
-                continue
-                
-            components = load_local_model(model_info["model_id"])
+            components = load_local_model(model_value)
             if components["model"] and components["tokenizer"]:
-                configured_models[model_key] = model_value  # Store just the model name
-                # Store the model and tokenizer in model_data
-                model_data[model_value]["model"] = components["model"]
-                model_data[model_value]["tokenizer"] = components["tokenizer"]
+                configured_models[model_key] = model_value  # Store the model name
                 continue
             else:
                 blacklisted_models.add(model_value)
