@@ -143,13 +143,22 @@ def initialize_model_configuration():
     
     return configured_models
 
-# Initialize the models
-model_config = initialize_model_configuration()
+# Initialize model constants as empty strings
+CHAT_AGENT_MODEL = ""
+TAG_EXTRACTION_MODEL = ""
+PROGRESSIVE_SUMMARY_MODEL = ""
+REVISION_MODEL = ""
+
+def set_model_constants(model_config: Dict[str, str]) -> None:
+    """Set the model constants from the configuration."""
+    global CHAT_AGENT_MODEL, TAG_EXTRACTION_MODEL, PROGRESSIVE_SUMMARY_MODEL, REVISION_MODEL
+    
+    CHAT_AGENT_MODEL = model_config["CHAT_AGENT_MODEL"]
+    TAG_EXTRACTION_MODEL = model_config["TAG_EXTRACTION_MODEL"]
+    PROGRESSIVE_SUMMARY_MODEL = model_config["PROGRESSIVE_SUMMARY_MODEL"]
+    REVISION_MODEL = model_config["REVISION_MODEL"]
 
 # Export the configured models and clients
-CHAT_AGENT_MODEL = model_config["CHAT_AGENT_MODEL"]
-TAG_EXTRACTION_MODEL = model_config["TAG_EXTRACTION_MODEL"]
-PROGRESSIVE_SUMMARY_MODEL = model_config["PROGRESSIVE_SUMMARY_MODEL"]
-REVISION_MODEL = model_config["REVISION_MODEL"]
-
-__all__ = ['model_config', 'openai_client', 'anthropic_client']
+__all__ = ['model_data', 'openai_client', 'anthropic_client', 'initialize_model_configuration',
+           'CHAT_AGENT_MODEL', 'TAG_EXTRACTION_MODEL', 'PROGRESSIVE_SUMMARY_MODEL', 'REVISION_MODEL',
+           'set_model_constants']
