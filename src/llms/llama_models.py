@@ -24,12 +24,14 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
     """Load a local transformers model and tokenizer from the local_models directory.
     Returns None for both model and tokenizer if loading fails."""
     model_info = llama_models.get(model_name)
+    logger.debug(f"Loading model {model_name}, info: {model_info}")
     if not model_info:
         logger.error(f"Unknown model: {model_name}")
         return {"model": None, "tokenizer": None}
         
     local_models_dir = PROJECT_ROOT / "local_models"
     model_dir = local_models_dir / model_info["local_dir"]
+    logger.debug(f"Looking for model in {model_dir}")
     
     if not model_dir.exists():
         logger.warning(f"Model directory not found: {model_dir}")
@@ -38,12 +40,14 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
     # Get quantization configuration
     try:
         quant_section = config.get("local_model_quantization")
+        logger.debug(f"Quantization config section: {quant_section}")
         if not quant_section:
             logger.error("No 'local_model_quantization' section found in config")
             return {"model": None, "tokenizer": None}
         
         # Use model_name for config lookup, not model_id!
         quant_setting = quant_section.get(model_name.lower())
+        logger.debug(f"Quantization setting for {model_name}: {quant_setting}")
         if not quant_setting:
             logger.error(f"No quantization setting found for model '{model_name}'")
             return {"model": None, "tokenizer": None}

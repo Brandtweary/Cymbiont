@@ -103,21 +103,30 @@ def initialize_model_configuration() -> Optional[Dict[str, str]]:
     configured_models = {}
     blacklisted_models = set()
     
+    logger.debug(f"Model configs from config.toml: {model_configs}")
+    
     for model_key, model_value in model_configs.items():
+        logger.debug(f"Configuring {model_key} = {model_value}")
+        
         if model_value not in model_data:
             logger.warning(f"Invalid model {model_value} specified in config")
             continue
             
         model_info = model_data[model_value]
         provider = model_info["provider"]
+        logger.debug(f"Provider for {model_value}: {provider}")
         
         # Handle local models
         if provider == "huggingface_llama_local":
+            logger.debug(f"Loading local model {model_value}")
             components = load_local_model(model_value)
+            logger.debug(f"Load result: model={bool(components['model'])}, tokenizer={bool(components['tokenizer'])}")
             if components["model"] and components["tokenizer"]:
                 configured_models[model_key] = model_value  # Store the model name
+                logger.debug(f"Added {model_value} to configured_models[{model_key}]")
                 continue
             else:
+                logger.warning(f"Local model {model_value} failed to load for {model_key}")
                 blacklisted_models.add(model_value)
                 fallback = get_fallback_model(model_value, available_providers, blacklisted_models)
                 if fallback:
