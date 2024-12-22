@@ -52,13 +52,25 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
         )
     
     try:
+        model_path = model_dir
+        if not model_path.exists():
+            raise RuntimeError(f"Model not found at {model_path}")
+            
+        logger.info(f"Loading model from {model_path}")
+        
+        # Load tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(str(model_path), local_files_only=True)
+        
+        # Load model with 4-bit quantization
         model = AutoModelForCausalLM.from_pretrained(
-            str(model_dir),
+            str(model_path),
             device_map="auto",
             quantization_config=quant_config,
             local_files_only=True
         )
-        tokenizer = AutoTokenizer.from_pretrained(str(model_dir), local_files_only=True)
+        
+        logger.info(f"Model device map: {model.hf_device_map}")
+        logger.info(f"First layer device: {next(model.parameters()).device}")
         
         # Get GPU memory usage
         try:
@@ -79,7 +91,7 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
         
         return {"model": model, "tokenizer": tokenizer}
     except Exception as e:
-        logger.error(f"Failed to load local model {model_id}: {str(e)}")
+        logger.error(f"Failed to load local model {model_id}: {str(e)}", exc_info=True)
         return {"model": None, "tokenizer": None}
 
 def format_llama_input(
@@ -191,14 +203,17 @@ async def generate_completion(api_call: APICall):
             
         logger.debug("Running model inference...")
         
-        # Set 60 second timeout
+        # Set 30 second timeout
         signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(60)
+        signal.alarm(30)
         
         try:
             with torch.inference_mode():
                 # Check that input tensor is on same device as model
                 model_device = next(model.parameters()).device
+                logger.info(f"Model device map: {model.hf_device_map}")
+                logger.info(f"Model first layer device: {model_device}")
+                logger.info(f"Input tensor device: {formatted_input.device}")
                 assert formatted_input.device == model_device, f"Input tensor on {formatted_input.device} but model on {model_device}"
                 
                 outputs = model.generate(

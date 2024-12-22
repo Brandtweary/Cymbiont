@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 import pynvml
 import signal
+import asyncio
 
 # Set up logging
 logging.basicConfig(
@@ -29,7 +30,7 @@ def log_gpu_memory():
 def timeout_handler(signum, frame):
     raise TimeoutError("Operation timed out after 60 seconds")
 
-def main():
+async def main():
     try:
         # Initialize
         model_name = "meta-llama/Llama-3.3-70B-Instruct"
@@ -70,8 +71,6 @@ def main():
         # Prepare input
         messages = [{"role": "user", "content": "Please suggest what I should cook for dinner tonight."}]
         input_text = tokenizer.apply_chat_template(messages, tokenize=False)
-        logger.info(f"input_text type: {type(input_text)}")
-        logger.info(f"input_text: {input_text}")
         
         logger.info("\n=== Tensor Device Tracking ===")
         input_ids = tokenizer(input_text, return_tensors="pt").input_ids
@@ -101,18 +100,14 @@ def main():
         signal.alarm(0)
         
         logger.info("\n=== Inference Complete ===")
+        logger.info("\nGenerated text:")
+        logger.info(tokenizer.decode(output[0][len(input_ids[0]):]))
+        
         log_gpu_memory()
         
-        # Decode only the new tokens
-        result = tokenizer.decode(output[0][input_ids.shape[1]:], skip_special_tokens=True)
-        logger.info(f"Result: {result}")
-        
     except Exception as e:
-        logger.error(f"Error: {str(e)}", exc_info=True)
-    finally:
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            log_gpu_memory()
+        logger.error(f"Error: {str(e)}")
+        raise
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -229,7 +229,7 @@ async def execute_call(call: APICall) -> None:
         
         call.future.set_result(result)
     except Exception as e:
-        if call.expiration_counter < 2:  # Allow up to 3 total attempts (0-2)
+        if call.expiration_counter < 0:  # Allow up to 3 total attempts (0-2) DEBUGGING: temporarily set to 0, remember to set back to 2 later
             error_msg = f"API call failed (attempt {call.expiration_counter + 1}), retrying: {str(e)}"
             logger.warning(error_msg)
             if call.process_log:
