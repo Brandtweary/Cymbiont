@@ -8,3 +8,4 @@ prompt_toolkit
 nltk
 transformers
 accelerate>=0.26.0
+pynvml

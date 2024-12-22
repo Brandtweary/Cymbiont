@@ -6,6 +6,7 @@ from .llm_types import LLM
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
 from pathlib import Path
+import pynvml
 
 # Initialize API clients
 openai_client = AsyncOpenAI() if os.getenv("OPENAI_API_KEY") else None
@@ -122,6 +123,18 @@ def load_local_model(model_id: str) -> Dict[str, Any]:
             local_files_only=True
         )
         tokenizer = AutoTokenizer.from_pretrained(str(model_dir), local_files_only=True)
+        
+        # Get GPU memory usage
+        try:
+            pynvml.nvmlInit()
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)  # Assuming first GPU
+            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            used_gb = info.used / (1024**3)  # Convert to GB
+            total_gb = info.total / (1024**3)
+            logger.info(f"GPU Memory Usage after loading model: {used_gb:.2f}GB / {total_gb:.2f}GB")
+        except Exception as e:
+            logger.warning(f"Could not get GPU memory info: {str(e)}")
+            
         logger.info(f"Successfully loaded local model from {model_dir}")
         return {"model": model, "tokenizer": tokenizer}
     except Exception as e:
