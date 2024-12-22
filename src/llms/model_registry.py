@@ -1,6 +1,7 @@
 """Manages model registration and access."""
 from typing import Dict, Optional, Any, List
 import logging
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -32,19 +33,27 @@ class ModelRegistry:
     
     def __getitem__(self, key: str) -> str:
         """Get a model by its key (e.g. 'chat_agent' or 'CHAT_AGENT_MODEL')."""
-        if not self._initialized:
-            raise RuntimeError("Model registry not initialized")
-            
-        # Convert snake_case to UPPER_CASE if needed
-        if not key.isupper():
-            key = f"{key.upper()}_MODEL"
-            
-        # Convert UPPER_CASE_MODEL to snake_case_model
-        prop_name = f"_{key.lower()}"
-        if not hasattr(self, prop_name):
-            raise KeyError(f"Unknown model key: {key}")
-            
-        return getattr(self, prop_name)
+        try:
+            if not self._initialized:
+                raise RuntimeError("Model registry not initialized")
+                
+            # Convert snake_case to UPPER_CASE if needed
+            if not key.isupper():
+                key = f"{key.upper()}_MODEL"
+                
+            # Convert UPPER_CASE_MODEL to snake_case_model
+            prop_name = f"_{key.lower()}"
+            if not hasattr(self, prop_name):
+                raise KeyError(f"Unknown model key: {key}")
+                
+            value = getattr(self, prop_name)
+            if value is None:
+                raise ValueError(f"Model {key} is not properly initialized")
+                
+            return value
+        except Exception as e:
+            logger.error(f"Error accessing model {key}: {str(e)}\n{traceback.format_exc()}")
+            raise
     
     @property
     def chat_agent_model(self) -> str:
