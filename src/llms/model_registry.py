@@ -1,5 +1,8 @@
 """Manages model registration and access."""
 from typing import Dict, Optional, Any, List
+import logging
+
+logger = logging.getLogger(__name__)
 
 class UninitializedModel(str):
     """Special string type for uninitialized models that can be used as a string but warns when accessed."""
@@ -73,11 +76,16 @@ class ModelRegistry:
         if missing:
             raise ValueError(f"Missing required models in config: {missing}")
             
+        logger.debug(f"Initializing model registry with config: {model_config}")
+        logger.debug(f"Before initialization: _initialized={self._initialized}, _chat_agent_model={self._chat_agent_model}")
+        
         self._chat_agent_model = model_config["CHAT_AGENT_MODEL"]
         self._tag_extraction_model = model_config["TAG_EXTRACTION_MODEL"]
         self._progressive_summary_model = model_config["PROGRESSIVE_SUMMARY_MODEL"]
         self._revision_model = model_config["REVISION_MODEL"]
         self._initialized = True
+        
+        logger.debug(f"After initialization: _initialized={self._initialized}, _chat_agent_model={self._chat_agent_model}")
 
 # Global instance
 registry = ModelRegistry()
