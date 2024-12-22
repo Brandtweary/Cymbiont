@@ -8,6 +8,8 @@ from .model_configuration import model_data
 from shared_resources import logger
 from agents.tool_schemas import TOOL_SCHEMAS
 from transformers import AutoTokenizer
+import asyncio
+from functools import partial
 
 def format_llama_input(
     tokenizer: AutoTokenizer,
@@ -64,13 +66,19 @@ def format_llama_input(
     
     # Apply chat template and convert to tensor
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    formatted_input = tokenizer.apply_chat_template(  # type: ignore
-        chat_messages,
-        add_generation_prompt=True,
-        return_tensors="pt",
-        tools=tool_definitions if tools and tool_choice != "none" else None
-    ).to(device)
-    
+    try:
+        logger.debug("Attempting to use chat template...")
+        formatted_input = tokenizer.apply_chat_template(  # type: ignore
+            chat_messages,
+            add_generation_prompt=True,
+            return_tensors="pt",
+            tools=tool_definitions if tools and tool_choice != "none" else None
+        ).to(device)
+    except Exception as e:
+        logger.error(f"Failed to format input with tokenizer {type(tokenizer).__name__}: {str(e)}")
+        logger.error(f"Available tokenizer methods: {dir(tokenizer)}")
+        raise
+        
     return formatted_input
 
 async def generate_completion(api_call: APICall):
@@ -83,25 +91,61 @@ async def generate_completion(api_call: APICall):
     model = model_info["model"]
     tokenizer = model_info["tokenizer"]
     
-    # Format input
-    formatted_input = format_llama_input(
-        tokenizer=tokenizer,
-        system_message=api_call.system_message,
-        messages=api_call.messages,
-        tools=api_call.tools,
-        tool_choice=api_call.tool_choice
-    )
-    prompt_tokens = len(formatted_input[0])
-    
-    # Generate completion
-    outputs = model.generate(
-        formatted_input,
-        max_new_tokens=api_call.max_completion_tokens,
-        temperature=api_call.temperature,
-        pad_token_id=tokenizer.pad_token_id,
-        eos_token_id=tokenizer.eos_token_id,
-    )
-    
+    try:
+        # Clear CUDA cache before generation
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            logger.debug(f"GPU Memory before generation: {torch.cuda.memory_allocated()/1e9:.2f}GB")
+        
+        # Format input
+        formatted_input = format_llama_input(
+            tokenizer=tokenizer,
+            system_message=api_call.system_message,
+            messages=api_call.messages,
+            tools=api_call.tools,
+            tool_choice=api_call.tool_choice
+        )
+        prompt_tokens = len(formatted_input[0])
+        
+            
+        # Create attention mask
+        attention_mask = torch.ones_like(formatted_input)
+        
+        logger.debug("Running model inference...")
+        loop = asyncio.get_event_loop()
+        generate_fn = partial(
+            model.generate,
+            formatted_input,
+            max_new_tokens=api_call.max_completion_tokens,
+            temperature=api_call.temperature,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+        )
+        
+        outputs = await asyncio.wait_for(
+            loop.run_in_executor(None, generate_fn),
+            timeout=30.0  # 30 second timeout
+        )
+        
+        if torch.cuda.is_available():
+            logger.debug(f"GPU Memory after generation: {torch.cuda.memory_allocated()/1e9:.2f}GB")
+            torch.cuda.empty_cache()
+            
+    except asyncio.TimeoutError:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        raise RuntimeError("Model inference timed out after 30 seconds")
+    except RuntimeError as e:
+        if "out of memory" in str(e):
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            raise RuntimeError(f"GPU out of memory during inference: {str(e)}")
+        raise  # Re-raise other runtime errors
+    except Exception as e:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        raise RuntimeError(f"Error during model inference: {str(e)}")
+        
     # Count completion tokens
     completion_tokens = len(outputs[0]) - prompt_tokens
     
