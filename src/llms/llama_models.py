@@ -99,9 +99,13 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
             info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             used_gb = int(info.used) / (1024**3)
             total_gb = int(info.total) / (1024**3)
-            logger.debug(f"GPU Memory - Used: {used_gb:.2f}GB / Total: {total_gb:.2f}GB")
+            usage = used_gb / total_gb
+            if usage > 0.9:
+                logger.warning(f"GPU Memory - Used: {used_gb:.2f}GB / Total: {total_gb:.2f}GB ({usage*100:.2f}% used)")
+            else:
+                logger.info(f"GPU Memory - Used: {used_gb:.2f}GB / Total: {total_gb:.2f}GB ({usage*100:.2f}% used)")
         except Exception as e:
-            logger.warning(f"Could not get GPU memory info: {str(e)}")
+            logger.warning(f"No NVIDIA GPU found or could not get GPU memory info: {str(e)}")
 
         # Store the loaded model and tokenizer
         llama_models[model_name]["model"] = model

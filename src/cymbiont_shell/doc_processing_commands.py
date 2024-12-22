@@ -9,7 +9,7 @@ from prompt_toolkit.styles import Style
 from llms.api_queue import enqueue_api_call
 from llms.llm_types import ChatMessage
 from cymbiont_logger.logger_types import LogLevel
-from llms.model_configuration import REVISION_MODEL
+from llms.model_state import REVISION_MODEL
 from llms.prompt_helpers import get_system_message, create_system_prompt_parts_data
 from utils import get_paths
 

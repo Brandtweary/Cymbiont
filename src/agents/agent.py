@@ -2,7 +2,7 @@ import asyncio
 from typing import Any, Dict, List, Optional, Set, Tuple, Literal, Union, Callable
 from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED, get_shell
 from cymbiont_logger.logger_types import LogLevel
-from llms.model_configuration import CHAT_AGENT_MODEL
+from llms.model_state import CHAT_AGENT_MODEL
 from llms.prompt_helpers import get_system_message, DEFAULT_SYSTEM_PROMPT_PARTS
 from llms.llm_types import SystemPromptPartInfo, SystemPromptPartsData, ChatMessage, ToolName, ToolChoice, ContextPart, TemporaryContextValue
 from utils import log_performance, convert_messages_to_string

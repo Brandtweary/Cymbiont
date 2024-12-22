@@ -191,10 +191,6 @@ def setup_logging(
     root_logger.setLevel(logging.DEBUG if debug else logging.INFO)
     root_logger.addHandler(complete_handler)
     
-    # Set accelerate logger to debug when debug mode is enabled
-    if debug:
-        logging.getLogger("accelerate").setLevel(logging.DEBUG)  # temporary debugging
-    
     # Set up cymbiont-specific logging
     cymbiont_file_handler = logging.handlers.RotatingFileHandler(
         cymbiont_log_file,

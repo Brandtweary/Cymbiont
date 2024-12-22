@@ -1,6 +1,6 @@
 import asyncio
 from shared_resources import logger, AGENT_NAME, DEBUG_ENABLED
-from llms.model_configuration import CHAT_AGENT_MODEL
+from llms.model_state import CHAT_AGENT_MODEL
 from llms.llm_types import ToolName
 from .chat_history import ChatHistory
 from .agent import Agent
