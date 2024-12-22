@@ -159,8 +159,7 @@ def initialize_model_configuration():
                 
             components = load_local_model(model_info["model_id"])
             if components["model"] and components["tokenizer"]:
-                configured_models[model_key] = model_info.copy()
-                configured_models[model_key].update(components)
+                configured_models[model_key] = model_value  # Store just the model name
                 continue
             else:
                 blacklisted_models.add(model_value)
@@ -184,7 +183,7 @@ def initialize_model_configuration():
             else:
                 continue
             
-        configured_models[model_key] = model_value  # Store just the model name, not the entire info dict
+        configured_models[model_key] = model_value  # Store just the model name
     
     if not configured_models:
         logger.warning("No models could be configured. Please check your config.toml")
