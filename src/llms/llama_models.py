@@ -146,6 +146,8 @@ def format_llama_input(
         
         # Simple version for debugging
         input_text = tokenizer.apply_chat_template(chat_messages, tokenize=False)
+        logger.debug(f"input_text type: {type(input_text)}")
+        logger.debug(f"input_text: {input_text}")
         formatted_input = tokenizer(input_text, return_tensors="pt").input_ids.to(device)
         
         # Tool-enabled version for later
@@ -157,7 +159,6 @@ def format_llama_input(
         # ).to(device)
     except Exception as e:
         logger.error(f"Failed to format input with tokenizer {type(tokenizer).__name__}: {str(e)}")
-        logger.error(f"Available tokenizer methods: {dir(tokenizer)}")
         raise
         
     return formatted_input
