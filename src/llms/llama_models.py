@@ -124,7 +124,7 @@ async def generate_completion(api_call: APICall):
         
         outputs = await asyncio.wait_for(
             loop.run_in_executor(None, generate_fn),
-            timeout=30.0  # 30 second timeout
+            timeout=60.0  # 60 second timeout
         )
         
         if torch.cuda.is_available():

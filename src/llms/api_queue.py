@@ -278,7 +278,7 @@ def enqueue_api_call(
     temperature: float = 0.7,
     process_log: Optional[ProcessLog] = None,
     tools: Optional[Set[ToolName]] = None,
-    max_completion_tokens: int = 4000,
+    max_completion_tokens: int = 2048,
     system_prompt_parts: Optional[SystemPromptPartsData] = None,
     tool_choice: Literal["auto", "required", "none"] = "auto"
 ) -> asyncio.Future[Dict[str, Any]]:
