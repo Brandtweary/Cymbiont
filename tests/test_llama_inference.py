@@ -4,6 +4,7 @@ import logging
 import sys
 from pathlib import Path
 import pynvml
+import signal
 
 # Set up logging
 logging.basicConfig(
@@ -24,6 +25,9 @@ def log_gpu_memory():
         logger.info(f"GPU Memory: {used_gb:.2f}GB / {total_gb:.2f}GB")
     except Exception as e:
         logger.error(f"Failed to get GPU memory info: {e}")
+
+def timeout_handler(signum, frame):
+    raise TimeoutError("Operation timed out after 60 seconds")
 
 def main():
     try:
@@ -70,6 +74,11 @@ def main():
         
         # Generate
         logger.info("Starting inference...")
+        
+        # Set 60 second timeout for inference
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(60)
+        
         with torch.inference_mode():
             output = model.generate(
                 input_ids,
@@ -78,6 +87,10 @@ def main():
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id
             )
+            
+        # Clear timeout
+        signal.alarm(0)
+        
         logger.info("Inference complete")
         log_gpu_memory()
         
