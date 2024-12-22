@@ -84,12 +84,12 @@ Create a `.env` file in the project root and set any of the following variables:
 OPENAI_API_KEY="your_api_key_here"
 ANTHROPIC_API_KEY="your_api_key_here"
 ```
-The bootstrap script will walk you through this step if this file is not present.
+The bootstrap script will walk you through this step if this file is not present. This step is optional if you are using local models.
 
-### Local Models via Hugging Face (Optional)
+## Local Models via Hugging Face (Optional)
 
 Currently, Cymbiont supports the following local models:
-- [Llama 3.3 70B Instruct](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct)*: Requires ~40GB VRAM with 4-bit quantization
+- [Llama 3.3 70B Instruct*](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct): Requires ~40GB VRAM with 4-bit quantization
 
 *Gated model - please request access on Hugging Face
 
