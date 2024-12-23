@@ -134,10 +134,6 @@ class BashExecutor:
             # Clean environment
             "unset BASH_ENV ENV",  # Disable startup files
             "unset CDPATH",  # Disable CDPATH
-
-            # Disable bracketed paste mode and prevent re-enabling
-           # r"printf '\x1b[?2004l'",  # Disable bracketed paste mode
-          #  "bind 'set enable-bracketed-paste off'",  # Prevent re-enabling
             
             # Security hardening
             "set +o history",  # Disable command history
@@ -323,10 +319,9 @@ class BashExecutor:
             size = struct.pack('HHHH', rows, cols, 0, 0)
             fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, size)
 
-    def _filter_ansi_escapes(self, text: str) -> str:
+    def _filter_problematic_ansi_escapes(self, text: str) -> str:
         """Filter out ANSI escape sequences that could affect the parent terminal state.
         Preserves color and basic formatting sequences."""
-        return text # temporarily disabled
         # Remove only specific escape sequences that affect terminal state
         text = re.sub(r'\x1B\[\?1049[hl]', '', text)  # Alternate screen buffer
         text = re.sub(r'\x1B\[\?1000[hl]', '', text)  # Mouse tracking
@@ -344,6 +339,10 @@ class BashExecutor:
         text = re.sub(r'\x1B\[\d*[JK]', '', text)    # Clear screen/line parts
         
         return text
+
+    def _strip_all_ansi_escapes(self, text: str) -> str:
+        """Remove all ANSI escape sequences from text, including colors and formatting."""
+        return re.sub(r'\x1B\[[^m]*m|\x1B\[[^\x40-\x7E]*[\x40-\x7E]', '', text)
             
     def _read_until_prompt(self, timeout: float = 0.1) -> str:
         """Read output until we see a shell prompt."""
@@ -371,7 +370,7 @@ class BashExecutor:
                 # Keep original data for output
                 partial += data
                 # Filter only for prompt detection
-                filtered_data = self._filter_ansi_escapes(data)
+                filtered_data = self._filter_problematic_ansi_escapes(data)
                 filtered_partial += filtered_data
                 
                 # Check if we have a complete prompt using filtered data
@@ -416,7 +415,8 @@ class BashExecutor:
             prompt_pattern = r'[^>]*@[^>]*:[^>]*[$#] '
             for line in lines:
                 # Skip prompt lines and command echo
-                if re.search(prompt_pattern, line) or line.strip() == command.strip():
+                stripped_line = self._strip_all_ansi_escapes(line)
+                if re.search(prompt_pattern, stripped_line) or stripped_line.strip() == command.strip():
                     continue
                 if line.strip():
                     clean_lines.append(line)
