@@ -238,7 +238,6 @@ async def generate_completion(api_call: APICall):
             skip_special_tokens=True,
             clean_up_tokenization_spaces=True
         )
-        logger.debug(f"Raw model response: {response[:200]}")
         
         completion_tokens = len(outputs[0]) - prompt_tokens
         

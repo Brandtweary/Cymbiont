@@ -256,9 +256,11 @@ else:
                 shutil.rmtree(project_test_dir)
 
     async def test_kill_switches():
-        """Test kill switch behavior for blocked commands."""
-        project_root = Path(__file__).parent.parent
-        
+        """Test kill switch functionality."""
+        # Temporarily disable tokenizer parallelism
+        original_parallelism = os.environ.get("TOKENIZERS_PARALLELISM", "true")
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+                
         # Create new executor for kill switch test
         executor = BashExecutor(ShellAccessTier.TIER_1_PROJECT_READ)
         
@@ -306,6 +308,8 @@ else:
             
         finally:
             executor.close()
+            # Restore original tokenizer parallelism setting
+            os.environ["TOKENIZERS_PARALLELISM"] = original_parallelism
 
     async def run_bash_executor_tests() -> tuple[int, int]:
         """Execute all bash executor tests sequentially.
