@@ -340,6 +340,15 @@ class BashExecutor:
         
         return text
 
+    def _strip_line_editing(self, text: str) -> str:
+        """Remove ANSI sequences related to line editing, preserving colors and other formatting."""
+        # Remove specific line editing sequences
+        text = re.sub(r'\r', '', text)  # Carriage return
+        text = re.sub(r'\x1b\[\d*[ABCD]', '', text)  # Cursor movement
+        text = re.sub(r'\x1b\[\d*[KG]', '', text)  # Line clearing and cursor horizontal absolute
+        text = re.sub(r'\x1b\[\?2004[hl]', '', text)  # Bracketed paste mode
+        return text
+            
     def _strip_all_ansi_escapes(self, text: str) -> str:
         """Remove all ANSI escape sequences and control characters from text."""
         # First strip ANSI escape sequences
@@ -406,19 +415,14 @@ class BashExecutor:
             # Read until we get the full output including next prompt
             output = self._read_until_prompt(timeout)
             
-            # Split into lines, preserving the \r characters
+            # Split into lines
             lines = output.split('\n')
             clean_lines = []
             prompt_pattern = r'[^>]*@[^>]*:[^>]*[$#] '
             
             for i, line in enumerate(lines):
-                # Split on \r and take the last non-empty part
-                parts = [p for p in line.split('\r') if p.strip()]
-                if not parts:
-                    continue
-                    
-                # Strip ANSI from the last part
-                clean_line = self._strip_all_ansi_escapes(parts[-1])
+                # Clean up line editing sequences but preserve colors
+                clean_line = self._strip_line_editing(line)
                 
                 # Skip prompt lines, command echo, and single quotes/double quotes
                 if (re.search(prompt_pattern, clean_line) or 
