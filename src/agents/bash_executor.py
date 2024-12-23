@@ -398,6 +398,11 @@ class BashExecutor:
             # Read until we get the full output including next prompt
             output = self._read_until_prompt(timeout)
             
+            # Debug logging
+            logger.debug("Raw PTY output lines:")
+            for i, line in enumerate(output.split('\n')):
+                logger.debug(f"Line {i}: {repr(line)}")
+                
             # Split into lines and clean up
             lines = output.split('\n')
             
@@ -407,9 +412,6 @@ class BashExecutor:
             for line in lines:
                 # Skip prompt lines and command echo
                 if re.search(prompt_pattern, line) or line.strip() == command.strip():
-                    continue
-                # Special handling for echo with quotes - if the line matches the echo argument, skip it
-                if command.startswith('echo "') and line.strip() == command.split('"')[1]:
                     continue
                 if line.strip():
                     clean_lines.append(line)
