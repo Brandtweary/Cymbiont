@@ -135,6 +135,10 @@ class BashExecutor:
             "unset BASH_ENV ENV",  # Disable startup files
             "unset CDPATH",  # Disable CDPATH
 
+            # Disable bracketed paste mode and prevent re-enabling
+            r"printf '\x1b[?2004l'",  # Disable bracketed paste mode
+            "bind 'set enable-bracketed-paste off'",  # Prevent re-enabling
+            
             # Security hardening
             "set +o history",  # Disable command history
             "set +o xtrace",  # Prevent tracing
