@@ -435,32 +435,32 @@ class BashExecutor:
                 logger.debug(f"Line {i}: {repr(line)}")
                 
             for i, line in enumerate(lines):
-                # Check if this line might be the command echo
-                stripped = line.strip()
+                # First clean any control sequences that would affect comparison
+                clean_line = line
+                if '\r' in line or '\x1b[' in line:
+                    clean_line = self._strip_line_editing(line)
+                    logger.debug(f"Line {i} after initial cleaning: {repr(clean_line)}")
+                
+                # Now check if this is the command echo
+                stripped = clean_line.strip()
                 logger.debug(f"Line {i} stripped for command comparison: {repr(stripped)}")
                 logger.debug(f"Command to match against: {repr(command.strip())}")
                 
                 if stripped == command.strip():
                     logger.debug(f"Skipping line {i} as command echo")
                     continue
-                    
-                # Only try to clean line editing if we see suspect sequences
-                if '\r' in line or '\x1b[' in line:
-                    logger.debug(f"Line {i} has control sequences, cleaning...")
-                    line = self._strip_line_editing(line)
-                    logger.debug(f"Line {i} after cleaning: {repr(line)}")
                 
                 # Skip empty lines and prompts
-                if not line.strip():
+                if not stripped:
                     logger.debug(f"Skipping line {i} as empty")
                     continue
                     
-                if re.search(prompt_pattern, line):
+                if re.search(prompt_pattern, clean_line):
                     logger.debug(f"Skipping line {i} as prompt")
                     continue
                 
-                logger.debug(f"Adding line {i}: {repr(line)}")
-                clean_lines.append(line)
+                logger.debug(f"Adding line {i}: {repr(clean_line)}")
+                clean_lines.append(clean_line)
             
             result = '\n'.join(clean_lines)
             
