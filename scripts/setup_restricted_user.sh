@@ -163,6 +163,8 @@ setfacl -m u:$PROJECT_WRITE_EXECUTE:rwx "$PROJECT_ROOT" || error_exit "Failed to
 setfacl -d -m u:$PROJECT_WRITE_EXECUTE:rwx "$PROJECT_ROOT" || error_exit "Failed to set default write-execute ACL on $PROJECT_ROOT"
 setfacl -m u:$SYSTEM_READ:r-x "$PROJECT_ROOT" || error_exit "Failed to set system read ACL on $PROJECT_ROOT"
 setfacl -d -m u:$SYSTEM_READ:r-x "$PROJECT_ROOT" || error_exit "Failed to set default system read ACL on $PROJECT_ROOT"
+setfacl -m u:$PROJECT_RESTRICTED_WRITE:r-x "$PROJECT_ROOT" || error_exit "Failed to set restricted write ACL on $PROJECT_ROOT"
+setfacl -d -m u:$PROJECT_RESTRICTED_WRITE:r-x "$PROJECT_ROOT" || error_exit "Failed to set default restricted write ACL on $PROJECT_ROOT"
 
 # Process Cymbiont files
 echo "Processing Cymbiont files..."
@@ -202,6 +204,8 @@ while IFS= read -r -d '' dir; do
         setfacl -d -m u:$PROJECT_WRITE_EXECUTE:rwx "$dir"
         setfacl -m u:$SYSTEM_READ:r-x "$dir"
         setfacl -d -m u:$SYSTEM_READ:r-x "$dir"
+        setfacl -m u:$PROJECT_RESTRICTED_WRITE:r-x "$dir"
+        setfacl -d -m u:$PROJECT_RESTRICTED_WRITE:r-x "$dir"
         
         # Special handling for agent workspace
         if [[ "$(realpath "$dir")" == "$(realpath "$AGENT_WORKSPACE_DIR")"* ]]; then
