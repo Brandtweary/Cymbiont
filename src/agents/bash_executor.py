@@ -404,12 +404,19 @@ class BashExecutor:
             # Remove lines containing prompts and the command echo
             clean_lines = []
             prompt_pattern = r'[^>]*@[^>]*:[^>]*[$#] '
+            command_without_newline = command.rstrip('\n')
             for line in lines:
-                # Skip prompt lines and command echo
-                if re.search(prompt_pattern, line) or line.strip() == command.strip():
+                line = line.strip()
+                # Skip empty lines, prompts, and command echo
+                if not line or re.search(prompt_pattern, line):
                     continue
-                if line.strip():
-                    clean_lines.append(line)
+                # Try different variants of the command for echo detection
+                if (line == command_without_newline or  # Exact match
+                    line == command_without_newline.strip('"\'') or  # Without quotes
+                    line == f"echo {command_without_newline.split(None, 1)[1] if ' ' in command_without_newline else ''}"  # Echo output
+                   ):
+                    continue
+                clean_lines.append(line)
             
             result = '\n'.join(clean_lines)
             
