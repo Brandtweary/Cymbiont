@@ -412,8 +412,18 @@ class BashExecutor:
             for i, line in enumerate(output.split('\n')):
                 logger.debug(f"Line {i}: {repr(line)}")
                 
-            # Split into lines and clean up
-            lines = output.split('\n')
+            # First split on \r to handle line edits, keeping only the final version
+            edited_lines = []
+            for line in output.split('\n'):
+                # Split into line edits
+                edits = line.split('\r')
+                # Keep only the last edit (the final state of the line)
+                if edits:
+                    edited_lines.append(edits[-1])
+                    
+            logger.debug("After handling line edits:")
+            for i, line in enumerate(edited_lines):
+                logger.debug(f"Line {i}: {repr(line)}")
             
             # Remove lines containing prompts and the command echo
             clean_lines = []
@@ -421,7 +431,7 @@ class BashExecutor:
             
             logger.debug(f"Original command for comparison: {repr(command.strip())}")
             
-            for i, line in enumerate(lines):
+            for i, line in enumerate(edited_lines):
                 # Skip prompt lines and command echo
                 stripped_line = self._strip_all_ansi_escapes(line)
                 logger.debug(f"Line {i} after stripping ANSI and control chars: {repr(stripped_line)}")
