@@ -441,12 +441,13 @@ class BashExecutor:
                     clean_line = self._strip_line_editing(line)
                     logger.debug(f"Line {i} after initial cleaning: {repr(clean_line)}")
                 
-                # Now check if this is the command echo
+                # Now check if this is the command echo by checking if it starts with the command
+                # This handles cases where line editing might have added trailing characters
                 stripped = clean_line.strip()
                 logger.debug(f"Line {i} stripped for command comparison: {repr(stripped)}")
                 logger.debug(f"Command to match against: {repr(command.strip())}")
                 
-                if stripped == command.strip():
+                if stripped.startswith(command.strip()):
                     logger.debug(f"Skipping line {i} as command echo")
                     continue
                 
