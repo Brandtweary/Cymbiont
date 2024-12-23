@@ -429,8 +429,10 @@ class BashExecutor:
                 clean_line = self._strip_all_ansi_escapes(parts[-1])
                 logger.debug(f"Line {i} after processing: {repr(clean_line)}")
                 
-                # Skip prompt lines and command echo
-                if re.search(prompt_pattern, clean_line) or clean_line.strip() == command.strip():
+                # Skip prompt lines, command echo, and single quotes/double quotes
+                if (re.search(prompt_pattern, clean_line) or 
+                    clean_line.strip() == command.strip() or 
+                    clean_line.strip() in ['"', "'", '""', "''"]):
                     logger.debug(f"Skipping line {i}: {repr(clean_line)}")
                     continue
                 
