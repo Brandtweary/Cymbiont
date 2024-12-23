@@ -1,20 +1,18 @@
+from datetime import datetime
 import logging
 import logging.handlers
 from pathlib import Path
-from typing import Optional, Tuple, Any, Union
-from datetime import datetime
+from typing import Optional, Tuple, TYPE_CHECKING
+from prompt_toolkit.patch_stdout import patch_stdout
+
+if TYPE_CHECKING:
+    from prompt_toolkit.application import Application
+
 from .logger_types import LogLevel
 import asyncio
 from prompt_toolkit import PromptSession
-from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.formatted_text import FormattedText
-from prompt_toolkit.application import get_app
 from prompt_toolkit.formatted_text.base import StyleAndTextTuples
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from cymbiont_shell.cymbiont_shell import CymbiontShell
-
-import os
 
 # Register all custom log levels
 for level in LogLevel:
@@ -119,33 +117,28 @@ class ColoredFormatter(logging.Formatter):
         record.msg = f"{color}{prefix}{record.msg}{self.RESET}"
         return super().format(record)
 
-class PromptRefreshingHandler(logging.StreamHandler):
-    """A handler that refreshes the prompt after logging"""
+class PatchedStreamHandler(logging.StreamHandler):
+    """A handler that uses prompt_toolkit's patch_stdout to preserve the prompt"""
     def __init__(self, stream=None):
         super().__init__(stream)
-        self.shell: Optional['CymbiontShell'] = None
-        self.in_test_mode = False  # Added flag for test mode
+        self.prompt_app: Optional['Application'] = None
         
-    def set_shell(self, shell: 'CymbiontShell') -> None:
-        """Set the shell instance"""
-        self.shell = shell
+    def set_prompt_app(self, app: 'Application') -> None:
+        """Set the prompt toolkit application"""
+        self.prompt_app = app
 
     def emit(self, record):
         try:
             msg = self.format(record)
-            
-            # Queue the message for shell to handle, but only if:
-            # 1. Not in test mode
-            # 2. Shell is available
-            # 3. Log queue exists
-            if not self.in_test_mode and self.shell and self.shell.log_queue:
-                asyncio.create_task(self.shell.log_queue.put(msg))
+            # Only use patch_stdout if we have an active prompt
+            if self.prompt_app and self.prompt_app.is_running:
+                with patch_stdout(raw=True):
+                    print(msg)
             else:
-                # Fallback if shell not available or in test mode
+                # Fallback to normal stream output
                 self.stream.write(msg)
                 self.stream.write(self.terminator)
                 self.flush()
-            
         except Exception:
             self.handleError(record)
 
@@ -157,11 +150,11 @@ def setup_logging(
     response: bool = False,
     tool: bool = False,
     log_prefix: Optional[str] = None
-) -> Tuple[logging.Logger, ConsoleFilter, PromptRefreshingHandler]:
+) -> Tuple[logging.Logger, ConsoleFilter, PatchedStreamHandler]:
     """Configure logging with separate handlers for cymbiont and all logs
     
     Returns:
-        A tuple of (logger, console_filter, prompt_handler)
+        A tuple of (logger, console_filter, console_handler)
     """
     # Create logs directory
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -208,7 +201,8 @@ def setup_logging(
         tool=tool
     )
     
-    console_handler = PromptRefreshingHandler()
+    # Use new PatchedStreamHandler instead of PromptRefreshingHandler
+    console_handler = PatchedStreamHandler()
     console_handler.setFormatter(console_formatter)
     console_handler.addFilter(console_filter)
     

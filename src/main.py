@@ -9,14 +9,16 @@ def setup_python_path() -> None:
     src_path = project_root / 'src'
     tests_path = project_root / 'tests'
     
-    # Add src and tests to Python path
-    sys.path.extend([str(project_root), str(src_path), str(tests_path)])
+    # Add to front of sys.path in reverse order so project_root ends up first
+    sys.path.insert(0, str(tests_path))
+    sys.path.insert(0, str(src_path))
+    sys.path.insert(0, str(project_root))
 
 # Call setup before project imports
 setup_python_path()
 
 # Project imports
-from shared_resources import logger, DATA_DIR, set_shell, DEBUG_ENABLED, console_handler
+from shared_resources import logger, DATA_DIR, set_shell, DEBUG_ENABLED
 from cymbiont_logger.token_logger import token_logger
 from cymbiont_shell.cymbiont_shell import CymbiontShell
 from utils import setup_directories, delete_logs
@@ -45,10 +47,6 @@ async def async_main() -> None:
     try:
         # Check if we have a one-shot command
         if len(sys.argv) > 1 and sys.argv[1] == '--test':
-            # Set test mode for logging
-            if console_handler:
-                console_handler.in_test_mode = True
-                
             # Run the test command
             if len(sys.argv) > 2:
                 test_name = sys.argv[2]
@@ -67,7 +65,7 @@ async def async_main() -> None:
         await shell.run()
         
     except KeyboardInterrupt:
-        logger.debug("Keyboard interrupt received")
+        logger.error("Keyboard interrupt received")
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         if DEBUG_ENABLED:
@@ -77,7 +75,7 @@ async def async_main() -> None:
         await stop_api_queue()
         token_logger.print_total_tokens()
         delete_logs(DATA_DIR)
-        logger.debug("Cymbiont shutdown complete")
+        logger.info("Cymbiont shutdown complete")
 
 def main() -> None:
     """Entry point that runs the async main function"""

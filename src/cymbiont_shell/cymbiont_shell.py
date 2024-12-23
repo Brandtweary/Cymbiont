@@ -1,10 +1,8 @@
 import math
 import asyncio
-import sys
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import FormattedText
-from prompt_toolkit.document import Document
 from typing import Tuple, Optional
 from agents.tool_helpers import register_tools
 from shared_resources import USER_NAME, AGENT_NAME, logger, DEBUG_ENABLED, AGENT_ACTIVATION_MODE, console_handler, SHELL_ACCESS_TIER
@@ -22,7 +20,6 @@ from agents.agent_types import ActivationMode
 from prompt_toolkit.patch_stdout import patch_stdout
 from agents.bash_executor import BashExecutor
 from utils import get_shell_access_tier_documentation
-import sys
 
 
 class CymbiontShell:
@@ -30,18 +27,7 @@ class CymbiontShell:
         self.chat_history = ChatHistory()
         self.test_successes: int = 0
         self.test_failures: int = 0
-        
-        # Initialize bash executor
-        try:
-            self.bash_executor = BashExecutor()
-        except Exception as e:
-            logger.error(f"Failed to initialize bash executor: {e}")
-            self.bash_executor = None
-            
-        self.log_queue = asyncio.Queue()  # Queue for log messages
-        self._needs_new_prompt = False  # Flag for new prompt
-        self._exit_type: Optional[str] = None  # Track how we're exiting
-        self._current_input: Optional[tuple[str, int]] = None  # Store current input text and cursor position
+        self.bash_executor: Optional[BashExecutor] = None
         
         # Initialize agents
         register_tools()
@@ -54,10 +40,6 @@ class CymbiontShell:
         
         # Connect chat history to logger
         setup_chat_history_handler(logger, self.chat_history)
-        
-        # Connect shell to console handler
-        if console_handler:
-            console_handler.shell = self
         
         # Store command metadata
         self.commands = create_commands(
@@ -100,16 +82,22 @@ class CymbiontShell:
             message=self.get_prompt,
             completer=self.completer
         )
-        #self.session.shell = cast('CymbiontShell', self)  # Connect shell to session
         
         # Connect shell to console handler
         if console_handler:
-            console_handler.set_shell(self)
+            console_handler.set_prompt_app(self.session.app)
+        
+        # Initialize bash executor
+        try:
+            self.bash_executor = BashExecutor()
+        except Exception as e:
+            logger.error(f"Failed to initialize bash executor: {e}")
+            self.bash_executor = None
         
         # Log shell startup
         logger.log(LogLevel.SHELL, "Cymbiont shell started")
         logger.info("Welcome to Cymbiont. Type help or ? to list commands.")
-    
+
     def get_prompt(self) -> FormattedText:
         """Generate the prompt text"""
         return FormattedText([
@@ -222,104 +210,27 @@ class CymbiontShell:
                 if DEBUG_ENABLED:
                     raise
 
-    def _get_current_input(self) -> tuple[str, int]:
-        """Get current input text and cursor position from the prompt session"""
-        if self.session and self.session.default_buffer:
-            return (self.session.default_buffer.text,
-                   self.session.default_buffer.cursor_position)
-        return ("", 0)
-
-    async def _prompt_async_with_patch(self) -> str:
-        """Wrapper around prompt_async that handles patch_stdout correctly"""
+    async def cmdloop(self) -> None:
+        """Async command loop."""
         with patch_stdout(raw=True):
-            text, cursor_pos = self._current_input if self._current_input is not None else ("", 0)
-            self._current_input = None
-            return await self.session.prompt_async(
-                default=Document(text, cursor_position=cursor_pos)
-            )
-    
-    async def _process_logs(self) -> None:
-        """Process all queued log messages"""
-        # Clear prompt using direct stdout
-        sys.stdout.write("\033[A\033[2K\r")
-        sys.stdout.flush()
-            
-        # Process logs
-        while not self.log_queue.empty():
-            log_msg = self.log_queue.get_nowait()
-            if console_handler and console_handler.stream:
-                console_handler.stream.write(log_msg)
-                console_handler.stream.write(console_handler.terminator)
-                console_handler.stream.flush()
-
-    async def _handle_prompt_cycle(self) -> str:
-        """Handle one cycle of prompt and log processing.
-        Returns the user input text."""
-        # Create prompt task
-        prompt_task = asyncio.create_task(self._prompt_async_with_patch())
-        
-        while True:
-            # Wait a bit and check for logs
-            done, _ = await asyncio.wait([prompt_task], timeout=0.1)
-            
-            if not self.log_queue.empty():
-                # Get current input text before canceling
-                self._current_input = self._get_current_input()
-                
-                # Then cancel the prompt task
-                prompt_task.cancel()
-                try:
-                    await prompt_task
-                except asyncio.CancelledError:
-                    pass
-                    
-                await self._process_logs()
-                
-                # Only break to create new prompt if no more logs
-                if self.log_queue.empty():
-                    return ""
-                # Otherwise continue checking for more logs
-                continue
-                
-            if done:
-                # We got user input
-                return prompt_task.result()
-
-    async def run(self) -> None:
-        """Run the shell"""
-        try:
-            await self.start_chat_agent()
-            # Give initial logs a chance to queue
-            await asyncio.sleep(0.1)
-
             while True:
                 try:
-                    # Get user input, handling any logs that come in
-                    text = await self._handle_prompt_cycle()
-                    
-                    # Process commands if we got input
-                    if text and text.strip():
-                        should_exit = await self.handle_input(text)
+                    command = await self.session.prompt_async()
+                    if command:
+                        should_exit = await self.handle_input(command)
                         if should_exit:
-                            self._exit_type = 'exit'
-                            return
-
+                            break
                 except (EOFError, KeyboardInterrupt):
-                    self._exit_type = 'interrupt'
                     break
-
-        finally:
-            await self.stop_chat_agent()
-            # Re-raise KeyboardInterrupt if that's how we exited
-            if self._exit_type == 'interrupt':
-                raise KeyboardInterrupt()
+                except Exception as e:
+                    logger.error(f"Error in command loop: {e}")
 
     async def handle_input(self, text: str) -> bool:
-        """Handle user input, returns True if shell should exit"""
+        """Handle user input. Returns True if shell should exit."""
         # Parse command and arguments
         parts = text.strip().split(maxsplit=1)
         command = parts[0].lower()
-        args = parts[1] if len(parts) > 1 else ''
+        args = parts[1] if len(parts) > 1 else ""
         
         # Execute command or treat as chat
         if command in self.commands:
@@ -328,12 +239,10 @@ class CymbiontShell:
         else:
             # Record user message and update context
             self.chat_history.add_message("user", text, name=USER_NAME)
-            self.keyword_router.toggle_context(text, self.chat_agent)
             
-            # Activate chat agent
+            # Ensure agent is active and generate response
             self.chat_agent.active = True
             logger.info("Generating response...")
-            
             return False
 
     async def execute_command(self, command: str, args: str, name: str = '') -> Tuple[bool, bool]:
@@ -391,10 +300,6 @@ class CymbiontShell:
                 await self.chat_agent_task
             except asyncio.CancelledError:
                 pass
-      
-        # Clear shell reference from handler so it falls back to direct output
-        if console_handler:
-            console_handler.shell = None
 
     async def do_print_total_tokens(self, args: str) -> None:
         """Print the total token count"""
@@ -430,3 +335,15 @@ class CymbiontShell:
             logger.error(f"Failed to execute command: {e}")
             # Reset executor on failure
             self.bash_executor = None
+
+    async def run(self) -> None:
+        """Run the shell"""
+        try:
+            await self.start_chat_agent()
+            # Give initial logs a chance to queue
+            await asyncio.sleep(0.1)
+
+            await self.cmdloop()
+
+        finally:
+            await self.stop_chat_agent()
