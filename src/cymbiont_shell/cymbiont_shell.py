@@ -30,7 +30,14 @@ class CymbiontShell:
         self.chat_history = ChatHistory()
         self.test_successes: int = 0
         self.test_failures: int = 0
-        self.bash_executor: Optional[BashExecutor] = None
+        
+        # Initialize bash executor
+        try:
+            self.bash_executor = BashExecutor()
+        except Exception as e:
+            logger.error(f"Failed to initialize bash executor: {e}")
+            self.bash_executor = None
+            
         self.log_queue = asyncio.Queue()  # Queue for log messages
         self._needs_new_prompt = False  # Flag for new prompt
         self._exit_type: Optional[str] = None  # Track how we're exiting
@@ -406,14 +413,10 @@ class CymbiontShell:
             logger.error("No command provided. Usage: bash <command>")
             return
             
-        # Initialize bash executor if needed
         if self.bash_executor is None:
-            try:
-                self.bash_executor = BashExecutor()
-            except Exception as e:
-                logger.error(f"Failed to initialize bash executor: {e}")
-                return
-                
+            logger.error("Bash executor not available")
+            return
+            
         try:
             # Execute the command
             output, error = self.bash_executor.execute(args)
