@@ -136,8 +136,8 @@ class BashExecutor:
             "unset CDPATH",  # Disable CDPATH
 
             # Disable bracketed paste mode and prevent re-enabling
-            r"printf '\x1b[?2004l'",  # Disable bracketed paste mode
-            "bind 'set enable-bracketed-paste off'",  # Prevent re-enabling
+           # r"printf '\x1b[?2004l'",  # Disable bracketed paste mode
+          #  "bind 'set enable-bracketed-paste off'",  # Prevent re-enabling
             
             # Security hardening
             "set +o history",  # Disable command history
@@ -326,6 +326,7 @@ class BashExecutor:
     def _filter_ansi_escapes(self, text: str) -> str:
         """Filter out ANSI escape sequences that could affect the parent terminal state.
         Preserves color and basic formatting sequences."""
+        return text # temporarily disabled
         # Remove only specific escape sequences that affect terminal state
         text = re.sub(r'\x1B\[\?1049[hl]', '', text)  # Alternate screen buffer
         text = re.sub(r'\x1B\[\?1000[hl]', '', text)  # Mouse tracking
