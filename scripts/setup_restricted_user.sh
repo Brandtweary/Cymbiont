@@ -42,7 +42,7 @@ process_directory_contents() {
     local dir="$1"
     
     # Set directory permissions recursively (for level 3 and deeper)
-    find "$dir" -mindepth 1 -type d ! -type l -exec chmod 2750 {} \;
+    find "$dir" -type d ! -type l -exec chmod 2750 {} \;
     
     # Set file permissions recursively (for all files under this directory)
     find "$dir" -type f ! -type l -exec chmod 640 {} \;
@@ -51,14 +51,14 @@ process_directory_contents() {
     find "$dir" -exec chgrp "$PROJECT_GROUP" {} \;
     
     # Set ACLs recursively
-    find "$dir" -mindepth 1 -type d ! -type l -exec setfacl -m g:$PROJECT_GROUP:r-x {} \; -exec setfacl -d -m g:$PROJECT_GROUP:r-X {} \;
-    find "$dir" -mindepth 1 -type d ! -type l -exec setfacl -m u:$PROJECT_WRITE_EXECUTE:rwx {} \; -exec setfacl -d -m u:$PROJECT_WRITE_EXECUTE:rwx {} \;
+    find "$dir" -type d ! -type l -exec setfacl -m g:$PROJECT_GROUP:r-x {} \; -exec setfacl -d -m g:$PROJECT_GROUP:r-X {} \;
+    find "$dir" -type d ! -type l -exec setfacl -m u:$PROJECT_WRITE_EXECUTE:rwx {} \; -exec setfacl -d -m u:$PROJECT_WRITE_EXECUTE:rwx {} \;
     find "$dir" -type f ! -type l -exec setfacl -m g:$PROJECT_GROUP:r-- {} \; -exec setfacl -m u:$PROJECT_WRITE_EXECUTE:rw- {} \;
     
     # Special handling for agent workspace
     if [[ "$(realpath "$dir")" == "$(realpath "$AGENT_WORKSPACE_DIR")"* ]]; then
         # Set ACLs for directories
-        find "$dir" -mindepth 1 -type d ! -type l -exec setfacl -m u:$PROJECT_RESTRICTED_WRITE:rwx {} \; -exec setfacl -d -m u:$PROJECT_RESTRICTED_WRITE:rwx {} \;
+        find "$dir" -type d ! -type l -exec setfacl -m u:$PROJECT_RESTRICTED_WRITE:rwx {} \; -exec setfacl -d -m u:$PROJECT_RESTRICTED_WRITE:rwx {} \;
         # Set ACLs for files
         find "$dir" -type f ! -type l -exec setfacl -m u:$PROJECT_RESTRICTED_WRITE:rw- {} \;
         # Set default ACL for files on the agent workspace dir itself
@@ -161,6 +161,8 @@ setfacl -m g:$PROJECT_GROUP:r-x "$PROJECT_ROOT" || error_exit "Failed to set gro
 setfacl -d -m g:$PROJECT_GROUP:r-X "$PROJECT_ROOT" || error_exit "Failed to set default group ACL on $PROJECT_ROOT"
 setfacl -m u:$PROJECT_WRITE_EXECUTE:rwx "$PROJECT_ROOT" || error_exit "Failed to set write-execute ACL on $PROJECT_ROOT"
 setfacl -d -m u:$PROJECT_WRITE_EXECUTE:rwx "$PROJECT_ROOT" || error_exit "Failed to set default write-execute ACL on $PROJECT_ROOT"
+setfacl -m u:$SYSTEM_READ:r-x "$PROJECT_ROOT" || error_exit "Failed to set system read ACL on $PROJECT_ROOT"
+setfacl -d -m u:$SYSTEM_READ:r-x "$PROJECT_ROOT" || error_exit "Failed to set default system read ACL on $PROJECT_ROOT"
 
 # Process Cymbiont files
 echo "Processing Cymbiont files..."
@@ -198,6 +200,8 @@ while IFS= read -r -d '' dir; do
         setfacl -d -m g:$PROJECT_GROUP:r-X "$dir"
         setfacl -m u:$PROJECT_WRITE_EXECUTE:rwx "$dir"
         setfacl -d -m u:$PROJECT_WRITE_EXECUTE:rwx "$dir"
+        setfacl -m u:$SYSTEM_READ:r-x "$dir"
+        setfacl -d -m u:$SYSTEM_READ:r-x "$dir"
         
         # Special handling for agent workspace
         if [[ "$(realpath "$dir")" == "$(realpath "$AGENT_WORKSPACE_DIR")"* ]]; then
