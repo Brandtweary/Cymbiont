@@ -412,45 +412,25 @@ class BashExecutor:
             for i, line in enumerate(output.split('\n')):
                 logger.debug(f"Line {i}: {repr(line)}")
                 
-            # First split on \r to handle line edits, keeping only the final version
-            edited_lines = []
-            for line in output.split('\n'):
-                # Split into line edits
-                edits = line.split('\r')
-                # Keep only the last edit (the final state of the line)
-                if edits:
-                    edited_lines.append(edits[-1])
-                    
-            logger.debug("After handling line edits:")
-            for i, line in enumerate(edited_lines):
-                logger.debug(f"Line {i}: {repr(line)}")
+            # Aggressively strip all ANSI and control sequences from the entire output first
+            clean_output = self._strip_all_ansi_escapes(output)
+            logger.debug(f"After stripping all ANSI and control sequences: {repr(clean_output)}")
             
-            # Remove lines containing prompts and the command echo
+            # Now split into lines and process normally
+            lines = clean_output.split('\n')
             clean_lines = []
             prompt_pattern = r'[^>]*@[^>]*:[^>]*[$#] '
             
             logger.debug(f"Original command for comparison: {repr(command.strip())}")
             
-            for i, line in enumerate(edited_lines):
+            for i, line in enumerate(lines):
                 # Skip prompt lines and command echo
-                stripped_line = self._strip_all_ansi_escapes(line)
-                logger.debug(f"Line {i} after stripping ANSI and control chars: {repr(stripped_line)}")
-                
-                is_prompt = bool(re.search(prompt_pattern, stripped_line))
-                is_command = stripped_line.strip() == command.strip()
-                
-                logger.debug(f"Line {i} analysis:")
-                logger.debug(f"  - Is prompt? {is_prompt}")
-                logger.debug(f"  - Is command? {is_command}")
-                logger.debug(f"  - Stripped line: {repr(stripped_line)}")
-                logger.debug(f"  - Command to match: {repr(command.strip())}")
-                
-                if is_prompt or is_command:
-                    logger.debug(f"Skipping line {i}")
+                if re.search(prompt_pattern, line) or line.strip() == command.strip():
+                    logger.debug(f"Skipping line {i}: {repr(line)}")
                     continue
-                    
+                
                 if line.strip():
-                    logger.debug(f"Adding line {i} to output")
+                    logger.debug(f"Adding line {i}: {repr(line)}")
                     clean_lines.append(line)
             
             result = '\n'.join(clean_lines)
