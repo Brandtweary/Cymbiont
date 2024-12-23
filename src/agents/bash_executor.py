@@ -341,12 +341,22 @@ class BashExecutor:
         return text
 
     def _strip_line_editing(self, text: str) -> str:
-        """Remove ANSI sequences related to line editing, preserving colors and other formatting."""
+        """Remove ANSI sequences related to line editing, preserving colors and other formatting.
+        Also cleans up any dangling quotes that might be left after removing editing sequences."""
+        original = text
+        
         # Remove specific line editing sequences
         text = re.sub(r'\r', '', text)  # Carriage return
         text = re.sub(r'\x1b\[\d*[ABCD]', '', text)  # Cursor movement
         text = re.sub(r'\x1b\[\d*[KG]', '', text)  # Line clearing and cursor horizontal absolute
         text = re.sub(r'\x1b\[\?2004[hl]', '', text)  # Bracketed paste mode
+        
+        # If we removed any line editing sequences, also clean up dangling quotes
+        if text != original:
+            # Remove single quotes or double quotes that are by themselves at the start/end
+            text = re.sub(r'^["\']\s*', '', text)
+            text = re.sub(r'\s*["\']$', '', text)
+            
         return text
             
     def _strip_all_ansi_escapes(self, text: str) -> str:
