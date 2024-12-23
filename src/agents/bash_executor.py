@@ -352,10 +352,9 @@ class BashExecutor:
         text = re.sub(r'\x1b\[\?2004[hl]', '', text)  # Bracketed paste mode
         
         # If we removed any line editing sequences, also clean up dangling quotes
-        if text != original:
-            # Remove single quotes or double quotes that are by themselves at the start/end
-            text = re.sub(r'^["\']\s*', '', text)
-            text = re.sub(r'\s*["\']$', '', text)
+        if text != original and re.search(r'^\s*["\']?\s*$', text):
+            # Only remove quotes if the line consists of just quotes and whitespace
+            text = ''
             
         return text
             
@@ -431,17 +430,20 @@ class BashExecutor:
             prompt_pattern = r'[^>]*@[^>]*:[^>]*[$#] '
             
             for i, line in enumerate(lines):
-                # Clean up line editing sequences but preserve colors
-                clean_line = self._strip_line_editing(line)
+                # Check if this line might be the command echo
+                stripped = line.strip()
+                if stripped == command.strip():
+                    continue
+                    
+                # Only try to clean line editing if we see suspect sequences
+                if '\r' in line or '\x1b[' in line:
+                    line = self._strip_line_editing(line)
                 
-                # Skip prompt lines, command echo, and single quotes/double quotes
-                if (re.search(prompt_pattern, clean_line) or 
-                    clean_line.strip() == command.strip() or 
-                    clean_line.strip() in ['"', "'", '""', "''"]):
+                # Skip empty lines and prompts
+                if not line.strip() or re.search(prompt_pattern, line):
                     continue
                 
-                if clean_line.strip():
-                    clean_lines.append(clean_line)
+                clean_lines.append(line)
             
             result = '\n'.join(clean_lines)
             
