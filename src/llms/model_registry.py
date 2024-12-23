@@ -1,8 +1,7 @@
 """Manages model registration and access."""
 from typing import Dict, List
-import logging
+from shared_resources import logger
 
-logger = logging.getLogger(__name__)
 
 class ModelRegistry:
     """Central registry for model configuration and access."""

@@ -242,6 +242,7 @@ async def generate_completion(api_call: APICall):
             skip_special_tokens=True,
             clean_up_tokenization_spaces=True
         )
+        logger.debug(f"Raw model response: {response[:200]}...")
         
         completion_tokens = len(outputs[0]) - prompt_tokens
         
@@ -263,7 +264,7 @@ async def generate_completion(api_call: APICall):
                 json_match = re.search(r'\{.*\}', response)
                 if json_match:
                     tool_call = json.loads(json_match.group())
-                    result["content"] = None  # No text response when tool calling
+                    result["content"] = ''  # No text response when tool calling
                     result["tool_call_results"] = {
                         "0": {  # Using "0" as ID since we don't have multiple tool calls yet
                             "tool_name": tool_call["name"],

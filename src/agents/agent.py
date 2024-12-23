@@ -164,6 +164,9 @@ class Agent:
         Removes accidental agent name prefixes from the message.
         Handles cases like "HECTOR: message" or "Hector>message".
         """
+        if not message:  # Handle None or empty string
+            return ""
+            
         agent_name = self.agent_name.upper()
         # Check for patterns like "HECTOR: " or "Hector: "
         if message.upper().startswith(f"{agent_name}: "):
@@ -226,9 +229,10 @@ class Agent:
             # Clean any accidental agent prefixes from the content
             content = self.clean_agent_prefix(content)
             
-            # Add to chat history and log the response
-            self.chat_history.add_message("assistant", content, name=self.agent_name)
-            logger.log(LogLevel.CHAT_RESPONSE, f"{self.agent_name}> {content}")
+            # Only add non-empty content to chat history
+            if content.strip():
+                self.chat_history.add_message("assistant", content, name=self.agent_name)
+                logger.log(LogLevel.CHAT_RESPONSE, f"{self.agent_name}> {content}")
 
             # Handle deactivation chat mode for text-only responses
             if self.activation_mode == ActivationMode.CHAT:
