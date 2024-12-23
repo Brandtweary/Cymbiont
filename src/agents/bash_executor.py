@@ -92,7 +92,6 @@ class BashExecutor:
         self._start_reset_timer()
 
     def _apply_base_safeguards(self) -> None:
-        return # temporarily disabled for debugging
         """Apply base security safeguards to bash environment."""
         # Set up minimal shell environment
         shell_env = [
@@ -407,17 +406,10 @@ class BashExecutor:
             # Read until we get the full output including next prompt
             output = self._read_until_prompt(timeout)
             
-            # Debug logging
-            logger.debug("Raw PTY output lines:")
-            for i, line in enumerate(output.split('\n')):
-                logger.debug(f"Line {i}: {repr(line)}")
-                
-            # First split into lines, preserving the \r characters
+            # Split into lines, preserving the \r characters
             lines = output.split('\n')
             clean_lines = []
             prompt_pattern = r'[^>]*@[^>]*:[^>]*[$#] '
-            
-            logger.debug(f"Original command for comparison: {repr(command.strip())}")
             
             for i, line in enumerate(lines):
                 # Split on \r and take the last non-empty part
@@ -425,19 +417,16 @@ class BashExecutor:
                 if not parts:
                     continue
                     
-                # Now strip ANSI from the last part
+                # Strip ANSI from the last part
                 clean_line = self._strip_all_ansi_escapes(parts[-1])
-                logger.debug(f"Line {i} after processing: {repr(clean_line)}")
                 
                 # Skip prompt lines, command echo, and single quotes/double quotes
                 if (re.search(prompt_pattern, clean_line) or 
                     clean_line.strip() == command.strip() or 
                     clean_line.strip() in ['"', "'", '""', "''"]):
-                    logger.debug(f"Skipping line {i}: {repr(clean_line)}")
                     continue
                 
                 if clean_line.strip():
-                    logger.debug(f"Adding line {i}: {repr(clean_line)}")
                     clean_lines.append(clean_line)
             
             result = '\n'.join(clean_lines)
