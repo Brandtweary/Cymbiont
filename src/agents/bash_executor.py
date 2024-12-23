@@ -342,8 +342,12 @@ class BashExecutor:
         return text
 
     def _strip_all_ansi_escapes(self, text: str) -> str:
-        """Remove all ANSI escape sequences from text, including colors and formatting."""
-        return re.sub(r'\x1B\[[^m]*m|\x1B\[[^\x40-\x7E]*[\x40-\x7E]', '', text)
+        """Remove all ANSI escape sequences and control characters from text."""
+        # First strip ANSI escape sequences
+        text = re.sub(r'\x1B\[[^m]*m|\x1B\[[^\x40-\x7E]*[\x40-\x7E]', '', text)
+        # Then strip control characters like \r
+        text = re.sub(r'[\r\n\t\x0b\x0c]', '', text)
+        return text
             
     def _read_until_prompt(self, timeout: float = 0.1) -> str:
         """Read output until we see a shell prompt."""
@@ -420,7 +424,7 @@ class BashExecutor:
             for i, line in enumerate(lines):
                 # Skip prompt lines and command echo
                 stripped_line = self._strip_all_ansi_escapes(line)
-                logger.debug(f"Line {i} after stripping ANSI: {repr(stripped_line)}")
+                logger.debug(f"Line {i} after stripping ANSI and control chars: {repr(stripped_line)}")
                 
                 is_prompt = bool(re.search(prompt_pattern, stripped_line))
                 is_command = stripped_line.strip() == command.strip()
@@ -428,7 +432,7 @@ class BashExecutor:
                 logger.debug(f"Line {i} analysis:")
                 logger.debug(f"  - Is prompt? {is_prompt}")
                 logger.debug(f"  - Is command? {is_command}")
-                logger.debug(f"  - Stripped line: {repr(stripped_line.strip())}")
+                logger.debug(f"  - Stripped line: {repr(stripped_line)}")
                 logger.debug(f"  - Command to match: {repr(command.strip())}")
                 
                 if is_prompt or is_command:
