@@ -47,13 +47,9 @@ class ModelRegistry:
         missing = [model for model in self.REQUIRED_MODELS if model not in model_config]
         if missing:
             raise ValueError(f"Missing required models in config: {missing}")
-            
-        logger.debug(f"Initializing model registry with config: {model_config}")
-        
+                    
         self._models = model_config.copy()  # Make a copy to avoid external mutations
         self._initialized = True
         
-        logger.debug(f"Model registry initialized with models: {self._models}")
-
 # Global instance
 registry = ModelRegistry()

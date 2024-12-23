@@ -24,14 +24,12 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
     """Load a local transformers model and tokenizer from the local_models directory.
     Returns None for both model and tokenizer if loading fails."""
     model_info = llama_models.get(model_name)
-    logger.debug(f"Loading model {model_name}, info: {model_info}")
     if not model_info:
         logger.error(f"Unknown model: {model_name}")
         return {"model": None, "tokenizer": None}
         
     local_models_dir = PROJECT_ROOT / "local_models"
     model_dir = local_models_dir / model_info["local_dir"]
-    logger.debug(f"Looking for model in {model_dir}")
     
     if not model_dir.exists():
         logger.warning(f"Model directory not found: {model_dir}")
@@ -40,14 +38,12 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
     # Get quantization configuration
     try:
         quant_section = config.get("local_model_quantization")
-        logger.debug(f"Quantization config section: {quant_section}")
         if not quant_section:
             logger.error("No 'local_model_quantization' section found in config")
             return {"model": None, "tokenizer": None}
         
         # Use model_name for config lookup, not model_id!
         quant_setting = quant_section.get(model_name.lower())
-        logger.debug(f"Quantization setting for {model_name}: {quant_setting}")
         if not quant_setting:
             logger.error(f"No quantization setting found for model '{model_name}'")
             return {"model": None, "tokenizer": None}
@@ -242,7 +238,7 @@ async def generate_completion(api_call: APICall):
             skip_special_tokens=True,
             clean_up_tokenization_spaces=True
         )
-        logger.debug(f"Raw model response: {response[:200]}...")
+        logger.debug(f"Raw model response: {response[:200]}")
         
         completion_tokens = len(outputs[0]) - prompt_tokens
         
@@ -263,10 +259,22 @@ async def generate_completion(api_call: APICall):
                 # Extract JSON from response
                 json_match = re.search(r'\{.*\}', response)
                 if json_match:
-                    tool_call = json.loads(json_match.group())
-                    result["content"] = ''  # No text response when tool calling
+                    # Extract the tool call and its position
+                    tool_call_text = json_match.group()
+                    start, end = json_match.span()
+                    
+                    # Parse the tool call
+                    tool_call = json.loads(tool_call_text)
+                    
+                    # Remove the tool call JSON from the response and clean up
+                    remaining_text = response[:start] + response[end:]
+                    remaining_text = remaining_text.strip()
+                    
+                    # Set content to remaining text or empty string if just whitespace
+                    result["content"] = remaining_text if remaining_text else ''
+                    
                     result["tool_call_results"] = {
-                        "0": {  # Using "0" as ID since we don't have multiple tool calls yet
+                        tool_call["name"]: {
                             "tool_name": tool_call["name"],
                             "arguments": tool_call["parameters"]
                         }
