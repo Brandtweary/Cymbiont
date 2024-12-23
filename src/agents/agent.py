@@ -25,7 +25,7 @@ class Agent:
         model: Optional[str] = None,
         agent_name: str = AGENT_NAME,
         default_system_prompt_parts: SystemPromptPartsData = DEFAULT_SYSTEM_PROMPT_PARTS,
-        default_tool_choice: ToolChoice = ToolChoice.NONE,
+        default_tool_choice: ToolChoice = ToolChoice.NONE,  # should be auto, set to none temporarily
         default_temperature: float = 0.7,
         default_tools: Optional[Set[ToolName]] = None,
         activation_mode: ActivationMode = ActivationMode.CONTINUOUS

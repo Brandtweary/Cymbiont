@@ -23,6 +23,10 @@ else:
 
     async def test_access_tiers():
         """Test shell access tier restrictions."""
+        # Temporarily disable tokenizer parallelism
+        original_parallelism = os.environ.get("TOKENIZERS_PARALLELISM", "true")
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        
         project_root = Path(__file__).parent.parent
         paths = get_paths(DATA_DIR)
         test_dir = project_root / "tests" / "bash_executor_test_files"
@@ -33,7 +37,7 @@ else:
         
         # Create test file
         test_file.write_text("test content")
-        
+            
         try:
             # Test Tier 1: Project Read-Only
             executor = BashExecutor(ShellAccessTier.TIER_1_PROJECT_READ)
@@ -238,6 +242,9 @@ else:
             executor.close()
             
         finally:
+            # Restore original tokenizer parallelism setting
+            os.environ["TOKENIZERS_PARALLELISM"] = original_parallelism
+            
             # Cleanup
             if os.path.exists(test_file):
                 os.remove(test_file)

@@ -101,7 +101,7 @@ def load_local_model(model_name: str) -> Dict[str, Any]:
             total_gb = int(info.total) / (1024**3)
             usage = used_gb / total_gb
             if usage > 0.9:
-                logger.warning(f"GPU Memory - Used: {used_gb:.2f}GB / Total: {total_gb:.2f}GB ({usage*100:.2f}% used)")
+                logger.warning(f"GPU Memory - {used_gb:.2f}/{total_gb:.2f}GB ({usage*100:.2f}% used)")
             else:
                 logger.info(f"GPU Memory - {used_gb:.2f}/{total_gb:.2f}GB ({usage*100:.2f}% used)")
         except Exception as e:
