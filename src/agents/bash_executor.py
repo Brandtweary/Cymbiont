@@ -412,26 +412,31 @@ class BashExecutor:
             for i, line in enumerate(output.split('\n')):
                 logger.debug(f"Line {i}: {repr(line)}")
                 
-            # Aggressively strip all ANSI and control sequences from the entire output first
-            clean_output = self._strip_all_ansi_escapes(output)
-            logger.debug(f"After stripping all ANSI and control sequences: {repr(clean_output)}")
-            
-            # Now split into lines and process normally
-            lines = clean_output.split('\n')
+            # First split into lines, preserving the \r characters
+            lines = output.split('\n')
             clean_lines = []
             prompt_pattern = r'[^>]*@[^>]*:[^>]*[$#] '
             
             logger.debug(f"Original command for comparison: {repr(command.strip())}")
             
             for i, line in enumerate(lines):
+                # Split on \r and take the last non-empty part
+                parts = [p for p in line.split('\r') if p.strip()]
+                if not parts:
+                    continue
+                    
+                # Now strip ANSI from the last part
+                clean_line = self._strip_all_ansi_escapes(parts[-1])
+                logger.debug(f"Line {i} after processing: {repr(clean_line)}")
+                
                 # Skip prompt lines and command echo
-                if re.search(prompt_pattern, line) or line.strip() == command.strip():
-                    logger.debug(f"Skipping line {i}: {repr(line)}")
+                if re.search(prompt_pattern, clean_line) or clean_line.strip() == command.strip():
+                    logger.debug(f"Skipping line {i}: {repr(clean_line)}")
                     continue
                 
-                if line.strip():
-                    logger.debug(f"Adding line {i}: {repr(line)}")
-                    clean_lines.append(line)
+                if clean_line.strip():
+                    logger.debug(f"Adding line {i}: {repr(clean_line)}")
+                    clean_lines.append(clean_line)
             
             result = '\n'.join(clean_lines)
             
