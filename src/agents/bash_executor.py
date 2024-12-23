@@ -92,6 +92,7 @@ class BashExecutor:
         self._start_reset_timer()
 
     def _apply_base_safeguards(self) -> None:
+        return # temporarily disabled for debugging
         """Apply base security safeguards to bash environment."""
         # Set up minimal shell environment
         shell_env = [
@@ -413,12 +414,29 @@ class BashExecutor:
             # Remove lines containing prompts and the command echo
             clean_lines = []
             prompt_pattern = r'[^>]*@[^>]*:[^>]*[$#] '
-            for line in lines:
+            
+            logger.debug(f"Original command for comparison: {repr(command.strip())}")
+            
+            for i, line in enumerate(lines):
                 # Skip prompt lines and command echo
                 stripped_line = self._strip_all_ansi_escapes(line)
-                if re.search(prompt_pattern, stripped_line) or stripped_line.strip() == command.strip():
+                logger.debug(f"Line {i} after stripping ANSI: {repr(stripped_line)}")
+                
+                is_prompt = bool(re.search(prompt_pattern, stripped_line))
+                is_command = stripped_line.strip() == command.strip()
+                
+                logger.debug(f"Line {i} analysis:")
+                logger.debug(f"  - Is prompt? {is_prompt}")
+                logger.debug(f"  - Is command? {is_command}")
+                logger.debug(f"  - Stripped line: {repr(stripped_line.strip())}")
+                logger.debug(f"  - Command to match: {repr(command.strip())}")
+                
+                if is_prompt or is_command:
+                    logger.debug(f"Skipping line {i}")
                     continue
+                    
                 if line.strip():
+                    logger.debug(f"Adding line {i} to output")
                     clean_lines.append(line)
             
             result = '\n'.join(clean_lines)
