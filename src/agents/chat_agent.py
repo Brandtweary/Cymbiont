@@ -17,9 +17,9 @@ class ChatAgent(Agent):
         default_tools = {
             ToolName.TOGGLE_PROMPT_PART,
             ToolName.TOGGLE_TOOL,
-            ToolName.MESSAGE_SELF,
+        #    ToolName.MESSAGE_SELF,
           #  ToolName.ADD_NOTE,  # don't forget to re-enable this tool, it's just annoying when the agent uses it for no reason
-            ToolName.READ_NOTES,
+         #   ToolName.READ_NOTES,
         }
         if activation_mode == ActivationMode.CONTINUOUS:
             default_tools.add(ToolName.MEDITATE)
