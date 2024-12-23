@@ -429,38 +429,25 @@ class BashExecutor:
             clean_lines = []
             prompt_pattern = r'[^>]*@[^>]*:[^>]*[$#] '
             
-            # Debug logging
-            logger.debug("Raw lines before processing:")
-            for i, line in enumerate(lines):
-                logger.debug(f"Line {i}: {repr(line)}")
-                
             for i, line in enumerate(lines):
                 # First clean any control sequences that would affect comparison
                 clean_line = line
                 if '\r' in line or '\x1b[' in line:
                     clean_line = self._strip_line_editing(line)
-                    logger.debug(f"Line {i} after initial cleaning: {repr(clean_line)}")
                 
-                # Now check if this is the command echo by checking if it starts with the command
+                # Check if this is the command echo by checking if it starts with the command
                 # This handles cases where line editing might have added trailing characters
                 stripped = clean_line.strip()
-                logger.debug(f"Line {i} stripped for command comparison: {repr(stripped)}")
-                logger.debug(f"Command to match against: {repr(command.strip())}")
-                
                 if stripped.startswith(command.strip()):
-                    logger.debug(f"Skipping line {i} as command echo")
                     continue
                 
                 # Skip empty lines and prompts
                 if not stripped:
-                    logger.debug(f"Skipping line {i} as empty")
                     continue
                     
                 if re.search(prompt_pattern, clean_line):
-                    logger.debug(f"Skipping line {i} as prompt")
                     continue
                 
-                logger.debug(f"Adding line {i}: {repr(clean_line)}")
                 clean_lines.append(clean_line)
             
             result = '\n'.join(clean_lines)
