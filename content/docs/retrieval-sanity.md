@@ -74,8 +74,7 @@ objects. Real libzim extraction/index behavior remains in the separate
 The reviewed path spans browser tool arguments and evidence retention, gateway
 forwarding, request validation, SQLite/native lexical retrieval, embedding and
 vector adapters, cross-generation fusion, optional reranking, budget packing and
-snapshot continuations. No additional defects were identified in the browser or
-gateway forwarding code during this review.
+snapshot continuations.
 
 Cross-generation dense similarities merge by value under a common encoder.
 The current lexical merge uses within-collection ranks, weighted by each
