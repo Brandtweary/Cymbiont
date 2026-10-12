@@ -42,6 +42,7 @@ import time
 import uuid
 from pathlib import Path
 
+from ..store import atomic_json
 from . import medium as medium_steps
 from . import parity as parity_files
 from .admit import integrity_dir
@@ -284,7 +285,6 @@ class Mender:
         """Record the original's new mtime; its size and SHA-256 are what they always were."""
         receipt_path = self.path.with_suffix(".receipt.json")
         if receipt_path.exists():
-            from ..store import atomic_json
             receipt = json.loads(receipt_path.read_text())
             stat = self.path.stat()
             atomic_json(receipt_path, {**receipt, "size": stat.st_size, "mtime_ns": stat.st_mtime_ns})

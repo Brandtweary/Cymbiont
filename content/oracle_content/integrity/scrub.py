@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 
 from ..models import digest
+from ..native import KIND
 from . import parity as parity_files
 from .admit import integrity_dir
 from .manifest import Manifest, ManifestDamaged
@@ -202,7 +203,6 @@ def check_generations(state: State, store_root: Path) -> dict:
     manifest carries it. Removing it from a manifest written with it still changes the
     digest, so its absence cannot pass for an earlier generation.
     """
-    from ..native import KIND
     results = {}
     for path in sorted((Path(store_root) / "generations").glob("*/manifest.json")):
         generation = path.parent.name

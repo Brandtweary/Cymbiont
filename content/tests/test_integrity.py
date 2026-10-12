@@ -895,3 +895,28 @@ def test_maintenance_cycles_start_a_period_apart_across_restarts(tmp_path, monke
     with pytest.raises(Stop):
         tool.main(argv)
     assert sleeps[0] == 86400 - 7200 and started == [1_172_800.0]
+
+
+RUN_DRIVER = """
+import json, sys
+sys.path.insert(0, sys.argv[1])
+from tools import integrity as tool
+loaded = {name for name in sys.modules if name.startswith("oracle_content")}
+status = tool.main(["--data", sys.argv[2], "--manifest-dir", sys.argv[3], "run", "--no-network"])
+late = sorted(name for name in sys.modules if name.startswith("oracle_content") and name not in loaded)
+print(json.dumps({"status": status, "late": late}))
+"""
+
+
+def test_a_maintenance_cycle_loads_all_its_code_at_startup(tmp_path):
+    """`run` lives for weeks while deploys rewrite the source tree beneath it, so a module it
+    first imports mid-cycle comes from a newer revision than the code already loaded. Every
+    module a cycle needs, through a mend's write and receipt, is loaded before the first one."""
+    item = install(tmp_path, leaves=10, group=4)
+    (item.root / "generations").mkdir()
+    damage(item.path, 3 * LEAF + 100)
+    result = subprocess.run([sys.executable, "-c", RUN_DRIVER, str(CONTENT), str(item.root), str(item.manifest)],
+                            capture_output=True, text=True, check=True, cwd=tmp_path)
+    outcome = json.loads(result.stdout.strip().splitlines()[-1])
+    assert item.path.read_bytes() == item.data, "the cycle must reach the write path"
+    assert outcome == {"status": 0, "late": []}
