@@ -14,6 +14,7 @@ import aboutDoc from '/about-almanac.md?raw';
 import {ChatPanel} from '/src/pi-web-ui/ChatPanel.ts';import {QuickStartTour} from '/src/quick-start-tour.ts';
 import {VoiceController} from '/src/voice.ts';import {MemoryButton} from '/src/memory-button.ts';import {StopAudioButton} from '/src/stop-audio-button.ts';import {setAppStorage} from '/src/pi-web-ui/storage/app-storage.ts';
 setAppStorage({providerKeys:{get:async()=> 'local'}});
+const handleSignup=e=>{e.preventDefault()}; // the real handler posts to the subscriber endpoint; sign-up is not what this suite covers
 window.micCalls=0;navigator.mediaDevices.getUserMedia=async()=>{window.micCalls++;throw Error('No recording in tour test')};
 let currentView='chat',currentTitle='',isEditingTitle=false;const headerHost=document.getElementById('header');const dbg=()=>{};const openSettings=()=>{};let quickStartTour;
 const setView=view=>{currentView=view;document.getElementById('chat').style.display=view==='chat'?'':'none';document.getElementById('about').style.display=view==='about'?'':'none';renderHeader();};
