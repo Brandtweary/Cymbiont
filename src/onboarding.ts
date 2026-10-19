@@ -5,7 +5,7 @@ const suggestions = [
 	"What should I measure before planning microhydro power?",
 	"How does crop rotation help the soil?",
 	"What is the opening chapter of Moby-Dick about?",
-	"How do volcanoes form?",
+	"Why does firewood need to season before burning?",
 ];
 
 export function renderOnboarding(disabled: boolean, choose: (text: string) => void) {
