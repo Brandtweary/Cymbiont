@@ -4,8 +4,8 @@ const suggestions = [
 	"Why is my compost staying wet?",
 	"What should I measure before planning microhydro power?",
 	"How does crop rotation help the soil?",
-	"What is the opening chapter of Moby-Dick about?",
 	"Why does firewood need to season before burning?",
+	"What is the opening chapter of Moby-Dick about?",
 ];
 
 export function renderOnboarding(disabled: boolean, choose: (text: string) => void) {
