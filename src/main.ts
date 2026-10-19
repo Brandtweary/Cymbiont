@@ -1461,6 +1461,14 @@ async function initApp() {
 	app.append(headerHost, bodyHost, aboutHost);
 	renderGutters(); // initial empty state
 
+	// Paint the correct pane layout and header NOW, synchronously — not after the
+	// async boot (consent, graph, release-profile fetch, agent creation) finishes.
+	// Both hosts are otherwise laid out visible as stacked flex children, so the
+	// first post-JS paint shows the chat column AND the About page side by side
+	// until updateBodyVisibility finally hides one, which is the whole first-load
+	// "everything in the wrong place" flash.
+	updateBodyVisibility();
+	renderHeader();
 	// Voice capture → the SAME agent as typed chat. Batch STT turns mic audio into a
 	// transcript; agent.prompt() drives the LLM (inheriting the Design-2 KG
 	// retrieval/injection + per-turn ingestion for free); the assistant's streamed

@@ -1,5 +1,8 @@
 <!doctype html>
-<html lang="en" class="dark">
+<!-- Inline black canvas: paints black before the render-blocking stylesheet
+     arrives on a slow first load, so the page can never open with a white or
+     gray frame. Matches --background in src/theme.css (pure black by design). -->
+<html lang="en" class="dark" style="background: #000">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
