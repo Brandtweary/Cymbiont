@@ -335,6 +335,7 @@ def localizing_reader(tmp_path, structure, precomputed):
     reader.generation, reader.profile, reader.tokenizer = generation, settings, tokens
     reader.template = reader.template.model_copy(update={"title": doc.title})
     reader.cache, reader.cache_bytes, reader.document_cache = OrderedDict(), 0, OrderedDict()
+    reader.lexical_states, reader.lexical_state_bytes = OrderedDict(), 0
     reader.cache_lock = threading.RLock()
     reader.verify_original = lambda: None
     reader.segment_article = lambda document, index: NativeReader.segment_article(reader, document, index, structure)

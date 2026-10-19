@@ -73,6 +73,17 @@ PASSAGE_CACHE_DOCUMENTS = 96
 PASSAGE_CACHE_BYTES = 256 * 1024 * 1024
 PASSAGE_CACHE_ENTRY_BYTES = 8 * 1024 * 1024
 
+# Localization also builds an in-memory FTS5 table over every passage of every
+# hit article, which is the bulk of a lexical search's CPU. The table and the
+# rows it ranks depend on the article alone, never on the query, so they are
+# kept per reader and reused across searches: a whole-book article pays its
+# decode and insert once per reader lifetime rather than once per query that
+# touches it. The byte estimate counts the rows and blocks the entry holds plus
+# the table's own copy of the text, and the ceiling leaves the service's
+# footprint well inside a host that has tens of GB to spare.
+LEXICAL_STATE_DOCUMENTS = 4096
+LEXICAL_STATE_BYTES = 2 * 1024 * 1024 * 1024
+
 
 class NativeLexicalHits(list):
     """Carry already-localized evidence across the asynchronous retrieval boundary.
@@ -308,6 +319,10 @@ class NativeReader:
         self.document_cache = OrderedDict()
         self.cache_bytes = 0
         self.cache_lock = threading.RLock()
+        # Localization rows and their in-memory FTS5 table, reused across
+        # searches; emptied wholesale when the spans are withdrawn.
+        self.lexical_states = OrderedDict()
+        self.lexical_state_bytes = 0
         # Article spans computed once at ingest time. Absent, partial or bound to
         # another generation, every path below falls back to computing them.
         self.spans = ArticleSpans.open(store.directory(generation), spans_binding(self))
@@ -500,6 +515,50 @@ class NativeReader:
                 return StoredPassages(document, self.generation, index, *stored, self.profile, self.tokenizer)
             return BuiltPassages(self._passages(document_id))
 
+    def lexical_state(self, document_id):
+        """An article's localization rows and its built in-memory FTS5 table.
+
+        Returns what `_localize` ranks with, reused across searches: the rows are
+        `localizable`'s answer and the table is built from them once, then held
+        with the rows as one cache entry. The lexical admission gate serializes
+        every `_localize`, so no two threads use one table concurrently; the
+        connection still crosses threads between searches and is opened
+        accordingly. When the spans are withdrawn the cache is dropped whole and
+        the answer is rebuilt uncached, so a withdrawn artifact is never served.
+        """
+        if self.usable_spans() is None:
+            with self.cache_lock:
+                while self.lexical_states:
+                    _, (_, _, size) = self.lexical_states.popitem(last=False)
+                    self.lexical_state_bytes -= size
+            return self.localizable(document_id), None
+        with self.cache_lock:
+            entry = self.lexical_states.get(document_id)
+            if entry is not None:
+                self.lexical_states.move_to_end(document_id)
+                return entry[0], entry[1]
+        article = self.localizable(document_id)
+        size = 2 * sum(len(text) for _handle, text in article.rows)
+        if isinstance(article, StoredPassages):
+            size += sum(len(block[0]) for block in article.blocks)
+        db = None
+        try:
+            db = sqlite3.connect(":memory:", check_same_thread=False)
+            db.execute("CREATE VIRTUAL TABLE article USING fts5(id UNINDEXED,text,tokenize='porter unicode61')")
+            db.executemany("INSERT INTO article VALUES(?,?)", article.rows)
+        except BaseException:
+            if db is not None:
+                db.close()
+            raise
+        with self.cache_lock:
+            while self.lexical_states and (len(self.lexical_states) >= LEXICAL_STATE_DOCUMENTS
+                                           or self.lexical_state_bytes + size > LEXICAL_STATE_BYTES):
+                _, (_, _, old) = self.lexical_states.popitem(last=False)
+                self.lexical_state_bytes -= old
+            self.lexical_states[document_id] = (article, db, size)
+            self.lexical_state_bytes += size
+        return article, db
+
     def passage(self, handle):
         self.verify_original()
         match = HANDLE.fullmatch(handle)
@@ -629,14 +688,19 @@ class NativeReader:
                 cutoff = sorted((score for _, score in ranked), reverse=True)[limit - 1]
                 if upper_bound < cutoff:
                     break
-            article = self.localizable(document.document_id)
-            db = sqlite3.connect(":memory:")
+            article, cached = self.lexical_state(document.document_id)
+            db = cached
             try:
-                db.execute("CREATE VIRTUAL TABLE article USING fts5(id UNINDEXED,text,tokenize='porter unicode61')")
-                db.executemany("INSERT INTO article VALUES(?,?)", article.rows)
+                if db is None:
+                    # No spans artifact: the built-passage shape is not cached, and
+                    # the query's table is built and thrown away with this call.
+                    db = sqlite3.connect(":memory:")
+                    db.execute("CREATE VIRTUAL TABLE article USING fts5(id UNINDEXED,text,tokenize='porter unicode61')")
+                    db.executemany("INSERT INTO article VALUES(?,?)", article.rows)
                 localized = db.execute("SELECT id FROM article WHERE article MATCH ? ORDER BY bm25(article),id LIMIT ?", (expression, limit)).fetchall() if expression else []
             finally:
-                db.close()
+                if cached is None:
+                    db.close()
             candidates = [row[0] for row in localized] or [passage_id for passage_id, _text in article.rows[:limit]]
             localized_passages.update(article.passages(candidates))
             for rank, pid in enumerate(candidates, 1):

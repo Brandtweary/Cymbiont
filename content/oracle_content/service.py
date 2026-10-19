@@ -16,6 +16,19 @@ from .store import HANDLE, Store, atomic_json
 
 request_id = ContextVar("content_request_id", default=None)
 
+# Per-request search-stage timings, in seconds. The app middleware owns the dict and
+# logs it with the request line; the search path accumulates into it through
+# `record_stage`, so a slow search is diagnosable from the journal after the fact
+# — which queue it waited in and which stage held the time — without reproducing it.
+search_stages = ContextVar("content_search_stages", default=None)
+
+def record_stage(name, seconds):
+    """Accumulate one stage's duration into the request's stage timings."""
+    stages = search_stages.get()
+    if stages is not None:
+        stages[name] = round(stages.get(name, 0.0) + seconds, 3)
+
+
 def fuse(branches, weights, k):
     scores, origins = {}, {}
     for branch, rows in branches.items():
@@ -381,11 +394,15 @@ class Service:
         # it, and a cancelled caller returns immediately while its orphan keeps
         # its place in the queue.
         gate = self.lexical_gate()
+        queued = time.monotonic()
         await gate.acquire()
+        record_stage("lexical_queue_seconds", time.monotonic() - queued)
+        started = time.monotonic()
         work = asyncio.ensure_future(self._lexical(generation, query, document_id))
 
         def completed(finished):
             gate.release()
+            record_stage("lexical_seconds", time.monotonic() - started)
             if not finished.cancelled():
                 # Retrieve it so an abandoned orphan's failure is not reported
                 # as an unhandled exception when it is garbage collected; the
@@ -524,10 +541,17 @@ class Service:
         async def withheld():
             return []
 
+        async def timed_dense():
+            started = time.monotonic()
+            try:
+                return await self.dense.search(generation, dense_query, document_id)
+            finally:
+                record_stage("dense_seconds", time.monotonic() - started)
+
         dense_query, dense_truncated = self.fit_dense_query(query)
         lexical, dense = await asyncio.gather(
             withheld() if lexical_withdrawn else self.lexical(generation, query, document_id),
-            withheld() if dense_withdrawn else self.dense.search(generation, dense_query, document_id),
+            withheld() if dense_withdrawn else timed_dense(),
             return_exceptions=True)
         if isinstance(lexical, BaseException):
             if isinstance(lexical, asyncio.CancelledError):
@@ -568,7 +592,10 @@ class Service:
                     found.append(None)
             return found
         passages, dropped = {}, getattr(lexical, "damaged", 0)
-        for p in await asyncio.to_thread(resolve):
+        resolved = time.monotonic()
+        found = await asyncio.to_thread(resolve)
+        record_stage("resolve_seconds", time.monotonic() - resolved)
+        for p in found:
             if p is None:
                 dropped += 1
                 continue
@@ -853,10 +880,12 @@ class Service:
                     degradation.append("reranker_unavailable")
             if degradation and request.require_qualified:
                 raise ContentError("qualified_profile_unavailable", "Required retrieval stages failed")
+            packed = time.monotonic()
             hits = [self.hit(generation, pool["passages"][row["passage_id"]]) for row in rows]
             snapshot = {**self.base(generation, degradation), "generations": pool.get("generations", [generation]),
                 "result_set": self.result_set(hits), "hits": hits}
             key, offset = self.save_snapshot(snapshot, binding, versions), 0
+            record_stage("pack_seconds", time.monotonic() - packed)
         return self.page(snapshot, key, offset, "hits", self.profile.response_tokens)
 
     async def read(self, request: ReadRequest):

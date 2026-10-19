@@ -52,7 +52,13 @@ from running searches at the same time. `CONTENT_LEXICAL_CONCURRENCY` (1) admits
 stage in arrival order, so the first is answered at one search's cost instead of every search
 returning at the cost of all of them. A cancelled search does not release its admission: cancelling
 the coroutine awaiting a thread does not stop the thread, so the gate is released by the localization
-itself rather than by whoever was waiting on it.
+itself rather than by whoever was waiting on it. What localization builds per article — its passage
+rows and the in-memory FTS5 table it ranks them with — depends on the article alone, so a reader holds
+it (bounded by documents and bytes, emptied when integrity withdraws the spans) and every later search
+that reaches the same article reuses it instead of paying the decode and insert again. Every search's
+request log line carries per-stage timings (`lexical_queue_seconds` waiting for that admission,
+`lexical_seconds` holding it, `dense_seconds`, `resolve_seconds`, `pack_seconds`), so a slow search
+is attributable to its stage from the journal without reproducing it.
 
 `tools/precompute_passages.py` moves that per-article work to a one-time pass over the archive,
 storing each article's extracted blocks, its segmentation spans and its semantic representative in

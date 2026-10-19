@@ -1,9 +1,56 @@
 from types import SimpleNamespace
 
+import threading
+
 import pytest
 
 from oracle_content.native import BuiltPassages, NativeReader
 from oracle_content.adapters import ZimLexical
+
+
+def lexical_state_reader():
+    """A reader whose localization rows come from a counted stub, so reuse is observable."""
+    import types
+    from collections import OrderedDict
+    reader = NativeReader.__new__(NativeReader)
+    reader.profile = types.SimpleNamespace(rrf_k=60.0)
+    reader.template = types.SimpleNamespace(sha256="a" * 64)
+    reader.lexical_states = OrderedDict()
+    reader.lexical_state_bytes = 0
+    reader.cache_lock = threading.RLock()
+    reader.spans = object()
+    reader.usable_spans = lambda: reader.spans
+    reader.calls = []
+    rows = [("p:" + "b" * 64 + ":0001", "pressure regulator valve"),
+            ("p:" + "b" * 64 + ":0002", "regulator")]
+    article = types.SimpleNamespace(rows=rows)
+    reader.localizable = lambda document_id: (reader.calls.append(document_id), article)[1]
+    return reader, article
+
+
+def test_lexical_state_reuses_the_built_table_across_searches():
+    """The FTS5 table an article is localized with is built once per reader and
+    reused, or a repeated search re-pays the decode and insert for every article
+    it touches."""
+    reader, article = lexical_state_reader()
+    first, first_db = reader.lexical_state("z" + "a" * 63 + "_7")
+    assert first is article and len(reader.calls) == 1
+    assert {row[0] for row in first_db.execute("SELECT id FROM article WHERE article MATCH 'regulator'").fetchall()} \
+        == {"p:" + "b" * 64 + ":0001", "p:" + "b" * 64 + ":0002"}
+    second, second_db = reader.lexical_state("z" + "a" * 63 + "_7")
+    assert second is article and second_db is first_db and len(reader.calls) == 1
+    assert reader.lexical_state_bytes > 0
+
+
+def test_lexical_state_is_dropped_when_the_spans_are_withdrawn():
+    """A withdrawn spans artifact must never be served from the cache, so the
+    cache is emptied whole and the answer rebuilt."""
+    reader, article = lexical_state_reader()
+    reader.lexical_state("z" + "a" * 63 + "_7")
+    reader.spans = None
+    rebuilt, db = reader.lexical_state("z" + "a" * 63 + "_7")
+    assert rebuilt is article and db is None and len(reader.calls) == 2
+    assert not reader.lexical_states and reader.lexical_state_bytes == 0
 
 
 @pytest.mark.parametrize("counts", [[40] * 40, [1] * 40, [0, 2, 19, 1, 0, 40] * 7])
@@ -26,7 +73,7 @@ def test_lazy_native_localization_matches_exhaustive_ranking(counts, constant):
     def passages(document_id):
         visited.append(document_id)
         return records[document_id]
-    reader.localizable = lambda document_id: BuiltPassages(passages(document_id))
+    reader.lexical_state = lambda document_id: (BuiltPassages(passages(document_id)), None)
     actual = reader._localize([str(index) for index in range(len(counts))], "pressure", 40, None)
     expected = sorted(exhaustive, key=lambda row: (-row[1], row[0]))[:40]
     assert list(actual) == expected
@@ -86,7 +133,7 @@ def test_native_localization_does_not_spend_passage_depth_on_redirect_duplicates
     def passages(document_id):
         visited.append(document_id)
         return [SimpleNamespace(passage_id=document_id, lexical_text="valve pressure")]
-    reader.localizable = lambda document_id: BuiltPassages(passages(document_id))
+    reader.lexical_state = lambda document_id: (BuiltPassages(passages(document_id)), None)
 
     rows = reader._localize(["Stopcock", "Valve", "Pressure"], "valve", 2, None)
 

@@ -20,7 +20,7 @@ from .adapters import Embeddings, Qdrant, Reranker, ZimLexical
 from .extract import TokenCounter, html_blocks, decode_zim_html
 from .models import ContentError, Profile, SearchRequest, ReadRequest
 from .service import (Service, FAILURE_LOG_MAX_BYTES, LEXICAL_CONCURRENCY, SNAPSHOT_MAX_BYTES,
-                      SNAPSHOT_TTL_SECONDS, request_id)
+                      SNAPSHOT_TTL_SECONDS, request_id, search_stages)
 from .store import HANDLE, Store
 from .phonemize import NativePhonemizer, PhonemizeRequest, PhonemizeBodyLimit
 
@@ -165,10 +165,18 @@ def create_app(service=None, phonemizer=None):
     async def observation(request: Request, call_next):
         request.state.request_id = uuid.uuid4().hex
         request_id.set(request.state.request_id)
+        # The inner app runs in its own task with a copy of this context, so the
+        # stage dict is created here and mutated in place by the search path: a
+        # task-local set from inside would never be visible on the way out.
+        stages = {}
+        search_stages.set(stages)
         started = time.monotonic()
         response = await call_next(request)
-        LOG.info(json.dumps({"request_id": request.state.request_id, "method": request.method,
-            "status": response.status_code, "duration_ms": round((time.monotonic() - started) * 1000)}))
+        line = {"request_id": request.state.request_id, "method": request.method,
+            "status": response.status_code, "duration_ms": round((time.monotonic() - started) * 1000)}
+        if stages:
+            line["stages"] = stages
+        LOG.info(json.dumps(line))
         response.headers["X-Request-ID"] = request.state.request_id
         return response
 

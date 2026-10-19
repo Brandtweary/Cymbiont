@@ -797,6 +797,43 @@ def _archive_coverage(index):
             "canonical_html_articles": 1000, "selection_policy": "canonical-html", "exclusions": {}}
 
 
+def test_manifest_is_parsed_once_per_file_version(tmp_path):
+    """A generation's manifest is read several times per hit; the parsed value
+    is reused until the file itself changes, and a rewrite is picked up."""
+    store = Store(tmp_path / "state")
+    generation = "a" * 64
+    directory = store.directory(generation)
+    directory.mkdir(parents=True)
+    (directory / "manifest.json").write_text('{"stage": "active", "v": 1}')
+    first = store.manifest(generation)
+    assert first["v"] == 1 and store.manifest(generation) is first
+    (directory / "manifest.json").write_text('{"stage": "active", "v": 2}')
+    os.utime(directory / "manifest.json", ns=(0, 2 * 10 ** 18))
+    assert store.manifest(generation)["v"] == 2
+
+
+def test_search_records_stage_timings(tmp_path):
+    """A search's request log line carries per-stage timings, so a slow one is
+    diagnosable from the journal after the fact: which queue it waited in and
+    which stage held the time, without reproducing it."""
+    import time
+    from oracle_content.service import search_stages
+    service, _, _ = setup(tmp_path)
+    stages = {}
+    token = search_stages.set(stages)
+    started = time.monotonic()
+    try:
+        found = asyncio.run(service.search(SearchRequest(query="ZX-42")))
+    finally:
+        search_stages.reset(token)
+    wall = time.monotonic() - started
+    assert found["hits"]
+    assert set(stages) >= {"lexical_queue_seconds", "lexical_seconds", "dense_seconds",
+                           "resolve_seconds", "pack_seconds"}
+    assert all(isinstance(value, (int, float)) and value >= 0 for value in stages.values())
+    assert sum(stages.values()) <= wall + 0.05
+
+
 def test_archive_growth_leaves_evidence_room(tmp_path):
     """Library-wide state grows with every installed archive; evidence must still fit the page."""
     service, _, _ = setup(tmp_path, response_tokens=600, read_tokens=600)

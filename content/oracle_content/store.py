@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import threading
 import uuid
 from .models import ContentError, Document, Passage
 
@@ -37,6 +38,8 @@ class Store:
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self._native_readers = {}
+        self._manifests = {}
+        self._manifest_lock = threading.Lock()
         from .integrity.overlay import Overlay
         self.integrity = Overlay(self.root)
 
@@ -113,10 +116,34 @@ class Store:
         return generation
 
     def manifest(self, generation):
+        """The generation's manifest, parsed once per file version.
+
+        Search reads it several times per hit — the reader, the collection label
+        and the document lookups all re-read and re-parse the same JSON — so the
+        parsed value is kept until the file's identity (mtime, size) changes, which
+        a rebuild or a rewrite of the manifest always advances.
+        """
+        path = self.directory(generation) / "manifest.json"
         try:
-            return json.loads((self.directory(generation) / "manifest.json").read_text())
+            stat = path.stat()
         except FileNotFoundError:
             raise ContentError("unavailable_version", "This source generation is unavailable", 410) from None
+        identity = (stat.st_mtime_ns, stat.st_size)
+        with self._manifest_lock:
+            held = self._manifests.get(generation)
+            if held is not None and held[0] == identity:
+                return held[1]
+        manifest = json.loads(path.read_text())
+        # A writer replacing the manifest between the stat and the read would
+        # cache new bytes under the old identity; a second stat that disagrees
+        # voids the read and settles for one bounded retry.
+        after = path.stat()
+        if (after.st_mtime_ns, after.st_size) != identity:
+            manifest = json.loads(path.read_text())
+            identity = (after.st_mtime_ns, after.st_size)
+        with self._manifest_lock:
+            self._manifests[generation] = (identity, manifest)
+        return manifest
 
     @contextlib.contextmanager
     def connect(self, generation):
