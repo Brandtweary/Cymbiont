@@ -1113,8 +1113,14 @@ const createAgent = async (initialState?: Partial<AgentState>, savedHistory?: Co
 				}
 				refreshAnswerSpeechUntilSilent(); // the turn released the speaker; its tail is still draining
 				// The turn is over → one pipeline tick (consent-gated; fire-and-forget;
-				// every completed exchange retains its own queued tick).
-				if (memoryConsent === "granted") {
+				// every completed exchange retains its own queued tick). An aborted run
+				// is not a completed exchange: the visitor cut it off, and firing a
+				// multi-minute tick they did not ask for is exactly the “stop button ran
+				// the pipeline” experience. Its messages are not lost — the next turn's
+				// tick covers back to the last completed job's boundary, so coverage
+				// defers instead of skipping.
+				const aborted = ((event.messages ?? []) as AgentMessage[]).some((m) => (m as { stopReason?: string }).stopReason === "aborted");
+				if (memoryConsent === "granted" && !aborted) {
 					const captured = history.snapshot();
 					const voiceEvidence = inFlightVoiceEvidence;
 					const epoch = memoryEpoch;

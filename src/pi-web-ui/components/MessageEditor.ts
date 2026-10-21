@@ -76,7 +76,11 @@ export class MessageEditor extends LitElement {
 
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
-			if (!this.isStreaming && !this.processingFiles && (this.value.trim() || this.attachments.length > 0)) {
+			// Enter during a run is a send, not a no-op: AgentInterface holds it and
+			// fires when the session goes idle. Without this the keypress is dropped
+			// with no feedback, which reads as the site eating the message. Escape
+			// remains the abort key while streaming.
+			if (!this.processingFiles && (this.value.trim() || this.attachments.length > 0)) {
 				this.handleSend();
 			}
 		} else if (e.key === "Escape" && this.isStreaming) {

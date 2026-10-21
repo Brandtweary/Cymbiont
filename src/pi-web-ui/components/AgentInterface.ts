@@ -48,6 +48,13 @@ export class AgentInterface extends LitElement {
 	private _sendingSessions = new WeakSet<Agent>();
 	@state() private _sendError = "";
 	@state() private _hasDraft = false;
+	// A send that arrived while the session was already streaming or mid-send.
+	// Held one deep: it fires the moment the session goes idle, and a newer
+	// attempt replaces it (the editor draft always mirrors the latest text, so
+	// what is held is what the visitor last pressed send on). Without this the
+	// send is dropped on the floor — no request, no feedback — which reads as
+	// the site eating a message.
+	private _heldSend: { input: string; attachments: Attachment[] } | null = null;
 	private _lastScrollTop = 0;
 	private _lastClientHeight = 0;
 	private _scrollContainer?: HTMLElement;
@@ -215,7 +222,7 @@ export class AgentInterface extends LitElement {
 					// finishRun() flips state.isStreaming=false AFTER agent_end with no
 					// further event, so defer one more update to revert the editor's
 					// stop button back to send.
-					setTimeout(() => this.requestUpdate(), 0);
+					setTimeout(() => { this.requestUpdate(); this._flushHeldSend(); }, 0);
 					break;
 				case "message_update":
 					if (this._streamingContainer) {
@@ -262,7 +269,14 @@ export class AgentInterface extends LitElement {
 		const session = this.session;
 		if (!session) throw new Error("No session set on AgentInterface");
 		if (!session.state.model) throw new Error("No model set on AgentInterface");
-		if (session.state.isStreaming || this._sendingSessions.has(session)) return;
+		if (session.state.isStreaming || this._sendingSessions.has(session)) {
+			// The run owns the session. Hold the send rather than dropping it: the
+			// draft stays in the composer and the message goes out when the run ends.
+			this._heldSend = { input, attachments: submittedAttachments };
+			this._sendError = "";
+			this.requestUpdate();
+			return;
+		}
 		this._sendingSessions.add(session);
 		this.requestUpdate();
 		this._sendError = "";
@@ -306,8 +320,22 @@ export class AgentInterface extends LitElement {
 			throw error;
 		} finally {
 			this._sendingSessions.delete(session);
+			// A send held during this one's preparation or run fires now that the
+			// session is idle; flushHeldSend re-checks every busy condition.
+			this._flushHeldSend();
 			this.requestUpdate();
 		}
+	}
+
+	/** Fire a held send once nothing owns the session. Any busy condition
+	 * leaves it held — the next agent_end or send completion retries. */
+	private _flushHeldSend(): void {
+		const held = this._heldSend;
+		if (!held || this.sendDisabled) return;
+		const session = this.session;
+		if (!session || session.state.isStreaming || this._sendingSessions.has(session)) return;
+		this._heldSend = null;
+		void this.sendMessage(held.input, held.attachments).catch(() => {});
 	}
 
 	private renderMessages() {
@@ -417,6 +445,7 @@ export class AgentInterface extends LitElement {
 				<div class="shrink-0">
 					<div class="max-w-3xl mx-auto px-2">
 						${this._sendError ? html`<div role="alert" class="text-sm text-red-500 py-2">${this._sendError}</div>` : ""}
+						${this._heldSend ? html`<div role="status" class="text-sm text-muted-foreground py-2">A reply is in progress — your message will send when it finishes.</div>` : ""}
 						<message-editor
 							@composer-draft-change=${(event: CustomEvent<boolean>) => { this._hasDraft = event.detail; }}
 							.disabled=${this.sendDisabled}
