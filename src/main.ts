@@ -1943,6 +1943,8 @@ async function initApp() {
 		addCost: addIngestionCostToSession,
 		onStateChange: () => refreshMemoryUi(),
 		onActivity: () => renderGutters(),
+		// A preempted background stage waits out the visitor's own chat run before re-running.
+		foregroundActive: () => runInFlight,
 	});
 	try {
 		if (!memorySnapshot) throw new Error("Saved memory snapshot unavailable");

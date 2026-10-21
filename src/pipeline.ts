@@ -19,7 +19,7 @@ import type { GraphAsset } from "./kg/types.js";
 import type { EmbedFn } from "./kg/embed.js";
 import type { makeCompletion } from "./kg/ingest.js";
 import { releaseProfile } from "./local-model.js";
-import { createLocalStreamFn, serializeModelRequest, countRequestTokens } from "./oracle-runtime.js";
+import { createLocalStreamFn, serializeModelRequest, countRequestTokens, isPreemptedCompletionError } from "./oracle-runtime.js";
 import { createPipelineTools, type ReviewFlag } from "./pipeline-tools.js";
 import type { PhonemizeFn } from "./stt-phonemize.js";
 import {
@@ -33,7 +33,7 @@ import {
 import { createMemoryInspector, fitMemoryText, inspectionPage, type InspectionRecord, type InspectionCollection, type MeasureMemoryContext } from "./memory-context.js";
 import type { ConversationArchive } from "./conversation-history.js";
 import { assertMessageContent } from "./message-validation.js";
-import { createRoleArchiveTool, assembleMemoryRoleTools, validateMemoryWindowOutcome, createAuditHandoffTool, createStageOutcomeTool, createSummaryDraftTool, MemoryRefusalError, MemoryBudgetError, MemoryTransientError, type AuditFinding, type StageOutcome } from "./memory-handoffs.js";
+import { createRoleArchiveTool, assembleMemoryRoleTools, validateMemoryWindowOutcome, createAuditHandoffTool, createStageOutcomeTool, createSummaryDraftTool, MemoryRefusalError, MemoryBudgetError, MemoryTransientError, MemoryPreemptedError, type AuditFinding, type StageOutcome } from "./memory-handoffs.js";
 import { validatedTokenUsage, addTokenUsage } from "./token-usage.js";
 import { emptySttLexicon, type SttLexicon } from "./stt-lexicon.js";
 
@@ -163,6 +163,9 @@ export interface PipelineDeps {
 	onActivity: () => void;
 	// Memory access requires explicit consent at admission and every mutation boundary.
 	getConsent?: () => string;
+	/** True while a foreground chat run is generating. A background stage preempted
+	 * by that run parks until this goes false, then re-runs from its stage start. */
+	foregroundActive?: () => boolean;
 }
 
 // -- Transcript formatting ----------------------------------------------------
@@ -867,6 +870,7 @@ export class PipelineRuntime {
 					assertActive();
 					for (const message of messages) account(message);
 					const last = [...messages].reverse().find(message => message.role === "assistant");
+					if (last?.role === "assistant" && last.stopReason === "error" && isPreemptedCompletionError(last.errorMessage)) throw new MemoryPreemptedError("Background round preempted by a foreground chat");
 					if (usage.output >= outputBudget! && last?.role === "assistant" && last.stopReason !== "stop") throw new MemoryBudgetError("Memory stage output-token allowance exhausted");
 					const decision = validateMemoryWindowOutcome(windowOutcome as StageOutcome | undefined, last?.role === "assistant" ? last.stopReason : undefined);
 					if (!last || last.role !== "assistant") throw new Error("Missing assistant completion");
@@ -898,6 +902,11 @@ export class PipelineRuntime {
 		const job = this.jobs.find(j => j.id === input.id);
 		if (!job || job.stages[name] === "complete") return;
 		this.attempts.set(`${input.id}:${name}`, { id: crypto.randomUUID(), sequence: 0 });
+		// A foreground chat may preempt any background round mid-generation. A stage
+		// commits only atomically at its end, so the aborted round published nothing:
+		// park it and re-run from the stage start, never half-applying a draft.
+		let preemptions = 0;
+		for (;;) {
 		try {
 			await this.ordered(async () => {
 				if (!this.active(input)) throw new Error("Memory operation cancelled");
@@ -962,7 +971,9 @@ export class PipelineRuntime {
 				for (const action of result?.actions ?? []) this.pushActivity(name, action);
 				if (summary?.entry) this.pushActivity(name, "updated conversation summary");
 			});
+			return;
 		} catch (error) {
+			if (error instanceof MemoryPreemptedError && this.active(input) && await this.parkPreemptedStage(name, input, ++preemptions)) continue;
 			if (!this.active(input)) return;
 			if (error instanceof MemorySourceDeletedError) { await this.sourceDeleted(error.sessionKey); return; }
 			dbgError(`pipeline[${name}] failed; draft discarded:`, error);
@@ -976,6 +987,30 @@ export class PipelineRuntime {
 				await this.publish(next, undefined, [this.archiveRecord(input, name, "outcome", { outcome: job.outcomes![name], history: job.history }, "failed")], () => { if (!this.active(input)) throw new Error("Memory failure publication cancelled"); });
 			});
 			this.pushActivity(name, error instanceof MemoryRefusalError ? "Memory stage refused; dependent work is paused until explicit retry." : error instanceof MemoryBudgetError ? "Memory stage exhausted its qualified resource allowance; draft discarded and coverage remains pending." : "Memory stage failed; draft discarded. Use Retry to resume unfinished coverage.");
+			return;
+		}
+		}
+	}
+
+	/** Park a stage whose round a foreground chat preempted. The aborted round
+	 * committed nothing, so the stage resets to pending durably and re-runs once
+	 * the visitor's chat has finished. Repeated preemptions back off, so a
+	 * contended GPU is not hammered with restarted rounds. */
+	private async parkPreemptedStage(name: PipelineAgentName, input: TickInput, preemptions: number): Promise<boolean> {
+		await this.ordered(async () => {
+			if (!this.active(input)) return;
+			const next = this.snapshot();
+			const parked = next.jobs!.find(j => j.id === input.id);
+			if (parked && parked.stages[name] === "running") { parked.stages[name] = "pending"; delete parked.outcomes?.[name]; }
+			await this.publish(next);
+		});
+		if (!this.active(input)) return false;
+		this.pushActivity(name, "Background round paused for a foreground message; resuming when it completes.");
+		const settle = Math.min(4000, 500 * 2 ** Math.min(preemptions - 1, 3));
+		for (;;) {
+			await new Promise(resolve => setTimeout(resolve, this.deps.foregroundActive?.() ? 250 : settle));
+			if (!this.active(input)) return false;
+			if (!this.deps.foregroundActive?.()) return true;
 		}
 	}
 

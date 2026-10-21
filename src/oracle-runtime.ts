@@ -6,6 +6,14 @@ export interface RequestState { id: string; state: string; position?: number; ro
 const listeners = new Set<(state: RequestState) => void>();
 export function subscribeRequests(fn: (state: RequestState) => void): () => void { listeners.add(fn); return () => listeners.delete(fn); }
 function emit(state: RequestState): void { for (const fn of listeners) fn(state); }
+/** The gateway parks a preempted background round by ending it with an explicit
+ * "preempted" code — an SSE error frame on the streaming path, or an HTTP error
+ * body on the buffered path. Match the code, not message wording, so both
+ * renderings of the same gateway fact are recognized. */
+export function isPreemptedCompletionError(errorMessage: string | undefined): boolean {
+	return errorMessage === "preempted" || /"code"\s*:\s*"preempted"/.test(errorMessage ?? "");
+}
+
 export async function countRequestTokens(payload: unknown, role: OracleRole, signal?: AbortSignal): Promise<number> {
 	const response = await fetch(`${GATEWAY_BASE}/tokenize`, {
 		method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(payload as object), role }), signal,

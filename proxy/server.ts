@@ -242,9 +242,19 @@ export function createGateway(cfg: GatewayConfig = config, fetcher: typeof fetch
       const reader = upstream.body.getReader(); const owned = lease;
       const decoder = new TextDecoder(); let tail = "", complete = false;
       let streamController: ReadableStreamDefaultController<Uint8Array>;
+      let preempted = false;
       const onAbort = () => {
+        // A foreground chat preempted this background round. The visitor is
+        // still connected, so the response ends with an explicit error frame
+        // the client can recognize as parking, instead of a bare cut that
+        // reads as a failed generation.
+        preempted ||= (owned.signal.reason as {code?: string} | undefined)?.code === "preempted";
         void reader.cancel(owned.signal.reason).finally(() => owned.finish("failed"));
-        try { streamController.error(owned.signal.reason); } catch { /* Stream is already closed. */ }
+        if (preempted) {
+          try { streamController.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({error: {code: "preempted", message: "preempted"}})}\n\n`)); streamController.close(); } catch { /* already closed */ }
+        } else {
+          try { streamController.error(owned.signal.reason); } catch { /* Stream is already closed. */ }
+        }
       };
       const stream = new ReadableStream<Uint8Array>({
         start(controller) { streamController = controller; owned.signal.addEventListener("abort", onAbort, {once: true}); if (owned.signal.aborted) onAbort(); },
@@ -253,6 +263,7 @@ export function createGateway(cfg: GatewayConfig = config, fetcher: typeof fetch
             const chunk = await reader.read();
             if (chunk.done) {
               owned.signal.removeEventListener("abort", onAbort);
+              if (preempted) return; // the preemption frame already ended this response
               if (!complete) throw new AdmissionError("incomplete_generation", 502);
               owned.finish(); controller.close();
             } else {
@@ -260,13 +271,18 @@ export function createGateway(cfg: GatewayConfig = config, fetcher: typeof fetch
               complete ||= /(?:^|\n)data: ?\[DONE\](?:\r?\n|$)/.test(text);
               tail = text.slice(-64); controller.enqueue(chunk.value);
             }
-          } catch (error) { owned.signal.removeEventListener("abort", onAbort); owned.finish("failed"); controller.error(error); }
+          } catch (error) { owned.signal.removeEventListener("abort", onAbort); owned.finish("failed"); try { controller.error(error); } catch { /* already closed by a preemption frame */ } }
         },
         async cancel(reason) { queue.cancel(id); try { await reader.cancel(reason); } finally { owned.signal.removeEventListener("abort", onAbort); owned.finish("failed"); } },
       });
       return new Response(stream, {headers: {"Content-Type": "text/event-stream", "Cache-Control": "no-store", "X-Request-Id": id}});
     } catch (error) {
-      lease?.finish("failed"); const err = error instanceof AdmissionError ? error : new AdmissionError("inference_failed", 502);
+      lease?.finish("failed");
+      // A preemption that landed during admission (before any bytes were
+      // streamed) still identifies itself by code, so a non-streaming caller
+      // can tell parking from failure too.
+      const preempted = lease?.signal.aborted && (lease.signal.reason as {code?: string} | undefined)?.code === "preempted";
+      const err = preempted ? new AdmissionError("preempted", 503) : error instanceof AdmissionError ? error : new AdmissionError("inference_failed", 502);
       log({id, stage: "completion", status: "failed", code: err.code});
       return c.json({error: {code: err.code, message: err.code}, request_id: id}, err.status as 503);
     }

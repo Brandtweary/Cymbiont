@@ -1,4 +1,4 @@
-export type State = "waiting" | "executing" | "completed" | "interrupted" | "failed";
+export type State = "waiting" | "executing" | "completed" | "interrupted" | "preempted" | "failed";
 export class AdmissionError extends Error {
   constructor(public code: string, public status = 503) { super(code); }
 }
@@ -40,15 +40,22 @@ export class CompletionQueue {
       this.entries.set(id, entry); this.waiting.push(entry);
       entry.timer = setTimeout(() => this.stop(entry, "queue_timeout"), this.limits.queueTimeoutMs);
       this.record({id, state: "waiting"}); this.advance();
+      // A foreground chat preempts an executing background round: one inference
+      // resource, and a visitor's message must not queue behind multi-second
+      // background generation. The aborted entry releases its slot only when its
+      // upstream request actually unwinds, so the foreground admission that
+      // follows sees a free resource, never a half-aborted one.
+      if (priority === "foreground" && this.active?.priority === "background") this.stop(this.active, "preempted");
     });
   }
   cancel(id: string) { const entry = this.entries.get(id); if (!entry || entry.ended) return false; this.stop(entry, "interrupted"); return true; }
   private stop(entry: Entry, code: string) {
     if (entry.ended) return;
-    entry.controller.abort(new AdmissionError(code, code === "interrupted" ? 499 : 504));
+    const status = code === "interrupted" ? 499 : code === "preempted" ? 503 : 504;
+    entry.controller.abort(new AdmissionError(code, status));
     if (entry.state === "waiting") {
-      entry.reject(new AdmissionError(code, code === "interrupted" ? 499 : 504));
-      this.finish(entry, code === "interrupted" ? "interrupted" : "failed");
+      entry.reject(new AdmissionError(code, status));
+      this.finish(entry, code === "interrupted" ? "interrupted" : code === "preempted" ? "preempted" : "failed");
     }
     // Executing callers release only after the upstream request actually unwinds.
   }
@@ -69,6 +76,6 @@ export class CompletionQueue {
     entry.timer = setTimeout(() => this.stop(entry, "execution_timeout"), this.limits.executionTimeoutMs);
     this.record({id: entry.id, state: "executing", waitedMs: Date.now() - entry.created});
     entry.resolve({signal: entry.controller.signal, finish: (state = "completed") => this.finish(entry,
-      entry.controller.signal.aborted ? (entry.controller.signal.reason?.code === "interrupted" ? "interrupted" : "failed") : state)});
+      entry.controller.signal.aborted ? (entry.controller.signal.reason?.code === "interrupted" ? "interrupted" : entry.controller.signal.reason?.code === "preempted" ? "preempted" : "failed") : state)});
   }
 }

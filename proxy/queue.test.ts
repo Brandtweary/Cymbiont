@@ -25,3 +25,21 @@ test("execution timeout starts after admission and holds slot until upstream unw
  await new Promise(resolve => setTimeout(resolve, 30)); expect(a.signal.aborted).toBe(true); expect(q.status("b")?.state).toBe("waiting");
  a.finish(); const next = await b; expect(next.signal.aborted).toBe(false); next.finish();
 });
+test("a foreground arrival preempts the executing background round, not other waiting work", async () => {
+ const q = new CompletionQueue(limits);
+ const bg = await q.acquire("bg", "D", "background", signal());
+ let bgAborted = ""; bg.signal.addEventListener("abort", () => { bgAborted = (bg.signal.reason as {code: string}).code; });
+ const fg = q.acquire("fg", "E", "foreground", signal());
+ expect(bgAborted).toBe("preempted"); // preemption is immediate, not at the next round boundary
+ expect(q.status("fg")?.state).toBe("waiting"); // the slot is held until the background upstream unwinds
+ bg.finish(); // executing caller releases after the aborted request actually unwinds
+ const lease = await fg; expect(lease.signal.aborted).toBe(false); lease.finish();
+ expect(q.status("bg")?.state).toBe("preempted");
+});
+test("foreground arrivals do not preempt an executing foreground round", async () => {
+ const q = new CompletionQueue(limits);
+ const first = await q.acquire("one", "A", "foreground", signal());
+ const second = q.acquire("two", "B", "foreground", signal());
+ expect(first.signal.aborted).toBe(false); expect(q.status("two")?.state).toBe("waiting");
+ first.finish(); (await second).finish();
+});

@@ -8,6 +8,8 @@ export type StageOutcome = { kind: "completed" | "no-op" | "refused" | "failed" 
 export class MemoryRefusalError extends Error {}
 export class MemoryBudgetError extends Error {}
 export class MemoryTransientError extends Error {}
+/** A foreground chat preempted this background round; the stage parks and re-runs. */
+export class MemoryPreemptedError extends Error {}
 const result = (text: string) => ({ content: [{ type: "text" as const, text }], details: {} });
 
 export function createStageOutcomeTool(deps: { finish: (outcome: "completed" | "no-op" | "refused", reason: string) => void }): AgentTool<any> {
