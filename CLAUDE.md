@@ -64,3 +64,22 @@ vendored components, and are load-bearing, not cruft:
 - Content and evaluation dependencies/tests are documented in their own directories; network/model integration checks remain separate from offline unit tests.
 - Browser endpoints default to the serving origin; explicit `VITE_PROXY_BASE`, `VITE_STT_BASE` and `VITE_TTS_BASE` overrides also constrain production CSP through Vite's loaded environment.
 - Preserve the current layout/palette and retained voice/session functionality while changing backend contracts.
+
+## Model serving facts
+
+- **Reasoning effort is a system-prompt line, not the API field.** `reasoning_effort` in the
+  request body is inert on this vLLM + Muse Glimmer combination — it produces no
+  `reasoning_content` and no `reasoning_tokens`. The native control is a
+  `Reasoning strength: <value>` line in the system prompt; the pipeline's prompts carry
+  neither, so today's effort is whatever the model does unprompted. A/B on an audit prompt:
+  no line 563 completion tokens, `high` 508, `low` 244 — adding a `low` line to the background
+  stages would roughly halve tick cost if it is ever wanted (the operator ruled 2026-10-21:
+  effort stays as-is; preemption is the fix, not dumber background thinking). Measured Oct 2026,
+  vLLM 0.29.
+- **The checkpoint is mixed precision** (`modelopt` W8A8 FP8 attention + W4 MLP), not the
+  pure W4A4 the vLLM recipe benchmarks: measured 51 tok/s sustained decode vs the recipe's
+  68.8 on a single 5090. Kept deliberately — better checkpoint, accepted throughput.
+- **Gateway queue diagnostics are occurrence-folded**: the queue's `record()` events share one
+  dedup fingerprint, so per-request queue detail barely exists in `gateway.jsonl`. Per-request
+  reconstruction comes from vLLM's docker logs; uvicorn's access line fires at response
+  start, so each line marks a generation arrival, not a completion.
