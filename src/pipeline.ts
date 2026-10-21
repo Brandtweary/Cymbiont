@@ -36,6 +36,7 @@ import { assertMessageContent } from "./message-validation.js";
 import { createRoleArchiveTool, assembleMemoryRoleTools, validateMemoryWindowOutcome, createAuditHandoffTool, createStageOutcomeTool, createSummaryDraftTool, MemoryRefusalError, MemoryBudgetError, MemoryTransientError, MemoryPreemptedError, type AuditFinding, type StageOutcome } from "./memory-handoffs.js";
 import { validatedTokenUsage, addTokenUsage } from "./token-usage.js";
 import { emptySttLexicon, type SttLexicon } from "./stt-lexicon.js";
+import { speechCandidates } from "./stt-candidates.js";
 
 // -- Persistence shapes -------------------------------------------------------
 
@@ -964,8 +965,14 @@ export class PipelineRuntime {
 				target.stages[name] = "running";
 				await this.publish(next, undefined, undefined, () => { if (!this.active(input)) throw new Error("Memory stage cancelled"); });
 			});
+			// Standing audit evidence: the pipeline computes the acoustic candidate
+			// comparison for this turn's raw utterance itself and presents it in the
+			// audit prompt, so a garbled voice turn reaches the audit as presented
+			// leads regardless of any model's choice to call a tool. Recomputed per
+			// attempt so a re-run stage reads fresh lexicon and graph state.
+			const phoneticReport = name === "audit" ? await this.auditPhoneticReport(input) : "";
 			const result = name === "summary" ? null : await this.runTooledAgent(name,
-				name === "audit" ? buildAuditInstructions({ bufferBlock: "Read memory_inspect(actions,id=committed) for prior actions; draft actions are actions/draft.", isVoiceTurn: input.isVoiceTurn, voiceEvidence: undefined }) :
+				name === "audit" ? buildAuditInstructions({ bufferBlock: "Read memory_inspect(actions,id=committed) for prior actions; draft actions are actions/draft.", isVoiceTurn: input.isVoiceTurn, voiceEvidence: undefined, phoneticReport }) :
 				buildMemoryManagerInstructions({ bufferBlock: "Read memory_inspect(actions,id=committed) for prior actions; draft actions are actions/draft.", isVoiceTurn: input.isVoiceTurn }), input);
 			const summary = name === "summary" ? await this.runSummaryAgent(input) : null;
 			if (job.history) await this.resolveHistory(job.history);
@@ -1039,6 +1046,27 @@ export class PipelineRuntime {
 			this.pushActivity(name, error instanceof MemoryRefusalError ? "Memory stage refused; dependent work is paused until explicit retry." : error instanceof MemoryBudgetError ? "Memory stage exhausted its qualified resource allowance; draft discarded and coverage remains pending." : "Memory stage failed; draft discarded. Use Retry to resume unfinished coverage.");
 			return;
 		}
+		}
+	}
+
+	/** The audit agent's standing acoustic evidence. One first page of the
+	 *  speech-candidate comparison per audit stage run — the same bounded
+	 *  computation the phonetic_candidates tool performs — computed from the raw
+	 *  utterance, the graph's term labels and the STT lexicon BEFORE the model
+	 *  runs. Fail-open: an unavailable pronunciation service states itself in the
+	 *  section instead of failing the stage or leaving the look to the model. */
+	private async auditPhoneticReport(input: TickInput): Promise<string> {
+		const evidence = input.voiceEvidence;
+		if (!evidence) return "";
+		if (!this.deps.phonemize) return "(unavailable: no pronunciation service is configured; weigh the raw evidence manually)";
+		try {
+			const page = await speechCandidates(evidence,
+				Object.values(this.deps.getGraph().serialize().thoughts).map(term => term.label),
+				this.sttLexicon, {}, this.deps.phonemize);
+			return JSON.stringify(page);
+		} catch (error) {
+			if (!this.active(input)) throw error;
+			return `(unavailable: ${error instanceof Error ? error.message : String(error)}; weigh the raw evidence manually)`;
 		}
 	}
 

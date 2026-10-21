@@ -6,6 +6,9 @@ export interface AgentTickContext {
 	voiceEvidence?: import("./stt-lexicon.js").VoiceEvidence;
 	bufferBlock: string; // rendered action buffer ("(no prior actions)" when empty)
 	isVoiceTurn: boolean;
+	/** Audit only: the pipeline-computed acoustic candidate report for this turn's raw
+	 *  utterance, presented as standing evidence — an empty string renders no section. */
+	phoneticReport?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -23,6 +26,7 @@ You are the quality inspector for everything that surfaced on this turn's live w
 
 ${voiceNote}
 ${ctx.voiceEvidence ? `Raw voice evidence (utterance ${ctx.voiceEvidence.utteranceId}): ${JSON.stringify(ctx.voiceEvidence.rawText)}\nDisplayed corrected text: ${JSON.stringify(ctx.voiceEvidence.correctedText)}` : "Raw voice evidence, when available for this turn, is read through memory_inspect(collection=voice,id=raw). If no record exists, do not infer or log a new transcription error."}
+${ctx.phoneticReport ? `\n### Pre-computed acoustic candidates (standing evidence)\n\n${ctx.phoneticReport}\n\nThese are pre-computed acoustic candidates for spans of THIS turn — deterministically generated from sound alone by the pipeline, deliberately high-recall, and NOT verdicts: they are leads to weigh. The comparison has already run whether or not you call any tool; an empty candidates list is a computed result, and adjudicating this report is a required part of the voice-turn verdict. Use phonetic_candidates only for continuation offsets when the presented page truncates.` : ""}
 
 ### 1. Retrieval quality (the <memory> blocks in the transcript)
 
@@ -59,7 +63,7 @@ Merge policy (destructive — buffer-gated, see Action policy):
 
 New transcription-error detection applies only to voice evidence. In either input mode, an explicit user statement identifying a mistaken stored pairing or unwanted rule may justify inspect_stt, reject_mistranscription or remove_auto_replace_rule. correct_mistranscription may repair a specifically identified existing utterance when the user explicitly supplies its intended spoken form. Inspect the stored evidence first; do not infer a new pairing from typed wording or invent an utterance. Historical cleanup does not authorize new logs, pronunciation hints or automatic rules from typed prose.
 
-For a new voice utterance, use phonetic_candidates to inspect eSpeak pronunciation and orthographic neighbors from the configured backend. Hints carry exact raw spans, vocabulary/observation provenance and scope; follow continuation offsets when omitted material matters. A similarity score is not evidence of what the user said: judge the original utterance and conversation, inspect_stt for prior rejections, and never log or auto-replace merely because a neighbor ranks first. Repeated evidence means distinct utterance identities, not repeated tool calls. Common-word hints require corroboration; this does not authorize automatic replacement of a real word. Numerical/version changes remain manual because these tools have no independent numerical oracle. Use exact_case on add_auto_replace_rule only when the raw evidence supports that capitalization and other capitalizations must remain untouched.
+For a new voice utterance, the pre-computed acoustic candidates section above is standing evidence: the pipeline already ran the phonetic comparison of the raw utterance against the term labels and accepted observations, and weighing its flagged near-misses is a required part of the verdict — never a discretionary tool call. phonetic_candidates remains available for continuation offsets when the presented page truncates. Hints carry exact raw spans, vocabulary/observation provenance and scope. Never ground a voice-turn verdict on rawText and correctedText being identical: that only proves no auto-replacement rule had already fired, never that the transcription was accurate — a garble no prior rule caught always shows rawText == correctedText == the garbled text. A similarity score is not evidence of what the user said: judge the original utterance and conversation, inspect_stt for prior rejections, and never log or auto-replace merely because a neighbor ranks first. Repeated evidence means distinct utterance identities, not repeated tool calls. Common-word hints require corroboration; this does not authorize automatic replacement of a real word. Numerical/version changes remain manual because these tools have no independent numerical oracle. Use exact_case on add_auto_replace_rule only when the raw evidence supports that capitalization and other capitalizations must remain untouched.
 
 Only consider the following phonetic error classes for automatic adaptation: the transcribed text SOUNDS LIKE what was said.
 1. Phonetic garbling — output that isn't a real word or phrase ("Kuber Netties" for "Kubernetes").
