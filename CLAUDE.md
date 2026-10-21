@@ -76,9 +76,12 @@ vendored components, and are load-bearing, not cruft:
   stages would roughly halve tick cost if it is ever wanted (the operator ruled 2026-10-21:
   effort stays as-is; preemption is the fix, not dumber background thinking). Measured Oct 2026,
   vLLM 0.29.
-- **The checkpoint is mixed precision** (`modelopt` W8A8 FP8 attention + W4 MLP), not the
-  pure W4A4 the vLLM recipe benchmarks: measured 51 tok/s sustained decode vs the recipe's
-  68.8 on a single 5090. Kept deliberately — better checkpoint, accepted throughput.
+- **The checkpoint is the vendor's own artifact, never re-quantized**: `nvidia/Muse-Glimmer-30B-NVFP4`
+  at the pinned revision in `candidate.json`, `MIXED_PRECISION` per `model/hf_quant_config.json` —
+  180 attention layers FP8 (W8A8, weights and activations), 213 MLP layers W4A16_NVFP4 (4-bit
+  NVFP4 weights, group size 16, 16-bit activations). Not the pure W4A4 the vLLM recipe benchmarks:
+  measured 51 tok/s sustained decode vs the recipe's 68.8 on a single 5090. Kept deliberately —
+  the calibrated mix is the better checkpoint, accepted throughput.
 - **Gateway queue diagnostics are occurrence-folded**: the queue's `record()` events share one
   dedup fingerprint, so per-request queue detail barely exists in `gateway.jsonl`. Per-request
   reconstruction comes from vLLM's docker logs; uvicorn's access line fires at response
