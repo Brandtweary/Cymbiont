@@ -72,6 +72,20 @@ A dense hit and a selection policy's license read only the stored representative
 the article's blocks, and lexical localization ranks every stored passage by its handle and lexical
 text but builds in full only the passages it keeps, so an article that is a whole book costs a search
 its decompression and in-article ranking rather than the construction of every passage in it.
+`tools/precompute_lexical.py` moves the per-article FTS5 table itself into
+`generations/<generation>/article-lexical/`, a directory of shard databases each holding at
+most 256 articles' contentless tables, so a first touch of a novel article opens a shard and
+matches instead of building the table in memory. Ranking is byte-identical: each table holds
+the same rows in the same order, its rowid is the passage's ordinal plus one, and the
+within-article tie-break `ORDER BY bm25(article), id` becomes `ORDER BY bm25, rowid` — the two
+orders agree because a handle's variable part is the ordinal-ordered coordinate tuple, which
+the build refuses to store an article without checking. `tools/verify_lexical_agreement.py`
+compares the served ranking against the in-memory build on live corpus data. A shard is
+written whole under a building name and moved into place, so an interrupted pass resumes by
+skipping the shards that are already published, and every article it has not covered still
+answers from the in-memory build. An article's decoded spans are kept per reader and reused
+across searches (bounded by documents and bytes), so a repeated search pays the match and
+not the decode again.
 Retrieval-stage failures record their stage and traceback to `failures.jsonl` under a fixed disk
 allotment: `CONTENT_FAILURE_LOG_MAX_BYTES` (64 MiB) covers the live file and one rotated predecessor
 together, so ordinary request traffic cannot grow the store without limit. A repeating identical

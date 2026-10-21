@@ -15,6 +15,7 @@ import asyncio
 import threading
 import time
 import traceback
+import zlib
 from html.parser import HTMLParser
 from html import escape
 from urllib.parse import quote, unquote, urlsplit
@@ -22,6 +23,7 @@ from urllib.parse import quote, unquote, urlsplit
 from bs4 import BeautifulSoup
 
 from .extract import TokenCounter, html_blocks, segment, decode_zim_html, inline_content
+from .lexical import ArticleLexicon, binding as lexical_binding
 from .models import ContentError, Document, Passage, Profile, digest
 from .precompute import ArticleSpans, StoredPassages, binding as spans_binding, rebuild as rebuild_passages
 from .store import atomic_json, HANDLE
@@ -326,6 +328,9 @@ class NativeReader:
         # Article spans computed once at ingest time. Absent, partial or bound to
         # another generation, every path below falls back to computing them.
         self.spans = ArticleSpans.open(store.directory(generation), spans_binding(self))
+        # The per-article FTS5 tables precomputed beside the spans, if a pass
+        # has written them; absent shards read as articles to build in memory.
+        self.lexicon = ArticleLexicon(store.directory(generation), lexical_binding(self))
 
     def verify_original(self):
         """Refuse an original that is gone, unreadable or changed since its receipt, as the loss of this archive."""
@@ -680,6 +685,11 @@ class NativeReader:
         localized_passages = {}
         tokens = re.findall(r"[^\W_]+(?:[-./][^\W_]+)*", query)
         expression = " OR ".join('"' + token + '"' for token in tokens)
+        # The precomputed tables are served only while the spans they were built
+        # from are usable: a withdrawal of the spans withdraws them with it.
+        lexicon = getattr(self, "lexicon", None)
+        if lexicon is not None and self.usable_spans() is None:
+            lexicon = None
         for article_rank, document in enumerate(documents, 1):
             if len(ranked) >= limit:
                 # Every remaining article has this score or less even for its
@@ -688,21 +698,35 @@ class NativeReader:
                 cutoff = sorted((score for _, score in ranked), reverse=True)[limit - 1]
                 if upper_bound < cutoff:
                     break
-            article, cached = self.lexical_state(document.document_id)
-            db = cached
-            try:
-                if db is None:
-                    # No spans artifact: the built-passage shape is not cached, and
-                    # the query's table is built and thrown away with this call.
-                    db = sqlite3.connect(":memory:")
-                    db.execute("CREATE VIRTUAL TABLE article USING fts5(id UNINDEXED,text,tokenize='porter unicode61')")
-                    db.executemany("INSERT INTO article VALUES(?,?)", article.rows)
-                localized = db.execute("SELECT id FROM article WHERE article MATCH ? ORDER BY bm25(article),id LIMIT ?", (expression, limit)).fetchall() if expression else []
-            finally:
-                if cached is None:
-                    db.close()
-            candidates = [row[0] for row in localized] or [passage_id for passage_id, _text in article.rows[:limit]]
-            localized_passages.update(article.passages(candidates))
+            precomputed = None
+            if lexicon is not None:
+                precomputed = lexicon.article(self, document, int(document.document_id.rsplit("_", 1)[1]))
+            if precomputed is not None:
+                try:
+                    candidates = precomputed.candidates(expression, limit)
+                    localized_passages.update(precomputed.passages(candidates))
+                except (sqlite3.Error, zlib.error, ValueError, TypeError, KeyError, IndexError):
+                    # A shard or a stored row the reader cannot use is damage to
+                    # a derived artifact: the article is answered by the in-memory
+                    # build below, and the count keeps the fallback visible.
+                    lexicon.undecodable += 1
+                    precomputed = None
+            if precomputed is None:
+                article, cached = self.lexical_state(document.document_id)
+                db = cached
+                try:
+                    if db is None:
+                        # No spans artifact: the built-passage shape is not cached, and
+                        # the query's table is built and thrown away with this call.
+                        db = sqlite3.connect(":memory:")
+                        db.execute("CREATE VIRTUAL TABLE article USING fts5(id UNINDEXED,text,tokenize='porter unicode61')")
+                        db.executemany("INSERT INTO article VALUES(?,?)", article.rows)
+                    localized = db.execute("SELECT id FROM article WHERE article MATCH ? ORDER BY bm25(article),id LIMIT ?", (expression, limit)).fetchall() if expression else []
+                finally:
+                    if cached is None:
+                        db.close()
+                candidates = [row[0] for row in localized] or [passage_id for passage_id, _text in article.rows[:limit]]
+                localized_passages.update(article.passages(candidates))
             for rank, pid in enumerate(candidates, 1):
                 ranked.append((pid, 1 / ((self.profile.rrf_k + article_rank) * (self.profile.rrf_k + rank))))
         selected = sorted(ranked, key=lambda row: (-row[1], row[0]))[:limit]

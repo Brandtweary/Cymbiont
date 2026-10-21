@@ -321,6 +321,19 @@ class ArticleSpans:
         """One article's validated block rows and spans for `StoredPassages`, or None as `raw` would return it."""
         return self._read(index, decode_stored)
 
+    def payload(self, index: int):
+        """One article's stored blob without decoding it, or None when absent.
+
+        The lexical precompute and its reader decode a payload themselves, in
+        the shape their own path needs; an absent row is the article the
+        artifact does not cover either.
+        """
+        try:
+            row = self.connect().execute("SELECT payload FROM articles WHERE entry_index=?", (index,)).fetchone()
+        except sqlite3.Error:
+            return None
+        return row[0] if row else None
+
     def _read(self, index, decoder):
         try:
             row = self.connect().execute("SELECT payload FROM articles WHERE entry_index=?", (index,)).fetchone()

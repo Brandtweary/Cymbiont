@@ -245,12 +245,19 @@ class Store:
                 # Precompute coverage comes from the already-open reader, never a
                 # fresh artifact read: coverage is reported on every response.
                 try:
-                    spans = self.native(value).usable_spans()
+                    native_reader = self.native(value)
+                    spans = native_reader.usable_spans()
+                    lexicon = getattr(native_reader, "lexicon", None)
                 except (ContentError, OSError, RuntimeError):
-                    spans = None
+                    spans, lexicon = None, None
                 native.append({"generation": value, "pack_id": manifest["source"]["pack_id"],
                     "precomputed_articles": None if spans is None else spans.articles,
                     "precomputed_undecodable": None if spans is None else spans.undecodable,
+                    # The lexical tables are served per article by presence of its
+                    # shard table; the count is the reads that fell back, so a
+                    # damaged artifact is told apart from a partial one.
+                    "precomputed_lexical": None if spans is None else lexicon is not None,
+                    "precomputed_lexical_undecodable": None if spans is None else lexicon.undecodable,
                     "integrity": {**self.integrity.coverage(manifest["source"]["sha256"]),
                                   **self.integrity.generation_flags(value)},
                     "lexical": "native full text within declared source selection", "reader": "complete articles",
