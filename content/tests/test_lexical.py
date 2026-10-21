@@ -259,3 +259,88 @@ def test_decoded_spans_are_evicted_at_the_byte_ceiling(tmp_path, monkeypatch):
     assert not reader.lexicon.decoded and reader.lexicon.decoded_bytes == 0
     assert list(reader._localize([], "filter water", 5, reader.document_id(3)))
     assert not reader.lexicon.decoded
+
+
+def test_connections_are_shared_across_worker_threads(tmp_path):
+    """The reader is served from `asyncio.to_thread` pool threads: a shard
+    connection opened by one worker must be reusable by another. sqlite
+    refuses cross-thread use unless the connection opts out, so a reuse
+    against a live foreign thread reads as damage and silently falls back
+    to the in-memory build; the test asserts the artifact itself served.
+    The creating thread stays alive throughout: an exited thread's ident
+    can be reused by the next short-lived thread, which would let a
+    sequential pair pass vacuously."""
+    corpus = Corpus(tmp_path, {3: tie_blocks(1)})
+    reader = corpus.reader(True)
+    document_id = reader.document_id(3)
+    failures = []
+    first_done = threading.Event()
+    second_done = threading.Event()
+
+    def first_search():
+        try:
+            list(reader._localize([], "filter water", 5, document_id))
+        except Exception as error:
+            failures.append(("first", error))
+        finally:
+            first_done.set()
+            second_done.wait()
+
+    def second_search():
+        first_done.wait()
+        try:
+            list(reader._localize([], "filter water", 5, document_id))
+        except Exception as error:
+            failures.append(("second", error))
+        finally:
+            second_done.set()
+
+    threads = [threading.Thread(target=first_search), threading.Thread(target=second_search)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not failures, failures
+    assert reader.lexicon.undecodable == 0, "the reused connection fell back instead of serving"
+
+
+def test_shard_eviction_closes_cross_thread_connections(tmp_path):
+    """Eviction closes the coldest shard connection from whatever worker
+    thread is serving: a close of a connection a live foreign thread opened
+    must not raise. The opener stays alive past the close so the two threads
+    cannot share a reused ident, which is what the production pool
+    guarantees."""
+    step = shard_table_count()
+    corpus = Corpus(tmp_path, {3: tie_blocks(1), step + 3: tie_blocks(2)})
+    reader = corpus.reader(True)
+    reader.lexicon = ArticleLexicon(reader.lexicon.directory.parent, reader.lexicon.expected, opened=1)
+    failures = []
+    first_done = threading.Event()
+    second_done = threading.Event()
+
+    def first_article():
+        try:
+            assert reader.lexicon.article(reader, corpus.documents[3], 3) is not None
+        except Exception as error:
+            failures.append(("first", error))
+        finally:
+            first_done.set()
+            second_done.wait()
+
+    def second_article():
+        first_done.wait()
+        try:
+            assert reader.lexicon.article(reader, corpus.documents[step + 3], step + 3) is not None
+        except Exception as error:
+            failures.append(("second", error))
+        finally:
+            second_done.set()
+
+    threads = [threading.Thread(target=first_article), threading.Thread(target=second_article)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not failures, failures

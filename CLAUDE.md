@@ -2,6 +2,8 @@
 
 Browser-local voice/text agent with optional personal memory and a mandatory backend reference corpus.
 
+- When the operator reports a bug on the live site, read the service's persisted errors FIRST — `failures.jsonl` in the content state and the service journal — before any source-reading or endpoint probing. The operator does not paste error messages; the errors are always logged, and a dozen tool calls of theorizing before the logs is the failure this bullet exists to prevent. The journal holds the content service's request log under its PID (`journalctl _PID=<pid>`); `failures.jsonl` carries the traceback of every stage failure the service records.
+
 - The browser runs the Pi agent and controls conversation, recording, playback and consent; the gateway serves the application and routes local inference, corpus and speech requests.
 - Corpus knowledge and personal memory have independent stores and lifecycles: reference tools remain available when personal memory is off.
 - The whole local runtime uses a pinned release profile with measured model, tokenizer, tool-parser, context and resource settings; candidate qualification is explicitly labelled and never reports production readiness.

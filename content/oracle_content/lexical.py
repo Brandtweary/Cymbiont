@@ -229,7 +229,11 @@ class ArticleLexicon:
             return None
         connection = None
         try:
-            connection = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)
+            # The reader serves requests from `asyncio.to_thread` pool threads, so a
+            # cached connection is routinely opened by one worker thread and reused by
+            # another. Every access is serialized under `self.lock`, which is the
+            # synchronization sqlite requires of connections shared across threads.
+            connection = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, check_same_thread=False)
             connection.execute("PRAGMA cache_size=-64")
             stored = connection.execute("SELECT value FROM meta WHERE key='binding'").fetchone()
             if stored is None or json.loads(stored[0]) != self.expected:
