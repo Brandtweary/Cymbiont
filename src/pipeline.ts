@@ -169,6 +169,10 @@ export interface PipelineDeps {
 	/** True while a foreground chat run is generating. A background stage preempted
 	 * by that run parks until this goes false, then re-runs from its stage start. */
 	foregroundActive?: () => boolean;
+	/** Fire-and-forget server-side record of a stage failure's class and reason
+	 * (never conversation content) so the failure is diagnosable from the gateway
+	 * journal rather than only from the browser's state. */
+	reportStageFailure?: (stage: string, kind: string, reason: string) => void;
 }
 
 // -- Transcript formatting ----------------------------------------------------
@@ -1030,13 +1034,18 @@ export class PipelineRuntime {
 			});
 			return;
 		} catch (error) {
-			// A round interrupted before finishing (MemoryTransientError: stopReason
-			// "aborted") is a preemption whose SSE error frame lost the race to the
-			// connection teardown — the gateway aborts the lease, and the client renders
-			// the dead stream as a plain abort. In a memory tick every such interruption
-			// is a preemption or a supersession (a real timeout renders as an error
-			// carrying a code and still fails), so it parks and retries like one.
-			if ((error instanceof MemoryPreemptedError || error instanceof MemoryTransientError) && this.active(input) && await this.parkPreemptedStage(name, input, ++preemptions)) continue;
+			// A round interrupted before finishing is a preemption in one of three
+			// renderings: the SSE error frame (MemoryPreemptedError), a plain abort
+			// whose frame lost the race to connection teardown (MemoryTransientError:
+			// stopReason "aborted"), or an unknown error while the foreground holds the
+			// machine — the gateway kills background rounds only for foreground chat, so
+			// a connection-level error mid-foreground is the same preemption wearing a
+			// fetch wrapper. Known judgment classes (refusal, budget) still route to
+			// their own outcomes, and unknown errors park only a bounded number of
+			// times so a genuine client bug fails visibly instead of looping.
+			const parkable = error instanceof MemoryPreemptedError || error instanceof MemoryTransientError ||
+				(!(error instanceof MemoryRefusalError) && !(error instanceof MemoryBudgetError) && this.deps.foregroundActive?.() && preemptions < 3);
+			if (parkable && this.active(input) && await this.parkPreemptedStage(name, input, ++preemptions)) continue;
 			if (!this.active(input)) return;
 			if (error instanceof MemorySourceDeletedError) { await this.sourceDeleted(error.sessionKey); return; }
 			dbgError(`pipeline[${name}] failed; draft discarded:`, error);
@@ -1047,6 +1056,7 @@ export class PipelineRuntime {
 				if (!job || job.stages[name] === "complete") return;
 				job.stages[name] = error instanceof MemoryRefusalError ? "refused" : "failed";
 				(job.outcomes ??= {})[name] = { kind: error instanceof MemoryRefusalError ? "refused" : error instanceof MemoryBudgetError ? "budget-exhausted" : error instanceof MemoryTransientError ? "transient" : "failed", reason: String(error) };
+				this.deps.reportStageFailure?.(name, job.outcomes![name].kind, String(error).slice(0, 200));
 				await this.publish(next, undefined, [this.archiveRecord(input, name, "outcome", { outcome: job.outcomes![name], history: job.history }, "failed")], () => { if (!this.active(input)) throw new Error("Memory failure publication cancelled"); });
 			});
 			this.pushActivity(name, error instanceof MemoryRefusalError ? "Memory stage refused; dependent work is paused until explicit retry." : error instanceof MemoryBudgetError ? "Memory stage exhausted its qualified resource allowance; draft discarded and coverage remains pending." : "Memory stage failed; draft discarded. Use Retry to resume unfinished coverage.");

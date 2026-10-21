@@ -195,6 +195,17 @@ export function createGateway(cfg: GatewayConfig = config, fetcher: typeof fetch
     if (!result.ok || !Array.isArray(tokens.tokens) || tokens.tokens.some((x: unknown) => !Number.isSafeInteger(x))) throw new AdmissionError("tokenizer_failed", 502);
     return tokens.tokens.length;
   }
+  app.post("/v1/diagnostic", limit("diagnostic"), async c => {
+    // Browser-side stage failures carry no conversation content — only the
+    // stage, the class and a reason head — so the failure is visible where the
+    // conversation itself is not (client-side, by design).
+    const body = await c.req.json().catch(() => null) as {stage?: unknown, kind?: unknown, reason?: unknown} | null;
+    const stage = typeof body?.stage === "string" ? body.stage.slice(0, 32) : "unknown";
+    const kind = typeof body?.kind === "string" ? body.kind.slice(0, 32) : "unknown";
+    const reason = typeof body?.reason === "string" ? body.reason.slice(0, 200) : "";
+    log({stage, status: "failed", code: `memory_${kind}`, error: reason});
+    return c.json({ok: true});
+  });
   app.post("/v1/tokenize", limit("tokenize"), async c => {
     if (!profile || !cfg.llmBase) return c.json({error: {code: "runtime_unconfigured"}}, 503);
     const raw = await c.req.json().catch(() => null);
@@ -244,6 +255,10 @@ export function createGateway(cfg: GatewayConfig = config, fetcher: typeof fetch
       let streamController: ReadableStreamDefaultController<Uint8Array>;
       let preempted = false;
       const onAbort = () => {
+        // A streaming round the foreground preempted: unlike the buffered path
+        // below, the abort would otherwise leave no server-side trace at all.
+        if ((owned.signal.reason as {code?: string} | undefined)?.code === "preempted")
+          log({id, stage: "completion", status: "failed", code: "preempted"});
         // A foreground chat preempted this background round. The visitor is
         // still connected, so the response ends with an explicit error frame
         // the client can recognize as parking, instead of a bare cut that

@@ -25,6 +25,10 @@ export const ROUTE_LIMITS = {
 	// A form submitted by hand, so the window is sized for a visitor correcting
 	// a typo rather than for any rate of legitimate traffic.
 	signup: 5,
+	// A failure beacon, not a conversation: the browser reports a memory-stage
+	// failure's class and reason head so it is diagnosable from the journal. The
+	// window tolerates a stage failing on every rapid-fire turn.
+	diagnostic: 30,
 } as const;
 export type RouteName = keyof typeof ROUTE_LIMITS;
 

@@ -87,6 +87,25 @@ test("an abort-shaped preemption (frame lost to teardown) parks like a preemptio
   assert.equal(h.errors.length, 0);
 });
 
+test("an unknown round error while the foreground holds the machine parks like a preemption", async () => {
+  const entered = deferred(); let calls = 0; let chatBusy = true;
+  const h = await fixture({ foregroundActive: () => chatBusy, loop: async (_messages, context) => {
+    if (isAudit(context) && calls++ === 0) { entered.resolve(); return [{ role: "assistant", content: [{ type: "text", text: "" }], stopReason: "error", errorMessage: "Connection error.", usage: { input: 1, output: 1 } }] as any; }
+    return completed();
+  } });
+  h.runtime.onTurnEnd(() => messages, false); await entered.promise;
+  const parked = () => h.runtime.snapshot().jobs?.[0];
+  await until(() => parked()?.stages.audit === "pending");
+  // The unknown error parked instead of failing: while a foreground chat runs,
+  // the gateway kills background rounds only for foreground, so any round death
+  // is a preemption in some rendering, connection-wrapped included.
+  assert.equal(h.runtime.activity.filter(a => a.line.includes("failed")).length, 0);
+  chatBusy = false;
+  await h.runtime.whenIdle();
+  assert.deepEqual(h.runtime.snapshot().jobs![0]!.stages, { audit: "complete", memory: "complete", summary: "complete" });
+  assert.equal(h.errors.length, 0);
+});
+
 test("a preempted round parks the stage, then re-runs it exactly once when the chat finishes", async () => {
   const entered = deferred(); let calls = 0; let chatBusy = true;
   const h = await fixture({ foregroundActive: () => chatBusy, loop: async (_messages, context) => {

@@ -1948,6 +1948,14 @@ async function initApp() {
 		onActivity: () => renderGutters(),
 		// A preempted background stage waits out the visitor's own chat run before re-running.
 		foregroundActive: () => runInFlight,
+		// Stage failures beacon class and reason (never conversation content) to the
+		// gateway journal, so a browser-side failure is diagnosable server-side.
+		reportStageFailure: (stage, kind, reason) => {
+			void fetch(`${import.meta.env.VITE_PROXY_BASE ?? ""}/v1/diagnostic`, {
+				method: "POST", headers: {"Content-Type": "application/json"},
+				body: JSON.stringify({stage, kind, reason}), keepalive: true,
+			}).catch(() => {});
+		},
 	});
 	try {
 		if (!memorySnapshot) throw new Error("Saved memory snapshot unavailable");
