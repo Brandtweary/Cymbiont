@@ -1030,7 +1030,13 @@ export class PipelineRuntime {
 			});
 			return;
 		} catch (error) {
-			if (error instanceof MemoryPreemptedError && this.active(input) && await this.parkPreemptedStage(name, input, ++preemptions)) continue;
+			// A round interrupted before finishing (MemoryTransientError: stopReason
+			// "aborted") is a preemption whose SSE error frame lost the race to the
+			// connection teardown — the gateway aborts the lease, and the client renders
+			// the dead stream as a plain abort. In a memory tick every such interruption
+			// is a preemption or a supersession (a real timeout renders as an error
+			// carrying a code and still fails), so it parks and retries like one.
+			if ((error instanceof MemoryPreemptedError || error instanceof MemoryTransientError) && this.active(input) && await this.parkPreemptedStage(name, input, ++preemptions)) continue;
 			if (!this.active(input)) return;
 			if (error instanceof MemorySourceDeletedError) { await this.sourceDeleted(error.sessionKey); return; }
 			dbgError(`pipeline[${name}] failed; draft discarded:`, error);

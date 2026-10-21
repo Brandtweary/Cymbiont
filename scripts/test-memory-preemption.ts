@@ -20,6 +20,7 @@ globalThis.IDBKeyRange = IDBKeyRange;
 const completed = () => [{ role: "assistant", content: [{ type: "text", text: "Complete" }], stopReason: "stop", usage: { input: 1, output: 1 } }] as any;
 // The gateway's preemption answer, as the provider stream surfaces it.
 const preempted = () => [{ role: "assistant", content: [{ type: "text", text: "" }], stopReason: "error", errorMessage: '{"code":"preempted"}', usage: { input: 1, output: 1 } }] as any;
+const aborted = () => [{ role: "assistant", content: [{ type: "text", text: "" }], stopReason: "aborted", usage: { input: 1, output: 1 } }] as any;
 const messages = [{ role: "user", content: "Remember orchard tools", timestamp: 1 }] as any;
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(r => { resolve = r; }); return { promise, resolve }; };
 const isAudit = (context: any) => !!context.tools.find((t: any) => t.name === "audit_handoff");
@@ -66,6 +67,24 @@ test("preemption detection matches both gateway renderings and rejects other fai
   assert.equal(isPreemptedCompletionError("Connection error."), false);
   assert.equal(isPreemptedCompletionError("Request was aborted"), false);
   assert.equal(isPreemptedCompletionError(undefined), false);
+});
+
+test("an abort-shaped preemption (frame lost to teardown) parks like a preemption, never fails the stage", async () => {
+  const entered = deferred(); let calls = 0; let chatBusy = true;
+  const h = await fixture({ foregroundActive: () => chatBusy, loop: async (_messages, context) => {
+    if (isAudit(context) && calls++ === 0) { entered.resolve(); return aborted(); }
+    return completed();
+  } });
+  h.runtime.onTurnEnd(() => messages, false); await entered.promise;
+  const parked = () => h.runtime.snapshot().jobs?.[0];
+  await until(() => parked()?.stages.audit === "pending");
+  // The interrupted round published no failure outcome: a transient abort is a
+  // preemption whose SSE error frame lost the race to the connection teardown.
+  assert.equal(h.runtime.activity.filter(a => a.line.includes("failed")).length, 0);
+  chatBusy = false;
+  await h.runtime.whenIdle();
+  assert.deepEqual(h.runtime.snapshot().jobs![0]!.stages, { audit: "complete", memory: "complete", summary: "complete" });
+  assert.equal(h.errors.length, 0);
 });
 
 test("a preempted round parks the stage, then re-runs it exactly once when the chat finishes", async () => {
