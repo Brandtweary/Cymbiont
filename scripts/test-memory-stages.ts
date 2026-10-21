@@ -142,13 +142,19 @@ test("cross-tab consent revision conflict cannot expose draft or overwrite anoth
   assert.equal(await h.raw.get("memory-consent", "choice"), "declined");
 });
 
-test("an unfinished earlier turn blocks newer coverage until recovery, avoiding stale summary replacement", async () => {
+test("a newer turn supersedes the stalled earlier sweep instead of stacking a second one", async () => {
   let calls = 0;
   const h = await fixture({ loop: async () => { calls++; throw new Error("provider unavailable"); } });
   h.runtime.onTurnEnd(() => messages, false); await h.runtime.whenIdle();
-  h.runtime.onTurnEnd(() => messages, false); await h.runtime.whenIdle();
-  assert.equal(calls, 1); assert.equal(h.runtime.snapshot().jobs!.length, 2);
-  assert.equal(h.runtime.snapshot().jobs![1].stages.summary, "pending");
+  h.runtime.onTurnEnd(() => [...messages, { role: "user", content: "second turn", timestamp: 2 } as any], false);
+  await h.runtime.whenIdle();
+  // Single flight: the stalled sweep is cancelled, never re-runs, and the
+  // superseding sweep is the only outstanding job — with no completed
+  // boundary yet, its window reaches back to the conversation start.
+  assert.equal(calls, 2);
+  assert.equal(h.runtime.snapshot().jobs!.length, 1);
+  assert.equal(h.runtime.snapshot().jobs![0].coverageStart, 0);
+  assert.equal(h.runtime.snapshot().jobs![0].stages.summary, "pending");
 });
 
 test("malformed coverage, mixed generations and duplicate turn identities fail closed", async () => {
@@ -160,7 +166,7 @@ test("malformed coverage, mixed generations and duplicate turn identities fail c
   }
 });
 
-test("explicit retry processes older coverage before newer work and clears stalled state", async () => {
+test("a newer turn folds the stalled sweep's coverage and explicit retry finishes it exactly once", async () => {
   let fail = true; const seen: string[] = [];
   const h = await fixture({ loop: async prompt => {
     const text = String((prompt[0] as any).content); seen.push(text.includes("older-turn") ? "old" : "new");
@@ -168,10 +174,13 @@ test("explicit retry processes older coverage before newer work and clears stall
   } });
   h.runtime.onTurnEnd(() => [{ role: "user", content: "older-turn", timestamp: 1 }] as any, false);
   await h.runtime.whenIdle(); assert(h.runtime.hasFailedWork);
-  h.runtime.onTurnEnd(() => messages, false); await h.runtime.whenIdle();
-  assert.deepEqual(seen, ["old"]);
+  h.runtime.onTurnEnd(() => [{ role: "user", content: "older-turn", timestamp: 1 }, ...messages], false); await h.runtime.whenIdle();
+  // The stalled sweep was superseded; the surviving job's window carries both
+  // turns (coverageStart 0), so its failed attempt sees the older turn too.
+  assert.deepEqual(seen, ["old", "old"]);
+  assert.equal(h.runtime.snapshot().jobs!.length, 1);
   fail = false; h.runtime.retryPending(); await h.runtime.whenIdle();
-  assert.deepEqual(seen, ["old", "old", "old", "new", "new"]);
+  assert.deepEqual(seen, ["old", "old", "old", "old"]);
   assert.equal(h.runtime.hasFailedWork, false);
   assert(h.runtime.snapshot().jobs!.every(job => Object.values(job.stages).every(state => state === "complete")));
 });

@@ -67,22 +67,16 @@ vendored components, and are load-bearing, not cruft:
 
 ## Model serving facts
 
-- **Reasoning effort is a system-prompt line, not the API field.** `reasoning_effort` in the
-  request body is inert on this vLLM + Muse Glimmer combination — it produces no
-  `reasoning_content` and no `reasoning_tokens`. The native control is a
-  `Reasoning strength: <value>` line in the system prompt; the pipeline's prompts carry
-  neither, so today's effort is whatever the model does unprompted. A/B on an audit prompt:
-  no line 563 completion tokens, `high` 508, `low` 244 — adding a `low` line to the background
-  stages would roughly halve tick cost if it is ever wanted (the operator ruled 2026-10-21:
-  effort stays as-is; preemption is the fix, not dumber background thinking). Measured Oct 2026,
-  vLLM 0.29.
-- **The checkpoint is the vendor's own artifact, never re-quantized**: `nvidia/Muse-Glimmer-30B-NVFP4`
-  at the pinned revision in `candidate.json`, `MIXED_PRECISION` per `model/hf_quant_config.json` —
-  180 attention layers FP8 (W8A8, weights and activations), 213 MLP layers W4A16_NVFP4 (4-bit
-  NVFP4 weights, group size 16, 16-bit activations). Not the pure W4A4 the vLLM recipe benchmarks:
-  measured 51 tok/s sustained decode vs the recipe's 68.8 on a single 5090. Kept deliberately —
-  the calibrated mix is the better checkpoint, accepted throughput.
-- **Gateway queue diagnostics are occurrence-folded**: the queue's `record()` events share one
-  dedup fingerprint, so per-request queue detail barely exists in `gateway.jsonl`. Per-request
-  reconstruction comes from vLLM's docker logs; uvicorn's access line fires at response
-  start, so each line marks a generation arrival, not a completion.
+- **Reasoning effort is a system-prompt line, not the API field** (vLLM 0.29):
+  `reasoning_effort` is inert on this vLLM + Muse Glimmer combination; the native control is a
+  `Reasoning strength: <value>` line the pipeline's prompts do not carry. Audit-prompt A/B:
+  no line 563 completion tokens, `high` 508, `low` 244 — a `low` line on background stages would
+  roughly halve tick cost (ruled 2026-10-21: stays as-is; preemption is the fix, not dumber
+  background thinking).
+- **The checkpoint is the vendor's `nvidia/Muse-Glimmer-30B-NVFP4`, revision-pinned, never
+  re-quantized**: MIXED_PRECISION — attention layers FP8, MLP layers W4A16_NVFP4. 51 tok/s
+  sustained decode vs the uniform-W4A4 recipe's 68.8 on a single 5090; the calibrated mix is
+  the better checkpoint, throughput accepted.
+- **Gateway queue events are occurrence-folded** (one dedup fingerprint), so per-request queue
+  detail barely exists in `gateway.jsonl`; vLLM's docker logs are the per-request source, and
+  uvicorn's access line fires at response start — a generation arrival, not a completion.

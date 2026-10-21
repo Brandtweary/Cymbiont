@@ -241,6 +241,11 @@ export class PipelineRuntime {
 	private activeSessionKey: string | undefined;
 	private explicitRetries = new Set<string>();
 	private attempts = new Map<string, { id: string; sequence: number }>();
+	// Superseded job ids: admission retires them in memory before the removal
+	// publishes, so an unwinding stage observes the loss through active() and
+	// never publishes or re-runs afterwards. Not durable — the removal from the
+	// persisted job list is what makes supersession survive a reload.
+	private retired = new Set<string>();
 	private generation = 0;
 	private controllers = new Set<AbortController>();
 	private loaded = false;
@@ -372,15 +377,20 @@ export class PipelineRuntime {
 				const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(messages.map(message => ({ role: message.role, text: formatTranscript([message]) })))));
 				return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, "0")).join("");
 			};
-			const previous = [...this.jobs].reverse().find(prior => prior.sessionKey === job.sessionKey && prior.inputDigest);
 			job.inputCount = job.messages.length;
 			job.inputDigest = await digest(job.messages);
+			// Coverage anchors to the last COMPLETED boundary only — an outstanding
+			// tick (superseded, parked, failed or refused) never acknowledged
+			// coverage, so its own start must not truncate this sweep's window.
+			const previous = [...this.jobs].reverse().find(prior => prior.sessionKey === job.sessionKey && prior.inputDigest &&
+				Object.values(prior.stages).every(stage => stage === "complete"));
 			job.coverageStart = previous?.inputCount && previous.inputCount <= job.messages.length &&
 				await digest(job.messages.slice(0, previous.inputCount)) === previous.inputDigest ? previous.inputCount : 0;
 			if (!this.allowed() || generation !== this.generation) return;
 			const next = this.snapshot();
-			next.jobs = [...this.jobs, job];
-			await this.publish(next, undefined, undefined, () => { if (!this.allowed() || generation !== this.generation) throw new Error("Memory admission cancelled"); });
+			const records = this.supersedeOutstanding(next, job.sessionKey, generation);
+			next.jobs = [...next.jobs!, job];
+			await this.publish(next, undefined, records.length ? records : undefined, () => { if (!this.allowed() || generation !== this.generation) throw new Error("Memory admission cancelled"); });
 		}).then(() => this.resumePending()).catch(error => this.report(error));
 	}
 
@@ -409,21 +419,56 @@ export class PipelineRuntime {
 			const history: MemoryHistoryRef = { sessionKey: saved.sessionKey, revision: saved.revision, count: archive.records.length,
 				firstId: archive.records[0].id, lastId: archive.records.at(-1)!.id, digest: await this.archiveDigest(archive) };
 			await this.resolveHistory(history);
-			const previous = [...this.jobs].reverse().find(job => job.sessionKey === saved.sessionKey && job.history)?.history ?? this.historyCoverage[saved.sessionKey];
+			// Coverage anchors to the last COMPLETED boundary only — an outstanding
+			// tick (superseded, parked, failed or refused) never acknowledged
+			// coverage, so its own start must not truncate this sweep's window.
+			const previous = [...this.jobs].reverse().find(job => job.sessionKey === saved.sessionKey && job.history &&
+				Object.values(job.stages).every(stage => stage === "complete"))?.history ?? this.historyCoverage[saved.sessionKey];
 			const start = previous && previous.count <= history.count &&
 				await this.archiveDigest({ ...archive, records: archive.records.slice(0, previous.count) }) === previous.digest ? previous.count : 0;
-			if (!this.allowed() || generation !== this.generation || start === history.count) return;
+			if (!this.allowed() || generation !== this.generation) return;
 			const next = this.snapshot();
+			const records = this.supersedeOutstanding(next, saved.sessionKey, generation);
+			if (start === history.count) {
+				// Nothing new to cover, but an outstanding tick would only re-run
+				// covered ground: retire it in the same admission publication.
+				if (records.length) await this.publish(next, undefined, records, () => { if (!this.allowed() || generation !== this.generation) throw new Error("Memory admission cancelled"); });
+				return;
+			}
 			next.jobs!.push({ id: crypto.randomUUID(), generation, sessionKey: saved.sessionKey, history,
 				messages: [], isVoiceTurn, voiceEvidence: voiceEvidence && structuredClone(voiceEvidence), coverageStart: start,
 				inputCount: history.count, inputDigest: history.digest, stages: { audit: "pending", memory: "pending", summary: "pending" } });
-			await this.publish(next, undefined, undefined, () => { if (!this.allowed() || generation !== this.generation) throw new Error("Memory admission cancelled"); });
+			await this.publish(next, undefined, records.length ? records : undefined, () => { if (!this.allowed() || generation !== this.generation) throw new Error("Memory admission cancelled"); });
 		});
 		this.resumePending();
 	}
 
 	private allowed(): boolean { return this.loaded && this.deps.getConsent?.() === "granted"; }
-	private active(input: TickInput): boolean { return input.generation === this.generation && this.allowed() && !this.deletedSessions.has(input.sessionKey); }
+	private active(input: TickInput): boolean { return input.generation === this.generation && this.allowed() && !this.deletedSessions.has(input.sessionKey) && !this.retired.has(input.id); }
+
+	/** Single-flight sweeps: a completed turn supersedes this conversation's
+	 *  outstanding tick — cancelled, never re-run — so quick successive turns and
+	 *  preemption parks cannot stack sweeps on one conversation. The superseding
+	 *  admission anchors its own coverage to the last completed boundary, so it
+	 *  still sees every uncovered turn. Removal and admission publish atomically;
+	 *  authority is retired in memory first, so a running or parked stage unwinds
+	 *  without publishing and a superseded tick never re-runs. */
+	private supersedeOutstanding(draft: PipelineSnapshot, sessionKey: string, generation: number): MemoryArchiveRecord[] {
+		const superseded = this.jobs.filter(job => job.sessionKey === sessionKey && Object.values(job.stages).some(stage => stage !== "complete"));
+		if (!superseded.length) return [];
+		for (const job of superseded) this.retired.add(job.id);
+		// Abort a tick of this conversation mid-flight; other conversations' ticks
+		// keep their authority (and their queue position) untouched.
+		if (this.activeSessionKey === sessionKey) for (const controller of this.controllers) controller.abort();
+		draft.jobs = draft.jobs!.filter(job => job.sessionKey !== sessionKey || Object.values(job.stages).every(stage => stage === "complete"));
+		const records = superseded.flatMap(job => (["audit", "memory", "summary"] as const)
+			.filter(role => job.stages[role] !== "complete").map(role => this.archiveRecord({ ...job,
+				model: this.deps.getModel(), modelId: this.deps.getModelId(), baseUrl: this.deps.getBaseUrl(), auth: "" }, role,
+				"outcome", { outcome: { kind: "cancelled", reason: "Superseded by a newer turn" }, history: job.history, generation }, "cancelled")));
+		for (const job of superseded) { this.attempted.delete(job.id); this.explicitRetries.delete(job.id); this.failedPublications.delete(job.id); }
+		this.pushActivity("audit", "Superseded an unfinished memory sweep; its coverage folds into this turn's sweep.");
+		return records;
+	}
 
 	/** Explicit source deletion retires only that conversation's outstanding work. */
 	sourceDeleted(sessionKey: string): Promise<void> {
@@ -494,6 +539,7 @@ export class PipelineRuntime {
 		this.generation++;
 		this.jobs = [];
 		this.failedPublications.clear();
+		this.retired.clear();
 		for (const controller of this.controllers) controller.abort();
 		if (!persist) return this.pending;
 		const clear = this.ordered(async () => {
@@ -911,7 +957,9 @@ export class PipelineRuntime {
 			await this.ordered(async () => {
 				if (!this.active(input)) throw new Error("Memory operation cancelled");
 				const next = this.snapshot();
-				next.jobs!.find(j => j.id === input.id)!.stages[name] = "running";
+				const target = next.jobs!.find(j => j.id === input.id);
+				if (!target) throw new Error("Memory operation cancelled");
+				target.stages[name] = "running";
 				await this.publish(next, undefined, undefined, () => { if (!this.active(input)) throw new Error("Memory stage cancelled"); });
 			});
 			const result = name === "summary" ? null : await this.runTooledAgent(name,

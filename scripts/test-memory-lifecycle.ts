@@ -35,23 +35,30 @@ function setup(loop?: PipelineDeps["runLoop"], summary = "[NO_ENTRY]") {
 }
 const message = (text: string) => [{ role: "user", content: text, timestamp: 1 }] as any;
 
-// Every queued exchange runs, retaining the originating session even after switching.
+// One sweep per conversation, retaining the originating session even after switching.
 {
   const entered = deferred(), release = deferred(); const transcripts: string[] = [];
   let first = true;
   const h = setup(async (messages) => {
     transcripts.push(String((messages[0] as any).content));
-    if (first) { first = false; entered.resolve(); await release.promise; }
+ if (first) { first = false; entered.resolve(); await release.promise; }
     return completed();
   });
   await h.runtime.init(); h.runtime.startSession("one");
   h.runtime.onTurnEnd(() => message("first"), false); await entered.promise;
   h.runtime.onTurnEnd(() => message("second"), false);
   h.runtime.startSession("two"); h.runtime.onTurnEnd(() => message("third"), false);
+  // In production the superseding turn's chat has already preempted the
+  // background round before it ends, so wait for both admissions (the first
+  // superseding the stalled sweep) before letting the blocked round unwind.
+  while (h.runtime.snapshot().jobs?.length !== 2) await new Promise(resolve => setTimeout(resolve, 5));
   release.resolve(); await h.runtime.whenIdle();
-  assert.equal(transcripts.length, 6); assert(transcripts[2].includes("second"));
-  assert.deepEqual(h.costs, ["one", "one", "one", "one", "one", "one", "two", "two", "two"]);
-  assert.equal(h.runtime.snapshot().jobs?.length, 3);
+  // Single flight per conversation: the second turn superseded the first's
+  // in-flight sweep, so only the folded sweep (and the other conversation's
+  // tick) ever completed work — each under its originating session.
+  assert.equal(transcripts.length, 5); assert(transcripts[2].includes("second"));
+  assert.deepEqual(h.costs, ["one", "one", "one", "two", "two", "two"]);
+  assert.equal(h.runtime.snapshot().jobs?.length, 2);
   assert(h.runtime.snapshot().jobs?.every(j => Object.values(j.stages).every(s => s === "complete")));
 }
 // A revoked active loop cannot write via a previously captured tool; queued ticks disappear.
