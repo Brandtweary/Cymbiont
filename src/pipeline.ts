@@ -55,6 +55,8 @@ export interface ActivityItem {
 	ts: string;
 	agent: PipelineAgentName;
 	line: string;
+	/** Internal scheduling lines stay in the record but never render. */
+	internal?: boolean;
 }
 
 export type PipelineAgentName = "audit" | "memory" | "summary";
@@ -466,7 +468,7 @@ export class PipelineRuntime {
 				model: this.deps.getModel(), modelId: this.deps.getModelId(), baseUrl: this.deps.getBaseUrl(), auth: "" }, role,
 				"outcome", { outcome: { kind: "cancelled", reason: "Superseded by a newer turn" }, history: job.history, generation }, "cancelled")));
 		for (const job of superseded) { this.attempted.delete(job.id); this.explicitRetries.delete(job.id); this.failedPublications.delete(job.id); }
-		this.pushActivity("audit", "Superseded an unfinished memory sweep; its coverage folds into this turn's sweep.");
+		this.pushActivity("audit", "Superseded an unfinished memory sweep; its coverage folds into this turn's sweep.", true);
 		return records;
 	}
 
@@ -697,8 +699,8 @@ export class PipelineRuntime {
 		return lines.join("\n");
 	}
 
-	private pushActivity(agent: PipelineAgentName, line: string): void {
-		this.activity.push({ ts: new Date().toISOString(), agent, line });
+	private pushActivity(agent: PipelineAgentName, line: string, internal = false): void {
+		this.activity.push({ ts: new Date().toISOString(), agent, line, internal });
 		if (this.activity.length > ACTIVITY_MAX_ITEMS) {
 			this.activity.splice(0, this.activity.length - ACTIVITY_MAX_ITEMS);
 		}
@@ -1053,7 +1055,7 @@ export class PipelineRuntime {
 			await this.publish(next);
 		});
 		if (!this.active(input)) return false;
-		this.pushActivity(name, "Background round paused for a foreground message; resuming when it completes.");
+		this.pushActivity(name, "Background round paused for a foreground message; resuming when it completes.", true);
 		const settle = Math.min(4000, 500 * 2 ** Math.min(preemptions - 1, 3));
 		for (;;) {
 			await new Promise(resolve => setTimeout(resolve, this.deps.foregroundActive?.() ? 250 : settle));

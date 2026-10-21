@@ -790,7 +790,9 @@ const renderGutters = () => {
 	if (!leftGutter || !rightGutter) return;
 	const terms = lastVacuum?.terms ?? [];
 	// Newest activity on top.
-	const activity = pipeline ? [...pipeline.activity].reverse() : [];
+	// Internal scheduling lines (supersession, preemption parking) stay in the
+	// activity record for debugging but never reach the visitor's gutter.
+	const activity = pipeline ? [...pipeline.activity].reverse().filter(entry => !entry.internal) : [];
 
 	render(
 		html`
