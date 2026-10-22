@@ -2,7 +2,7 @@
 
 Browser-local voice/text agent with optional personal memory and a mandatory backend reference corpus.
 
-- When the operator reports a bug on the live site, read the service's persisted errors FIRST — `failures.jsonl` in the content state and the service journal — before any source-reading or endpoint probing. The operator does not paste error messages; the errors are always logged, and a dozen tool calls of theorizing before the logs is the failure this bullet exists to prevent. The journal holds the content service's request log under its PID (`journalctl _PID=<pid>`); `failures.jsonl` carries the traceback of every stage failure the service records.
+- When the operator reports a bug on the live site, read the service's persisted errors before any source-reading or endpoint probing. The operator does not paste error messages; the errors are always logged. The journal holds the content service's request log under its PID (`journalctl _PID=<pid>`), and `failures.jsonl` in the content state carries the traceback of every stage failure the service records.
 
 - The browser runs the Pi agent and controls conversation, recording, playback and consent; the gateway serves the application and routes local inference, corpus and speech requests.
 - Corpus knowledge and personal memory have independent stores and lifecycles: reference tools remain available when personal memory is off.
@@ -71,7 +71,7 @@ vendored components, and are load-bearing, not cruft:
   `reasoning_effort` is inert on this vLLM + Muse Glimmer combination; the native control is a
   `Reasoning strength: <value>` line the pipeline's prompts do not carry. Audit-prompt A/B:
   no line 563 completion tokens, `high` 508, `low` 244 — a `low` line on background stages would
-  roughly halve tick cost (ruled 2026-10-21: stays as-is; preemption is the fix, not dumber
+  roughly halve tick cost (stays as-is: preemption is the fix, not dumber
   background thinking).
 - **The checkpoint is the vendor's `nvidia/Muse-Glimmer-30B-NVFP4`, revision-pinned, never
   re-quantized**: MIXED_PRECISION — attention layers FP8, MLP layers W4A16_NVFP4. 51 tok/s
