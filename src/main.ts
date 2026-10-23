@@ -1312,6 +1312,11 @@ const renderAbout = () => html`
 				<button class="cw-signup-btn" type="submit">Submit</button>
 				<span class="cw-signup-status" role="status" aria-live="polite"></span>
 			</form>
+			<footer class="cw-about-foot">
+				<p>
+					<a target="_blank" rel="noreferrer" href="https://brandtweary.com">brandtweary.com</a>
+				</p>
+			</footer>
 		</div>
 	</div>
 `;

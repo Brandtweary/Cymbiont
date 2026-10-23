@@ -363,6 +363,15 @@ agent-interface .shrink-0 > .max-w-3xl.px-2 > .h-5 {
 	opacity: 0.8;
 }
 
+/* Page footer below the sign-up, matching the personal site's sitefoot. */
+.cw-about-foot {
+	margin-top: 3rem;
+	padding-top: 1.25rem;
+	border-top: 1px solid var(--border);
+	font-size: 0.85rem;
+	color: var(--muted);
+}
+
 /* Email sign-up at the foot of the About page. */
 .cw-signup {
 	display: flex;
