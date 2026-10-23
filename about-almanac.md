@@ -45,3 +45,5 @@ The model is an off-the-shelf open-weights release and the collection is public 
 Appropriate technology has always meant tools you can own, repair, and understand, and there is no good reason to hold AI apart from that. A capable model on your own machine, reading a library on your own disk, belongs in a workshop or a farmhouse — a patient reference librarian who never closes. Almanac is a proof of concept for that, and a look at what AI can be in the communities building something durable.
 
 [Source code and installation](https://github.com/Brandtweary/Almanac#installation)
+
+[brandtweary.com](https://brandtweary.com)
