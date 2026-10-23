@@ -1314,7 +1314,7 @@ const renderAbout = () => html`
 			</form>
 			<footer class="cw-about-foot">
 				<p>
-					<a target="_blank" rel="noreferrer" href="https://brandtweary.com">brandtweary.com</a>
+					<a href="https://brandtweary.com">brandtweary.com</a>
 				</p>
 			</footer>
 		</div>
